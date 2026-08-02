@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, Difficulty, Language, Resource, ResourceType } from './domain'
-import { addWordToDeck, createState, deleteResource, loadState, progressFor, resetState, saveState, setSilentOverride, upsertResource } from './store'
+import { addWordToDeck, createState, deleteResource, loadState, progressFor, resetState, saveState, setWordMark, toggleSilentMark, upsertResource } from './store'
 import { importFromFile, importFromUrl, paragraphsToResource } from './importer'
 import { Reader, Cover } from './features/Reader'
 import { LearningFocus } from './features/LearningFocus'
@@ -78,7 +78,8 @@ export default function App() {
           onAddWord={(args) => { const next = addWordToDeck(state, args); const added = next !== state; if (added) change(next); return true }}
           onOpenFocus={(resource) => setFocusId(resource.id)}
           onPageSize={(size) => change({ ...state, settings: { ...state.settings, readerPageSize: size } })}
-          onSilentOverride={(normalized, letters) => change(setSilentOverride(state, normalized, letters))} />
+          onWordMark={(key, mark) => change(setWordMark(state, key, mark))}
+          onSilentMark={(key, letterIndex) => change(toggleSilentMark(state, key, letterIndex))} />
       ) : (
         <>
           {page === 'home' && <Dashboard name={state.settings.name} state={state} onRead={() => go('reading')} onWrite={() => go('writing')} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}
@@ -93,7 +94,7 @@ export default function App() {
       )}
     </section>
     <nav className="mobile-nav">{navItems.slice(1).map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => go(item.id)} key={item.id}><b>{item.icon}</b><span>{t[item.label]}</span></button>)}</nav>
-    {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} silentOverrides={state.silentOverrides} onClose={() => setFocusId(null)} />}
+    {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} onClose={() => setFocusId(null)} />}
   </main>
 }
 

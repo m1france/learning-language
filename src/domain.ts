@@ -106,6 +106,15 @@ export type CustomTool = {
   url?: string
 }
 
+export type GrammarMarkType = 'verb' | 'noun' | 'adjective' | 'adverb' | 'expression'
+export type GrammarMarkStyle = 'highlight' | 'underline' | 'overlay'
+
+export type WordMark = {
+  type: GrammarMarkType
+  style: GrammarMarkStyle
+  color: string
+}
+
 export type UserSettings = {
   name: string
   learningLanguage: Language
@@ -129,6 +138,10 @@ export type AppState = {
   completedScenarios: string[]
   /** User overrides for silent letters: normalized word → exact letters considered silent. */
   silentOverrides: Record<string, string[]>
+  /** User grammar marks: `${language}:${normalized}` → mark (type, style, color). */
+  wordMarks: Record<string, WordMark>
+  /** User-grayed letters: `${language}:${normalized}` → indices of letters (alpha order) greyed by the user. */
+  silentMarks: Record<string, number[]>
   /** User-added tools shown in the "Vivre" section. */
   customTools: CustomTool[]
   /** Tool names removed by the user from the recommended list. */

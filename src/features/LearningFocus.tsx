@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Language, Resource } from '../domain'
-import { normalizeWord } from '../domain'
-import { isVerbLike, silentLettersFor } from '../phonetics'
+import type { Resource } from '../domain'
 
 /**
  * Learning Focus grammar — plein écran pour projeter un texte en classe.
@@ -73,10 +71,9 @@ function paginate(paragraphs: { key: string; text: string; chapterTitle: string;
   return pages.length ? pages : [[]]
 }
 
-export function LearningFocus({ resources, initialResourceId, silentOverrides, onClose }: {
+export function LearningFocus({ resources, initialResourceId, onClose }: {
   resources: Resource[]
   initialResourceId: string
-  silentOverrides: Record<string, string[]>
   onClose: () => void
 }) {
   const [resourceId, setResourceId] = useState(initialResourceId)
@@ -227,7 +224,7 @@ export function LearningFocus({ resources, initialResourceId, silentOverrides, o
             {paragraph.text.split(/(\s+)/).map((part, index) => {
               if (/\s+/.test(part)) return <span key={index}>{part}</span>
               const wordKey = `${paragraph.key}:${index}`
-              return <FocusWord key={wordKey} wordKey={wordKey} raw={part} language={resource.language} overrides={silentOverrides} grayed={current.grayed} interactive={tool === 'gray' || tool === 'liaison'} />
+              return <FocusWord key={wordKey} wordKey={wordKey} raw={part} grayed={current.grayed} interactive={tool === 'gray' || tool === 'liaison'} />
             })}
           </p>
         </div>)}
@@ -273,28 +270,18 @@ export function LearningFocus({ resources, initialResourceId, silentOverrides, o
   </div>
 }
 
-function FocusWord({ raw, wordKey, language, overrides, grayed, interactive }: {
+function FocusWord({ raw, wordKey, grayed, interactive }: {
   raw: string
   wordKey: string
-  language: Language
-  overrides: Record<string, string[]>
   grayed: string[]
   interactive: boolean
 }) {
-  const normalized = normalizeWord(raw)
-  const verb = isVerbLike(normalized, language)
-  const silent = silentLettersFor(normalized, language, overrides)
-  const remaining = [...silent]
-  return <span className={`focus-word ${verb ? 'grammar-mark' : ''} ${interactive ? 'clickable' : ''}`} data-word={wordKey}>
+  return <span className={`focus-word ${interactive ? 'clickable' : ''}`} data-word={wordKey}>
     {[...raw].map((letter, index) => {
-      const lower = letter.toLowerCase()
-      let autoSilent = false
-      const at = remaining.indexOf(lower)
-      if (at >= 0 && /[a-zà-ÿ]/i.test(letter)) { autoSilent = true; remaining.splice(at, 1) }
       const letterKey = `${wordKey}.${index}`
       const userGray = grayed.includes(letterKey)
       return <span key={index} data-letter={letterKey}
-        className={`focus-letter ${userGray ? 'user-gray' : autoSilent ? 'silent' : ''}`}>{letter}</span>
+        className={`focus-letter ${userGray ? 'user-gray' : ''}`}>{letter}</span>
     })}
   </span>
 }

@@ -96,6 +96,62 @@ export async function explainWordInContext(args: {
 }
 
 // ---------------------------------------------------------------------------
+// Wiktionary dictionary (https://publicapi.dev/wiktionary-api)
+// ---------------------------------------------------------------------------
+
+function stripHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  return (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
+
+export type WiktionaryResult = { partOfSpeech: string; definitions: string[] }
+
+/**
+ * Query the Wiktionary REST definition API for a word.
+ * `endpoint` may be either the classic /w/api.php URL or the REST base; the
+ * host is reused. For French-speaking learners of English, the French
+ * Wiktionary is queried too so the gloss can be shown in French.
+ */
+export async function lookupWiktionary(word: string, learningLanguage: Language, endpoint: string): Promise<WiktionaryResult | null> {
+  let host = learningLanguage === 'en' ? 'en.wiktionary.org' : 'fr.wiktionary.org'
+  try {
+    const url = new URL(endpoint)
+    if (url.hostname.includes('wiktionary.org')) host = url.hostname
+  } catch { /* keep default host */ }
+
+  const glossHost = learningLanguage === 'en' ? 'fr.wiktionary.org' : 'en.wiktionary.org'
+  const query = encodeURIComponent(word.toLowerCase())
+
+  const parse = async (h: string): Promise<{ partOfSpeech: string; definitions: string[] } | null> => {
+    const response = await fetch(`https://${h}/api/rest_v1/page/definition/${query}`)
+    if (!response.ok) return null
+    const data = (await response.json()) as Record<string, { partOfSpeech?: string; definitions?: { definition?: string }[] }[]>
+    const entries = Object.values(data).flat()
+    const partOfSpeech = entries.find((entry) => entry.partOfSpeech)?.partOfSpeech ?? ''
+    const definitions = entries
+      .flatMap((entry) => entry.definitions ?? [])
+      .map((definition) => stripHtml(definition.definition ?? ''))
+      .filter((text) => text.length > 3 && !/^#?\s*(plural|past|third-person|present participle)/i.test(text))
+      .slice(0, 3)
+    return definitions.length ? { partOfSpeech, definitions } : null
+  }
+
+  try {
+    // Gloss in the learner's UI language first (fr.wiktionary for English words), then the main host.
+    const gloss = await parse(glossHost)
+    const main = host === glossHost ? null : await parse(host)
+    const partOfSpeech = gloss?.partOfSpeech || main?.partOfSpeech || ''
+    const definitions = [...(gloss?.definitions ?? []), ...(main?.definitions ?? [])]
+      .filter((text, index, all) => all.indexOf(text) === index)
+      .slice(0, 3)
+    if (!definitions.length) return null
+    return { partOfSpeech, definitions }
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
 // TTS
 // ---------------------------------------------------------------------------
 
@@ -138,8 +194,11 @@ export function listVoices(lang: Language): SpeechSynthesisVoice[] {
     .sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang))
 }
 
-async function speakWithOpenRouter(text: string, api: ApiSettings): Promise<boolean> {
-  if (!api.openRouterKey || !api.ttsModel) return false
+export type SpeakResult = { engine: 'ai' | 'google' | 'browser' | 'none'; error?: string }
+
+async function speakWithOpenRouter(text: string, api: ApiSettings): Promise<{ ok: boolean; error?: string }> {
+  if (!api.openRouterKey) return { ok: false, error: 'pas de clé OpenRouter' }
+  if (!api.ttsModel) return { ok: false, error: 'aucun modèle TTS choisi' }
   try {
     const response = await fetch(OPENROUTER_URL, {
       method: 'POST',
@@ -151,30 +210,94 @@ async function speakWithOpenRouter(text: string, api: ApiSettings): Promise<bool
         audio: { voice: 'alloy', format: 'mp3' },
       }),
     })
-    if (!response.ok) return false
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      return { ok: false, error: `HTTP ${response.status}${detail ? ` — ${detail.slice(0, 160)}` : ''}` }
+    }
     const data = (await response.json()) as { choices?: { message?: { audio?: { data?: string } } }[] }
     const base64 = data.choices?.[0]?.message?.audio?.data
-    if (!base64) return false
+    if (!base64) return { ok: false, error: 'le modèle n’a pas renvoyé d’audio' }
     audioElement?.pause()
     audioElement = new Audio(`data:audio/mp3;base64,${base64}`)
     await audioElement.play()
-    return true
-  } catch {
-    return false
+    return { ok: true }
+  } catch (caught) {
+    return { ok: false, error: caught instanceof Error ? caught.message : 'erreur réseau' }
   }
 }
 
 export function stopSpeaking() {
   audioElement?.pause()
   audioElement = null
+  googleQueue?.element.pause()
+  googleQueue = null
   if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel()
 }
 
-/** Speak text with the best available engine: AI TTS when configured, else the most natural browser voice. */
-export async function speak(text: string, lang: Language, api: ApiSettings): Promise<'ai' | 'browser' | 'none'> {
+// ---------------------------------------------------------------------------
+// Google Translate TTS — free, natural voice, played through <audio> (no CORS
+// needed for playback). Long texts are split into ~180-char chunks.
+// ---------------------------------------------------------------------------
+
+let googleQueue: { element: HTMLAudioElement; chunks: string[] } | null = null
+
+function chunkForTts(text: string, maxLength = 180): string[] {
+  const sentences = text.replace(/\s+/g, ' ').match(/[^.!?…;:]+[.!?…;:]*\s*/g) ?? [text]
+  const chunks: string[] = []
+  let current = ''
+  for (const sentence of sentences) {
+    if (current && (current + sentence).length > maxLength) { chunks.push(current.trim()); current = '' }
+    if (sentence.length > maxLength) {
+      // hard-split very long sentences on spaces
+      let rest = sentence
+      while (rest.length > maxLength) {
+        const cut = rest.lastIndexOf(' ', maxLength)
+        chunks.push(rest.slice(0, cut > 0 ? cut : maxLength).trim())
+        rest = rest.slice(cut > 0 ? cut : maxLength)
+      }
+      current = rest
+    } else current += sentence
+  }
+  if (current.trim()) chunks.push(current.trim())
+  return chunks.filter(Boolean)
+}
+
+function speakWithGoogle(text: string, lang: Language): Promise<boolean> {
+  return new Promise((resolve) => {
+    const chunks = chunkForTts(text)
+    if (!chunks.length) { resolve(false); return }
+    const tl = lang === 'en' ? 'en' : 'fr'
+    let index = 0
+    let settled = false
+    const ok = (value: boolean) => { if (!settled) { settled = true; resolve(value) } }
+    const playNext = () => {
+      if (index >= chunks.length) { googleQueue = null; return }
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${tl}&q=${encodeURIComponent(chunks[index])}`
+      const element = new Audio(url)
+      googleQueue = { element, chunks }
+      element.onplaying = () => ok(true)
+      element.onended = () => { index += 1; playNext() }
+      element.onerror = () => { googleQueue = null; ok(false) }
+      element.play().catch(() => { googleQueue = null; ok(false) })
+    }
+    playNext()
+  })
+}
+
+/** Speak text with the best available engine: OpenRouter audio model (if configured), else free natural Google voice, else the most natural browser voice. */
+export async function speak(text: string, lang: Language, api: ApiSettings): Promise<SpeakResult> {
   stopSpeaking()
-  if (await speakWithOpenRouter(text, api)) return 'ai'
-  if (typeof speechSynthesis === 'undefined') return 'none'
+  const errors: string[] = []
+  if (api.ttsModel && api.ttsModel !== 'browser' && api.openRouterKey) {
+    const attempt = await speakWithOpenRouter(text, api)
+    if (attempt.ok) return { engine: 'ai' }
+    errors.push(`OpenRouter: ${attempt.error}`)
+  }
+  if (api.ttsModel !== 'browser') {
+    if (await speakWithGoogle(text, lang)) return { engine: 'google' }
+    errors.push('voix Google indisponible')
+  }
+  if (typeof speechSynthesis === 'undefined') return { engine: 'none', error: errors.join(' · ') }
   const utterance = new SpeechSynthesisUtterance(text)
   const voice = bestVoice(lang, api.ttsVoice || undefined)
   if (voice) utterance.voice = voice
@@ -182,5 +305,5 @@ export async function speak(text: string, lang: Language, api: ApiSettings): Pro
   utterance.rate = 0.92
   utterance.pitch = 1
   speechSynthesis.speak(utterance)
-  return 'browser'
+  return { engine: 'browser', error: errors.filter(Boolean).join(' · ') }
 }

@@ -33,9 +33,9 @@ const MODEL_PRESETS = [
 ]
 
 const TTS_PRESETS = [
-  { id: '', name: 'Voix du navigateur', detail: 'Gratuit, choisit automatiquement la voix la plus naturelle installée.' },
-  { id: 'fish-audio/s2.1-pro-free:free', name: 'Fish Audio S2.1 (gratuit)', detail: 'Voix IA très naturelle via OpenRouter, nécessite une clé.' },
-  { id: 'openai/gpt-4o-audio-preview', name: 'GPT-4o Audio (payant)', detail: 'Voix de très haute qualité via OpenRouter.' },
+  { id: '', name: 'Voix naturelle (gratuit)', detail: 'Voix Google de bonne qualité, sans clé ni compte. Recommandé.' },
+  { id: 'openai/gpt-4o-audio-preview', name: 'GPT-4o Audio (OpenRouter)', detail: 'Voix IA haut de gamme via ta clé OpenRouter. Payant selon le modèle.' },
+  { id: 'browser', name: 'Voix du navigateur', detail: 'Fonctionne hors ligne, qualité variable selon l’appareil.' },
 ]
 
 export function Settings({ settings, onSave, onResetData }: SettingsProps) {
@@ -123,7 +123,7 @@ export function Settings({ settings, onSave, onResetData }: SettingsProps) {
                 <strong>{preset.name}</strong><p>{preset.detail}</p>
               </button>)}
             </div>
-            {draft.api.ttsModel === '' && voices.length > 0 && <label>Voix préférée<select value={draft.api.ttsVoice} onChange={(event) => updateApi('ttsVoice', event.target.value)}>
+            {draft.api.ttsModel === 'browser' && voices.length > 0 && <label>Voix préférée<select value={draft.api.ttsVoice} onChange={(event) => updateApi('ttsVoice', event.target.value)}>
               <option value="">Automatique (la plus naturelle)</option>
               {voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} ({voice.lang})</option>)}
             </select></label>}

@@ -1,4 +1,4 @@
-import { type AppState, type DictionarySense, type LearnedWord, type Resource, type UserSettings, id, normalizeWord, todayKey } from './domain'
+import { type AppState, type DictionarySense, type LearnedWord, type Resource, type UserSettings, type WordMark, id, normalizeWord, todayKey } from './domain'
 import { seedResources } from './seed'
 
 const stateKey = 'vivre-la-langue:state:v2'
@@ -20,7 +20,7 @@ export const defaultSettings: UserSettings = {
     unsplashKey: '',
     pexelsKey: '',
     ttsVoice: '',
-    ttsModel: 'fish-audio/s2.1-pro-free:free',
+    ttsModel: '',
   },
 }
 
@@ -34,6 +34,8 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   sessions: [],
   completedScenarios: [],
   silentOverrides: {},
+  wordMarks: {},
+  silentMarks: {},
   customTools: [],
   removedTools: [],
 })
@@ -44,6 +46,8 @@ export const loadState = (): AppState | null => {
     if (!raw) return null
     const parsed = JSON.parse(raw) as AppState
     if (parsed.version !== 2 || !parsed.settings || !Array.isArray(parsed.resources)) return null
+    // Fish Audio ne produit pas d'audio via OpenRouter (HTTP 404 confirmé) : repli sur la voix naturelle gratuite.
+    if (parsed.settings?.api?.ttsModel?.startsWith('fish-audio')) parsed.settings.api.ttsModel = ''
     return {
       ...createState(parsed.settings),
       ...parsed,
@@ -54,6 +58,8 @@ export const loadState = (): AppState | null => {
       sessions: parsed.sessions ?? [],
       completedScenarios: parsed.completedScenarios ?? [],
       silentOverrides: parsed.silentOverrides ?? {},
+      wordMarks: parsed.wordMarks ?? {},
+      silentMarks: parsed.silentMarks ?? {},
       customTools: parsed.customTools ?? [],
       removedTools: parsed.removedTools ?? [],
     }
@@ -143,4 +149,22 @@ export const setSilentOverride = (state: AppState, normalized: string, letters: 
   if (letters === null || letters.length === 0) delete silentOverrides[normalized]
   else silentOverrides[normalized] = letters
   return { ...state, silentOverrides }
+}
+
+/** Set or clear a user grammar mark on a word (`null` removes it). */
+export const setWordMark = (state: AppState, key: string, mark: WordMark | null): AppState => {
+  const wordMarks = { ...state.wordMarks }
+  if (mark === null) delete wordMarks[key]
+  else wordMarks[key] = mark
+  return { ...state, wordMarks }
+}
+
+/** Toggle a greyed letter (alpha-order index) for a word. */
+export const toggleSilentMark = (state: AppState, key: string, letterIndex: number): AppState => {
+  const silentMarks = { ...state.silentMarks }
+  const current = silentMarks[key] ?? []
+  const next = current.includes(letterIndex) ? current.filter((value) => value !== letterIndex) : [...current, letterIndex]
+  if (next.length === 0) delete silentMarks[key]
+  else silentMarks[key] = next
+  return { ...state, silentMarks }
 }
