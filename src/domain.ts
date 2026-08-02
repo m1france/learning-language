@@ -17,6 +17,8 @@ export type Resource = {
   difficulty: Difficulty
   minutes: number
   cover: CoverTone
+  /** Optional user-uploaded cover image (data URL). Overrides the tone cover when present. */
+  coverImage?: string
   language: Language
   chapters: Chapter[]
   sourceUrl?: string
@@ -84,7 +86,7 @@ export type MediaSession = {
 }
 
 export type ApiSettings = {
-  dictionaryProvider: 'local' | 'wiktionary'
+  dictionaryProvider: 'local' | 'wiktionary' | 'ai'
   dictionaryEndpoint: string
   openRouterKey: string
   openRouterModel: string
@@ -92,6 +94,16 @@ export type ApiSettings = {
   unsplashKey: string
   pexelsKey: string
   ttsVoice: string
+  /** OpenRouter model used for high-quality TTS when a key is configured. */
+  ttsModel: string
+}
+
+export type CustomTool = {
+  id: string
+  name: string
+  description: string
+  category: string
+  url?: string
 }
 
 export type UserSettings = {
@@ -100,6 +112,8 @@ export type UserSettings = {
   theme: 'light' | 'dark'
   readerFontSize: number
   readerWidth: 'comfortable' | 'wide'
+  /** Approximate number of words per reader page. */
+  readerPageSize: number
   showGrammar: boolean
   api: ApiSettings
 }
@@ -113,6 +127,12 @@ export type AppState = {
   writings: WritingEntry[]
   sessions: MediaSession[]
   completedScenarios: string[]
+  /** User overrides for silent letters: normalized word → exact letters considered silent. */
+  silentOverrides: Record<string, string[]>
+  /** User-added tools shown in the "Vivre" section. */
+  customTools: CustomTool[]
+  /** Tool names removed by the user from the recommended list. */
+  removedTools: string[]
 }
 
 export const todayKey = () => new Date().toISOString().slice(0, 10)

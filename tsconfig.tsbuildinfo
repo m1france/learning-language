@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/data.ts","./src/main.tsx"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/ai.ts","./src/data.ts","./src/domain.ts","./src/importer.ts","./src/main.tsx","./src/phonetics.ts","./src/seed.ts","./src/store.ts","./src/features/internalmonologue.tsx","./src/features/learningfocus.tsx","./src/features/lifepage.tsx","./src/features/reader.tsx","./src/features/settings.tsx","./src/features/speakingpage.tsx","./src/features/speakingstudio.tsx","./src/features/writing.tsx"],"version":"5.9.3"}

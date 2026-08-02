@@ -3,22 +3,24 @@ import { seedResources } from './seed'
 
 const stateKey = 'vivre-la-langue:state:v2'
 
-const defaultSettings: UserSettings = {
+export const defaultSettings: UserSettings = {
   name: '',
   learningLanguage: 'en',
   theme: 'light',
   readerFontSize: 19,
   readerWidth: 'comfortable',
+  readerPageSize: 220,
   showGrammar: true,
   api: {
     dictionaryProvider: 'local',
     dictionaryEndpoint: 'https://en.wiktionary.org/w/api.php',
     openRouterKey: '',
-    openRouterModel: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    openRouterModel: 'meta-llama/llama-3.3-70b-instruct:free',
     openAiKey: '',
     unsplashKey: '',
     pexelsKey: '',
-    ttsVoice: 'en-US',
+    ttsVoice: '',
+    ttsModel: 'fish-audio/s2.1-pro-free:free',
   },
 }
 
@@ -31,6 +33,9 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   writings: [],
   sessions: [],
   completedScenarios: [],
+  silentOverrides: {},
+  customTools: [],
+  removedTools: [],
 })
 
 export const loadState = (): AppState | null => {
@@ -48,6 +53,9 @@ export const loadState = (): AppState | null => {
       writings: parsed.writings ?? [],
       sessions: parsed.sessions ?? [],
       completedScenarios: parsed.completedScenarios ?? [],
+      silentOverrides: parsed.silentOverrides ?? {},
+      customTools: parsed.customTools ?? [],
+      removedTools: parsed.removedTools ?? [],
     }
   } catch { return null }
 }
@@ -117,4 +125,22 @@ export const progressFor = (state: AppState, resource: Resource) => {
   const total = resource.chapters.reduce((sum, chapter) => sum + chapter.paragraphs.length, 0)
   const before = resource.chapters.slice(0, value.chapterIndex).reduce((sum, chapter) => sum + chapter.paragraphs.length, 0)
   return Math.min(100, Math.round(((before + value.paragraphIndex + (value.completed ? 1 : 0)) / Math.max(total, 1)) * 100))
+}
+
+export const upsertResource = (state: AppState, resource: Resource): AppState => {
+  const exists = state.resources.some((item) => item.id === resource.id)
+  return { ...state, resources: exists ? state.resources.map((item) => (item.id === resource.id ? resource : item)) : [resource, ...state.resources] }
+}
+
+export const deleteResource = (state: AppState, resourceId: string): AppState => {
+  const progress = { ...state.progress }
+  delete progress[resourceId]
+  return { ...state, resources: state.resources.filter((item) => item.id !== resourceId), progress }
+}
+
+export const setSilentOverride = (state: AppState, normalized: string, letters: string[] | null): AppState => {
+  const silentOverrides = { ...state.silentOverrides }
+  if (letters === null || letters.length === 0) delete silentOverrides[normalized]
+  else silentOverrides[normalized] = letters
+  return { ...state, silentOverrides }
 }
