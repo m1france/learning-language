@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { Resource } from '../domain'
 
 /**
  * Learning Focus grammar — plein écran pour projeter un texte en classe.
  * Toolbar glass opaque (icônes seules), couleurs/épaisseur en panneau vertical
  * bas-droite, navigation ↑/↓ à droite, annuler/gomme/effacer à gauche.
- * Notes manuscrites déplaçables et redimensionnables. Mode édition : le texte
- * reste noir pendant la saisie, seuls les mots modifiés passent en vert.
+ * Notes manuscrites déplaçables et redimensionnables.
+ * Mode édition : textarea transparente + miroir coloré — les lettres ajoutées
+ * passent en vert en temps réel (diff caractère par caractère contre le texte
+ * d'origine), les lettres grisées restent visibles pendant la saisie.
  * Cmd/Ctrl+Z = annuler la dernière annotation.
  */
 
@@ -86,29 +89,73 @@ function paginate(paragraphs: ReturnType<typeof flattenParagraphs>, wordsPerPage
   return pages.length ? pages : [[]]
 }
 
-/** Diff mot à mot (LCS) : indices des mots du texte actuel absents du texte d'origine. */
-function modifiedWordIndices(original: string, current: string): Set<number> {
-  const a = original.split(/\s+/)
-  const b = current.split(/\s+/)
-  if (a.length > 600 || b.length > 600) return new Set(b.map((_, index) => index))
-  const m = a.length
-  const n = b.length
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0))
+/**
+ * Diff caractère par caractère : indices (dans le texte actuel) des caractères
+ * absents du texte d'origine. Pré/suffixe commun ignorés, LCS sur le milieu —
+ * seules les lettres réellement ajoutées/remplacées ressortent en vert.
+ */
+function modifiedCharIndices(original: string, current: string): Set<number> {
+  const modified = new Set<number>()
+  if (original === current) return modified
+  let p = 0
+  const minLength = Math.min(original.length, current.length)
+  while (p < minLength && original[p] === current[p]) p++
+  let s = 0
+  while (s < minLength - p && original[original.length - 1 - s] === current[current.length - 1 - s]) s++
+  const midA = original.slice(p, original.length - s)
+  const midB = current.slice(p, current.length - s)
+  if (!midA) {
+    for (let j = 0; j < midB.length; j++) modified.add(p + j)
+    return modified
+  }
+  if (!midB) return modified
+  if (midA.length * midB.length > 250000) {
+    for (let j = 0; j < midB.length; j++) modified.add(p + j)
+    return modified
+  }
+  const m = midA.length
+  const n = midB.length
+  const dp: Int32Array[] = Array.from({ length: m + 1 }, () => new Int32Array(n + 1))
   for (let i = m - 1; i >= 0; i--) {
     for (let j = n - 1; j >= 0; j--) {
-      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+      dp[i][j] = midA[i] === midB[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
     }
   }
-  const modified = new Set<number>()
   let i = 0
   let j = 0
   while (i < m && j < n) {
-    if (a[i] === b[j]) { i++; j++ }
+    if (midA[i] === midB[j]) { i++; j++ }
     else if (dp[i + 1][j] >= dp[i][j + 1]) { i++ }
-    else { modified.add(j); j++ }
+    else { modified.add(p + j); j++ }
   }
-  while (j < n) { modified.add(j); j++ }
+  while (j < n) { modified.add(p + j); j++ }
   return modified
+}
+
+/** Rendu caractère par caractère du miroir d'édition : vert (ajouté) + gris (lettre grisée). */
+function renderMirrorChars(text: string, green: Set<number>, grayed: string[], paragraphKey: string): ReactNode[] {
+  const nodes: ReactNode[] = []
+  const parts = text.split(/(\s+)/)
+  let offset = 0
+  let nodeKey = 0
+  for (let partIndex = 0; partIndex < parts.length; partIndex++) {
+    const part = parts[partIndex]
+    if (/\s+/.test(part)) {
+      nodes.push(<span key={nodeKey++}>{part}</span>)
+      offset += part.length
+      continue
+    }
+    for (let letterIndex = 0; letterIndex < part.length; letterIndex++) {
+      const globalIndex = offset + letterIndex
+      const letterKey = `${paragraphKey}:${partIndex}.${letterIndex}`
+      const cls = green.has(globalIndex)
+        ? 'focus-letter edited-char'
+        : grayed.includes(letterKey) ? 'focus-letter user-gray' : 'focus-letter'
+      nodes.push(<span key={nodeKey++} className={cls}>{part[letterIndex]}</span>)
+    }
+    offset += part.length
+  }
+  return nodes
 }
 
 const loadMap = (resourceId: string): AnnotationMap => {
@@ -143,6 +190,7 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
   const [annotations, setAnnotations] = useState<AnnotationMap>(() => loadMap(initialResourceId))
   const [originals, setOriginals] = useState<Record<string, string>>(() => loadOriginals(initialResourceId))
   const [legacyEdited, setLegacyEdited] = useState<string[]>(() => loadLegacyEdited(initialResourceId))
+  const [editValues, setEditValues] = useState<Record<string, string>>({})
   const [pendingLiaison, setPendingLiaison] = useState<Point | null>(null)
   const [draftNote, setDraftNote] = useState<{ x: number; y: number; id?: string; value: string } | null>(null)
 
@@ -158,15 +206,15 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
   const pageKey = `${resource.id}#${safePage}`
   const current = annotations[pageKey] ?? emptyPage()
 
-  // mots modifiés (vert) par paragraphe, calculés contre le texte d'origine
-  const modifiedWords = useMemo(() => {
+  // caractères modifiés (vert) par paragraphe, calculés contre le texte d'origine
+  const modifiedChars = useMemo(() => {
     const map: Record<string, Set<number>> = {}
     for (const paragraph of paragraphs) {
       const original = originals[paragraph.key]
       if (original !== undefined) {
-        if (original !== paragraph.text) map[paragraph.key] = modifiedWordIndices(original, paragraph.text)
+        if (original !== paragraph.text) map[paragraph.key] = modifiedCharIndices(original, paragraph.text)
       } else if (legacyEdited.includes(paragraph.key)) {
-        map[paragraph.key] = new Set(paragraph.text.split(/\s+/).map((_, index) => index))
+        map[paragraph.key] = new Set(Array.from({ length: paragraph.text.length }, (_, index) => index))
       }
     }
     return map
@@ -184,10 +232,16 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
     setAnnotations(loadMap(resource.id))
     setOriginals(loadOriginals(resource.id))
     setLegacyEdited(loadLegacyEdited(resource.id))
+    setEditValues({})
     setPageIndex(0)
     setPendingLiaison(null)
     setDraftNote(null)
   }, [resource.id])
+
+  // en quittant le mode édition, on oublie les brouillons (le blur a déjà commité)
+  useEffect(() => {
+    if (tool !== 'edit') setEditValues({})
+  }, [tool])
 
   const updatePage = (updater: (page: PageAnnotations) => PageAnnotations) => {
     setAnnotations((map) => ({ ...map, [pageKey]: updater(normalizePage(map[pageKey])) }))
@@ -389,8 +443,13 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
     }
   }
 
-  // --- mode édition : texte noir pendant la saisie, mots modifiés en vert -----
+  // --- mode édition : commit au blur, vert en temps réel pendant la saisie ----
   const commitParagraph = (key: string, chapterIndex: number, paragraphIndex: number, text: string) => {
+    setEditValues((values) => {
+      const next = { ...values }
+      delete next[key]
+      return next
+    })
     const before = resource.chapters[chapterIndex]?.paragraphs[paragraphIndex]
     const clean = text.replace(/\s+/g, ' ').trim()
     if (!clean || clean === before) return
@@ -422,31 +481,41 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
 
     <div className="focus-stage">
       <div className="focus-board" ref={boardRef} onClick={onBoardClick}>
-        {page.map((paragraph) => {
-          const modified = modifiedWords[paragraph.key]
-          return <div key={paragraph.key}>
-            {paragraph.isChapterStart && <h3 className="focus-chapter">{paragraph.chapterTitle}</h3>}
-            <p
-              className={`focus-paragraph ${tool === 'edit' ? 'editing' : ''}`}
-              style={{ fontSize }}
-              contentEditable={tool === 'edit'}
-              suppressContentEditableWarning
-              spellCheck={false}
-              onClick={tool === 'edit' ? (event) => event.stopPropagation() : undefined}
-              onBlur={tool === 'edit' ? (event) => commitParagraph(paragraph.key, paragraph.chapterIndex, paragraph.paragraphIndex, event.currentTarget.textContent ?? '') : undefined}
-            >
-              {tool === 'edit'
-                ? paragraph.text
-                : paragraph.text.split(/(\s+)/).map((part, index) => {
-                    if (/\s+/.test(part)) return <span key={index}>{part}</span>
-                    const wordKey = `${paragraph.key}:${index}`
-                    return <FocusWord key={wordKey} wordKey={wordKey} raw={part} grayed={current.grayed}
-                      edited={modified?.has(index / 2) ?? false}
-                      interactive={tool === 'gray' || tool === 'liaison'} />
-                  })}
-            </p>
-          </div>
-        })}
+        {page.map((paragraph) => <div key={paragraph.key}>
+          {paragraph.isChapterStart && <h3 className="focus-chapter">{paragraph.chapterTitle}</h3>}
+          {tool === 'edit' ? (
+            (() => {
+              const value = editValues[paragraph.key] ?? paragraph.text
+              const original = originals[paragraph.key] ?? paragraph.text
+              const green = modifiedCharIndices(original, value)
+              return <div className="focus-paragraph editing focus-edit-wrap" style={{ fontSize }}
+                onClick={(event) => event.stopPropagation()}>
+                <span className="focus-edit-mirror" aria-hidden>
+                  {renderMirrorChars(value, green, current.grayed, paragraph.key)}
+                </span>
+                <textarea className="focus-edit-area" value={value} spellCheck={false}
+                  onChange={(event) => setEditValues((values) => ({ ...values, [paragraph.key]: event.target.value }))}
+                  onBlur={(event) => commitParagraph(paragraph.key, paragraph.chapterIndex, paragraph.paragraphIndex, event.target.value)} />
+              </div>
+            })()
+          ) : (
+            (() => {
+              const modified = modifiedChars[paragraph.key]
+              let offset = 0
+              return <p className="focus-paragraph" style={{ fontSize }}>
+                {paragraph.text.split(/(\s+)/).map((part, index) => {
+                  const start = offset
+                  offset += part.length
+                  if (/\s+/.test(part)) return <span key={index}>{part}</span>
+                  const wordKey = `${paragraph.key}:${index}`
+                  return <FocusWord key={wordKey} wordKey={wordKey} raw={part} grayed={current.grayed}
+                    green={modified} offset={start}
+                    interactive={tool === 'gray' || tool === 'liaison'} />
+                })}
+              </p>
+            })()
+          )}
+        </div>)}
 
         {current.texts.map((note) => <div key={note.id} className="focus-text-note"
           style={{ left: note.x, top: note.y, fontSize: note.size, color: note.color }}
@@ -522,19 +591,21 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
   </div>
 }
 
-function FocusWord({ raw, wordKey, grayed, edited, interactive }: {
+function FocusWord({ raw, wordKey, grayed, green, offset, interactive }: {
   raw: string
   wordKey: string
   grayed: string[]
-  edited: boolean
+  green?: Set<number>
+  offset: number
   interactive: boolean
 }) {
-  return <span className={`focus-word ${interactive ? 'clickable' : ''} ${edited ? 'edited-word' : ''}`} data-word={wordKey}>
-    {[...raw].map((letter, index) => {
+  return <span className={`focus-word ${interactive ? 'clickable' : ''}`} data-word={wordKey}>
+    {raw.split('').map((letter, index) => {
       const letterKey = `${wordKey}.${index}`
       const userGray = grayed.includes(letterKey)
+      const isGreen = green?.has(offset + index) ?? false
       return <span key={index} data-letter={letterKey}
-        className={`focus-letter ${userGray ? 'user-gray' : ''}`}>{letter}</span>
+        className={`focus-letter ${isGreen ? 'edited-char' : ''} ${userGray ? 'user-gray' : ''}`}>{letter}</span>
     })}
   </span>
 }

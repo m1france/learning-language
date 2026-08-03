@@ -160,9 +160,11 @@ h1,h2,h3,p { margin-top:0; } h1,h2,h3 { letter-spacing:-1.5px; } h1,h2 { font-fa
 .focus-text-note { position:absolute; font-family:'Caveat',cursive; font-weight:500; white-space:pre-wrap; cursor:move; touch-action:none; z-index:2; line-height:1.25; }
 .focus-text-input { position:absolute; font-family:'Caveat',cursive; font-weight:500; background:transparent; border:none; outline:none; resize:none; z-index:3; line-height:1.25; min-width:120px; overflow:hidden; }
 
-/* mode édition : texte noir pendant la saisie ; seuls les mots modifiés sont verts */
-.focus-paragraph.editing { outline:none; cursor:text; }
-.focus-word.edited-word { color:#16a34a; }
+/* mode édition : miroir coloré sous une textarea transparente, alignés au pixel près */
+.focus-edit-wrap { position:relative; }
+.focus-edit-mirror { display:block; white-space:pre-wrap; overflow-wrap:break-word; pointer-events:none; }
+.focus-edit-area { position:absolute; inset:0; width:100%; height:100%; margin:0; padding:0; border:none; outline:none; resize:none; overflow:hidden; background:transparent; color:transparent; caret-color:var(--ink); font-family:inherit; font-size:inherit; line-height:inherit; letter-spacing:inherit; white-space:pre-wrap; overflow-wrap:break-word; }
+.focus-letter.edited-char { color:#16a34a; }
 
 /* ===== Parler v2 ===== */
 .mode-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:20px; }
