@@ -1,4 +1,4 @@
-import { type AppState, type DictionarySense, type LearnedWord, type Resource, type UserSettings, type WordMark, id, normalizeWord, todayKey } from './domain'
+import { type ApiSettings, type AppState, type DictionarySense, type LearnedWord, type Resource, type UserSettings, type WordMark, id, normalizeWord, todayKey } from './domain'
 import { seedResources } from './seed'
 
 const stateKey = 'vivre-la-langue:state:v2'
@@ -16,11 +16,17 @@ export const defaultSettings: UserSettings = {
     dictionaryEndpoint: 'https://en.wiktionary.org/w/api.php',
     openRouterKey: '',
     openRouterModel: 'meta-llama/llama-3.3-70b-instruct:free',
+    agentModel: 'nvidia/nemotron-3-ultra-550b-a55b:free',
     openAiKey: '',
     unsplashKey: '',
     pexelsKey: '',
     ttsVoice: '',
-    ttsModel: '',
+    ttsProvider: 'google',
+    ttsModel: 'openai/gpt-4o-audio-preview',
+    elevenLabsKey: '',
+    elevenLabsVoice: '21m00Tcm4TlvDq8ikWAM',
+    fishKey: '',
+    fishReferenceId: '',
   },
 }
 
@@ -33,7 +39,6 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   writings: [],
   sessions: [],
   completedScenarios: [],
-  silentOverrides: {},
   wordMarks: {},
   silentMarks: {},
   customTools: [],
@@ -46,18 +51,21 @@ export const loadState = (): AppState | null => {
     if (!raw) return null
     const parsed = JSON.parse(raw) as AppState
     if (parsed.version !== 2 || !parsed.settings || !Array.isArray(parsed.resources)) return null
-    // Fish Audio ne produit pas d'audio via OpenRouter (HTTP 404 confirmé) : repli sur la voix naturelle gratuite.
-    if (parsed.settings?.api?.ttsModel?.startsWith('fish-audio')) parsed.settings.api.ttsModel = ''
+    const api = parsed.settings.api as Partial<ApiSettings> | undefined
+    // Migration : déduire ttsProvider de l'ancien réglage ttsModel (fish-audio ne produit pas d'audio via OpenRouter).
+    if (api && !api.ttsProvider) {
+      api.ttsProvider = api.ttsModel === 'browser' ? 'browser' : api.ttsModel === 'openai/gpt-4o-audio-preview' ? 'openrouter' : 'google'
+    }
+    if (api?.ttsModel?.startsWith('fish-audio')) api.ttsModel = 'openai/gpt-4o-audio-preview'
     return {
       ...createState(parsed.settings),
       ...parsed,
-      settings: { ...defaultSettings, ...parsed.settings, api: { ...defaultSettings.api, ...parsed.settings.api } },
+      settings: { ...defaultSettings, ...parsed.settings, api: { ...defaultSettings.api, ...api } },
       progress: parsed.progress ?? {},
       words: parsed.words ?? [],
       writings: parsed.writings ?? [],
       sessions: parsed.sessions ?? [],
       completedScenarios: parsed.completedScenarios ?? [],
-      silentOverrides: parsed.silentOverrides ?? {},
       wordMarks: parsed.wordMarks ?? {},
       silentMarks: parsed.silentMarks ?? {},
       customTools: parsed.customTools ?? [],
@@ -142,13 +150,6 @@ export const deleteResource = (state: AppState, resourceId: string): AppState =>
   const progress = { ...state.progress }
   delete progress[resourceId]
   return { ...state, resources: state.resources.filter((item) => item.id !== resourceId), progress }
-}
-
-export const setSilentOverride = (state: AppState, normalized: string, letters: string[] | null): AppState => {
-  const silentOverrides = { ...state.silentOverrides }
-  if (letters === null || letters.length === 0) delete silentOverrides[normalized]
-  else silentOverrides[normalized] = letters
-  return { ...state, silentOverrides }
 }
 
 /** Set or clear a user grammar mark on a word (`null` removes it). */

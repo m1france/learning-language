@@ -32,9 +32,11 @@ const MODEL_PRESETS = [
   { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini (payant)', detail: 'Excellentes explications, faible coût.' },
 ]
 
-const TTS_PRESETS = [
-  { id: '', name: 'Voix naturelle (gratuit)', detail: 'Voix Google de bonne qualité, sans clé ni compte. Recommandé.' },
-  { id: 'openai/gpt-4o-audio-preview', name: 'GPT-4o Audio (OpenRouter)', detail: 'Voix IA haut de gamme via ta clé OpenRouter. Payant selon le modèle.' },
+const TTS_PROVIDERS: { id: UserSettings['api']['ttsProvider']; name: string; detail: string }[] = [
+  { id: 'google', name: 'Voix naturelle (gratuit)', detail: 'Voix Google de bonne qualité, sans clé ni compte. Recommandé pour démarrer.' },
+  { id: 'elevenlabs', name: 'ElevenLabs', detail: 'Voix IA haut de gamme. Colle ta clé API ElevenLabs ci-dessous.' },
+  { id: 'fish', name: 'Fish Audio', detail: 'S2.1 et autres modèles Fish, avec ta clé API Fish Audio directe.' },
+  { id: 'openrouter', name: 'OpenRouter (modèle audio)', detail: 'Un modèle compatible sortie audio via ta clé OpenRouter (ex. openai/gpt-4o-audio-preview).' },
   { id: 'browser', name: 'Voix du navigateur', detail: 'Fonctionne hors ligne, qualité variable selon l’appareil.' },
 ]
 
@@ -115,15 +117,32 @@ export function Settings({ settings, onSave, onResetData }: SettingsProps) {
         </>}
 
         {tab === 'connections' && <>
-          <SettingHeading title="Connexions" detail="Les clés restent dans ce navigateur. Laisse vide pour utiliser les solutions locales." />
+          <SettingHeading title="Connexions" detail="Les clés restent dans ce navigateur. Laisse vide pour utiliser les solutions gratuites." />
           <div className="connection-card">
-            <div><h3>Voix (TTS)</h3><p>La voix qui lit les textes à voix haute.</p></div>
+            <div><h3>Choix modèle Agent principal</h3><p>Le modèle qui pilotera les prochaines fonctionnalités IA. Écris directement l’identifiant du modèle (OpenRouter ou autre).</p></div>
+            <label>Modèle principal<input value={draft.api.agentModel} onChange={(event) => updateApi('agentModel', event.target.value)} placeholder="nvidia/nemotron-3-ultra-550b-a55b:free" /></label>
+            <p className="field-hint">Exemples : <code>nvidia/nemotron-3-ultra-550b-a55b:free</code>, <code>z-ai/glm-5.2</code>, <code>meta-llama/llama-3.3-70b-instruct:free</code></p>
+          </div>
+          <div className="connection-card">
+            <div><h3>Voix (TTS)</h3><p>Choisis le fournisseur qui lit les textes à voix haute, puis colle la clé correspondante si besoin.</p></div>
             <div className="preset-grid">
-              {TTS_PRESETS.map((preset) => <button key={preset.id} className={draft.api.ttsModel === preset.id ? 'preset-card selected' : 'preset-card'} onClick={() => updateApi('ttsModel', preset.id)}>
-                <strong>{preset.name}</strong><p>{preset.detail}</p>
+              {TTS_PROVIDERS.map((provider) => <button key={provider.id} className={draft.api.ttsProvider === provider.id ? 'preset-card selected' : 'preset-card'} onClick={() => updateApi('ttsProvider', provider.id)}>
+                <strong>{provider.name}</strong><p>{provider.detail}</p>
               </button>)}
             </div>
-            {draft.api.ttsModel === 'browser' && voices.length > 0 && <label>Voix préférée<select value={draft.api.ttsVoice} onChange={(event) => updateApi('ttsVoice', event.target.value)}>
+            {draft.api.ttsProvider === 'elevenlabs' && <>
+              <label>Clé API ElevenLabs<input type="password" value={draft.api.elevenLabsKey} onChange={(event) => updateApi('elevenLabsKey', event.target.value)} placeholder="sk_…" autoComplete="off" /></label>
+              <label>ID de voix <small>ex. 21m00Tcm4TlvDq8ikWAM (Rachel)</small><input value={draft.api.elevenLabsVoice} onChange={(event) => updateApi('elevenLabsVoice', event.target.value)} /></label>
+            </>}
+            {draft.api.ttsProvider === 'fish' && <>
+              <label>Clé API Fish Audio<input type="password" value={draft.api.fishKey} onChange={(event) => updateApi('fishKey', event.target.value)} placeholder="Clé api.fish.audio" autoComplete="off" /></label>
+              <label>ID de voix / modèle <small>optionnel — reference_id</small><input value={draft.api.fishReferenceId} onChange={(event) => updateApi('fishReferenceId', event.target.value)} placeholder="Laisser vide pour la voix S2 par défaut" /></label>
+            </>}
+            {draft.api.ttsProvider === 'openrouter' && <>
+              <label>Modèle audio OpenRouter<input value={draft.api.ttsModel} onChange={(event) => updateApi('ttsModel', event.target.value)} placeholder="openai/gpt-4o-audio-preview" /></label>
+              <p className="field-hint">Nécessite ta clé OpenRouter (carte « Clés API » ci-dessous) et un modèle qui accepte la sortie audio.</p>
+            </>}
+            {draft.api.ttsProvider === 'browser' && voices.length > 0 && <label>Voix préférée<select value={draft.api.ttsVoice} onChange={(event) => updateApi('ttsVoice', event.target.value)}>
               <option value="">Automatique (la plus naturelle)</option>
               {voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} ({voice.lang})</option>)}
             </select></label>}

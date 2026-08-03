@@ -94,7 +94,7 @@ export default function App() {
       )}
     </section>
     <nav className="mobile-nav">{navItems.slice(1).map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => go(item.id)} key={item.id}><b>{item.icon}</b><span>{t[item.label]}</span></button>)}</nav>
-    {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} onClose={() => setFocusId(null)} />}
+    {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} onUpdateResource={(updated) => change(upsertResource(state, updated))} onClose={() => setFocusId(null)} />}
   </main>
 }
 

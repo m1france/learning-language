@@ -85,17 +85,27 @@ export type MediaSession = {
   transcript?: string
 }
 
+export type TtsProvider = 'google' | 'openrouter' | 'elevenlabs' | 'fish' | 'browser'
+
 export type ApiSettings = {
   dictionaryProvider: 'local' | 'wiktionary' | 'ai'
   dictionaryEndpoint: string
   openRouterKey: string
   openRouterModel: string
+  /** Main agent model (free-form OpenRouter model id), reserved for upcoming AI features. */
+  agentModel: string
   openAiKey: string
   unsplashKey: string
   pexelsKey: string
   ttsVoice: string
-  /** OpenRouter model used for high-quality TTS when a key is configured. */
+  /** TTS provider currently selected in Settings. */
+  ttsProvider: TtsProvider
+  /** OpenRouter audio model id, used when ttsProvider === 'openrouter'. */
   ttsModel: string
+  elevenLabsKey: string
+  elevenLabsVoice: string
+  fishKey: string
+  fishReferenceId: string
 }
 
 export type CustomTool = {
@@ -136,8 +146,6 @@ export type AppState = {
   writings: WritingEntry[]
   sessions: MediaSession[]
   completedScenarios: string[]
-  /** User overrides for silent letters: normalized word → exact letters considered silent. */
-  silentOverrides: Record<string, string[]>
   /** User grammar marks: `${language}:${normalized}` → mark (type, style, color). */
   wordMarks: Record<string, WordMark>
   /** User-grayed letters: `${language}:${normalized}` → indices of letters (alpha order) greyed by the user. */

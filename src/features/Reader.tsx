@@ -165,10 +165,15 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
   const speakText = async (text: string) => {
     const result = await speak(text, resource.language, api)
-    if (result.engine === 'ai') notifyTts(`✦ ${t.ttsAi} — ${api.ttsModel}`)
-    else if (result.engine === 'google') notifyTts(`✦ ${t.ttsGoogle}`)
-    else if (result.engine === 'browser') notifyTts(`▶ ${t.ttsBrowser}${result.error ? ` · ${result.error}` : ''}`)
-    else notifyTts(result.error ?? '')
+    const engineLabel: Record<string, string> = {
+      openrouter: `✦ ${t.ttsAi} — ${api.ttsModel}`,
+      elevenlabs: '✦ ElevenLabs',
+      fish: '✦ Fish Audio',
+      google: `✦ ${t.ttsGoogle}`,
+    }
+    if (result.engine === 'browser') notifyTts(`▶ ${t.ttsBrowser}${result.error ? ` · ${result.error}` : ''}`)
+    else if (result.engine === 'none') notifyTts(result.error ?? '')
+    else notifyTts(`${engineLabel[result.engine]}${result.error ? ` · ${result.error}` : ''}`)
   }
 
   const gotoPage = (next: number) => {
@@ -540,7 +545,7 @@ function WordCard({ ui, selected, state, language, inDeck, onClose, onAddWord, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected.raw])
 
-  const sourceLabel = dict?.source === 'ai' ? ' · IA' : dict?.source === 'wiktionary' ? ` · ${t.wiktionary}` : ` · ${t.noAi}`
+  const sourceName = dict?.source === 'ai' ? 'IA' : dict?.source === 'wiktionary' ? 'Wiktionary' : t.noAi
 
   // Position the card next to the clicked word, clamped inside the viewport.
   const cardWidth = 340
@@ -555,9 +560,9 @@ function WordCard({ ui, selected, state, language, inDeck, onClose, onAddWord, o
       <h2>{cleanWord}</h2>
       {local.phonetic && <span className="phonetic">/ {local.phonetic} /</span>}
     </div>
-    <p className="word-type">{dict?.partOfSpeech || (loading ? '…' : guessPartOfSpeech(normalized, language))} · {language === 'en' ? 'American English' : 'Français'}</p>
+    <p className="word-type">{dict?.partOfSpeech || (loading ? '…' : guessPartOfSpeech(normalized, language))} · {sourceName}</p>
     <div className="definition">
-      <span>{t.context}{dict ? sourceLabel : ''}</span>
+      <span>{t.context}</span>
       {loading && <p className="word-loading">{t.thinking}</p>}
       {!loading && dict?.translation && <p className="word-translation">{dict.translation}</p>}
       {!loading && dict?.explanation && dict.explanation !== dict.translation && <p>{dict.explanation}</p>}

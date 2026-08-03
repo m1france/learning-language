@@ -194,7 +194,46 @@ export function listVoices(lang: Language): SpeechSynthesisVoice[] {
     .sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang))
 }
 
-export type SpeakResult = { engine: 'ai' | 'google' | 'browser' | 'none'; error?: string }
+export type SpeakEngine = 'openrouter' | 'elevenlabs' | 'fish' | 'google' | 'browser' | 'none'
+export type SpeakResult = { engine: SpeakEngine; error?: string }
+
+async function playBlob(blob: Blob): Promise<void> {
+  audioElement?.pause()
+  audioElement = new Audio(URL.createObjectURL(blob))
+  await audioElement.play()
+}
+
+async function speakWithElevenLabs(text: string, api: ApiSettings): Promise<{ ok: boolean; error?: string }> {
+  if (!api.elevenLabsKey) return { ok: false, error: 'pas de clé ElevenLabs' }
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${api.elevenLabsVoice || '21m00Tcm4TlvDq8ikWAM'}?output_format=mp3_44100_128`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'xi-api-key': api.elevenLabsKey },
+      body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2' }),
+    })
+    if (!response.ok) return { ok: false, error: `HTTP ${response.status} — ${(await response.text().catch(() => '')).slice(0, 140)}` }
+    await playBlob(await response.blob())
+    return { ok: true }
+  } catch (caught) {
+    return { ok: false, error: caught instanceof Error ? caught.message : 'erreur réseau' }
+  }
+}
+
+async function speakWithFish(text: string, api: ApiSettings): Promise<{ ok: boolean; error?: string }> {
+  if (!api.fishKey) return { ok: false, error: 'pas de clé Fish Audio' }
+  try {
+    const response = await fetch('https://api.fish.audio/v1/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api.fishKey}` },
+      body: JSON.stringify({ text, format: 'mp3', ...(api.fishReferenceId ? { reference_id: api.fishReferenceId } : {}) }),
+    })
+    if (!response.ok) return { ok: false, error: `HTTP ${response.status} — ${(await response.text().catch(() => '')).slice(0, 140)}` }
+    await playBlob(await response.blob())
+    return { ok: true }
+  } catch (caught) {
+    return { ok: false, error: caught instanceof Error ? caught.message : 'erreur réseau' }
+  }
+}
 
 async function speakWithOpenRouter(text: string, api: ApiSettings): Promise<{ ok: boolean; error?: string }> {
   if (!api.openRouterKey) return { ok: false, error: 'pas de clé OpenRouter' }
@@ -284,17 +323,27 @@ function speakWithGoogle(text: string, lang: Language): Promise<boolean> {
   })
 }
 
-/** Speak text with the best available engine: OpenRouter audio model (if configured), else free natural Google voice, else the most natural browser voice. */
+/** Speak text via the provider chosen in Settings, with sensible fallbacks. */
 export async function speak(text: string, lang: Language, api: ApiSettings): Promise<SpeakResult> {
   stopSpeaking()
   const errors: string[] = []
-  if (api.ttsModel && api.ttsModel !== 'browser' && api.openRouterKey) {
+  if (api.ttsProvider === 'openrouter' && api.openRouterKey) {
     const attempt = await speakWithOpenRouter(text, api)
-    if (attempt.ok) return { engine: 'ai' }
+    if (attempt.ok) return { engine: 'openrouter' }
     errors.push(`OpenRouter: ${attempt.error}`)
   }
-  if (api.ttsModel !== 'browser') {
-    if (await speakWithGoogle(text, lang)) return { engine: 'google' }
+  if (api.ttsProvider === 'elevenlabs') {
+    const attempt = await speakWithElevenLabs(text, api)
+    if (attempt.ok) return { engine: 'elevenlabs' }
+    errors.push(`ElevenLabs: ${attempt.error}`)
+  }
+  if (api.ttsProvider === 'fish') {
+    const attempt = await speakWithFish(text, api)
+    if (attempt.ok) return { engine: 'fish' }
+    errors.push(`Fish Audio: ${attempt.error}`)
+  }
+  if (api.ttsProvider !== 'browser') {
+    if (await speakWithGoogle(text, lang)) return { engine: 'google', error: errors.join(' · ') || undefined }
     errors.push('voix Google indisponible')
   }
   if (typeof speechSynthesis === 'undefined') return { engine: 'none', error: errors.join(' · ') }
