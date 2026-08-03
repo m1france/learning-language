@@ -3,10 +3,11 @@ import type { Resource } from '../domain'
 
 /**
  * Learning Focus grammar — plein écran pour projeter un texte en classe.
- * Barre d'outils liquid glass : stylo sensible (point au simple toucher),
- * surligneur à ligne droite forcée, ligne avec aimantation Shift (15°),
- * formes, flèche, arcs de liaison, grisage de lettres, annotations texte
- * manuscrites et mode édition (texte modifié en vert). Cmd/Ctrl+Z = annuler.
+ * Toolbar glass opaque (icônes seules), couleurs/épaisseur en panneau vertical
+ * bas-droite, navigation ↑/↓ à droite, annuler/gomme/effacer à gauche.
+ * Notes manuscrites déplaçables et redimensionnables. Mode édition : le texte
+ * reste noir pendant la saisie, seuls les mots modifiés passent en vert.
+ * Cmd/Ctrl+Z = annuler la dernière annotation.
  */
 
 type Tool = 'select' | 'pen' | 'highlighter' | 'text' | 'edit' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'liaison' | 'gray' | 'eraser'
@@ -47,7 +48,6 @@ const TOOLS: { id: Tool; icon: string; label: string; color?: boolean; width?: b
   { id: 'arrow', icon: '→', label: 'Flèche', color: true, width: true },
   { id: 'liaison', icon: '‿', label: 'Liaison', color: true },
   { id: 'gray', icon: 'Aa', label: 'Griser une lettre' },
-  { id: 'eraser', icon: '⌫', label: 'Gomme' },
 ]
 
 const COLORS = ['#d64545', '#2563eb', '#16a34a', '#f59e0b', '#20201e', '#7c3aed']
@@ -86,11 +86,44 @@ function paginate(paragraphs: ReturnType<typeof flattenParagraphs>, wordsPerPage
   return pages.length ? pages : [[]]
 }
 
+/** Diff mot à mot (LCS) : indices des mots du texte actuel absents du texte d'origine. */
+function modifiedWordIndices(original: string, current: string): Set<number> {
+  const a = original.split(/\s+/)
+  const b = current.split(/\s+/)
+  if (a.length > 600 || b.length > 600) return new Set(b.map((_, index) => index))
+  const m = a.length
+  const n = b.length
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0))
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+  const modified = new Set<number>()
+  let i = 0
+  let j = 0
+  while (i < m && j < n) {
+    if (a[i] === b[j]) { i++; j++ }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { i++ }
+    else { modified.add(j); j++ }
+  }
+  while (j < n) { modified.add(j); j++ }
+  return modified
+}
+
 const loadMap = (resourceId: string): AnnotationMap => {
   try {
     const raw = JSON.parse(localStorage.getItem(`vivre-focus-${resourceId}`) || '{}') as Record<string, Partial<PageAnnotations>>
     return Object.fromEntries(Object.entries(raw).map(([key, page]) => [key, normalizePage(page)]))
   } catch { return {} }
+}
+
+const loadOriginals = (resourceId: string): Record<string, string> => {
+  try { return JSON.parse(localStorage.getItem(`vivre-focus-originals-${resourceId}`) || '{}') } catch { return {} }
+}
+
+const loadLegacyEdited = (resourceId: string): string[] => {
+  try { return JSON.parse(localStorage.getItem(`vivre-focus-edited-${resourceId}`) || '[]') } catch { return [] }
 }
 
 export function LearningFocus({ resources, initialResourceId, onUpdateResource, onClose }: {
@@ -108,15 +141,14 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
   const [width, setWidth] = useState(WIDTHS[1])
   const [textSize, setTextSize] = useState(24)
   const [annotations, setAnnotations] = useState<AnnotationMap>(() => loadMap(initialResourceId))
-  const [editedKeys, setEditedKeys] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(`vivre-focus-edited-${initialResourceId}`) || '[]') } catch { return [] }
-  })
+  const [originals, setOriginals] = useState<Record<string, string>>(() => loadOriginals(initialResourceId))
+  const [legacyEdited, setLegacyEdited] = useState<string[]>(() => loadLegacyEdited(initialResourceId))
   const [pendingLiaison, setPendingLiaison] = useState<Point | null>(null)
   const [draftNote, setDraftNote] = useState<{ x: number; y: number; id?: string; value: string } | null>(null)
 
   const boardRef = useRef<HTMLDivElement>(null)
-  const toolbarRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef<Stroke | null>(null)
+  const dragNoteRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null)
   const [, forceRedraw] = useState(0)
 
   const paragraphs = useMemo(() => flattenParagraphs(resource), [resource])
@@ -126,17 +158,32 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
   const pageKey = `${resource.id}#${safePage}`
   const current = annotations[pageKey] ?? emptyPage()
 
+  // mots modifiés (vert) par paragraphe, calculés contre le texte d'origine
+  const modifiedWords = useMemo(() => {
+    const map: Record<string, Set<number>> = {}
+    for (const paragraph of paragraphs) {
+      const original = originals[paragraph.key]
+      if (original !== undefined) {
+        if (original !== paragraph.text) map[paragraph.key] = modifiedWordIndices(original, paragraph.text)
+      } else if (legacyEdited.includes(paragraph.key)) {
+        map[paragraph.key] = new Set(paragraph.text.split(/\s+/).map((_, index) => index))
+      }
+    }
+    return map
+  }, [paragraphs, originals, legacyEdited])
+
   useEffect(() => {
     localStorage.setItem(`vivre-focus-${resource.id}`, JSON.stringify(annotations))
   }, [annotations, resource.id])
 
   useEffect(() => {
-    localStorage.setItem(`vivre-focus-edited-${resource.id}`, JSON.stringify(editedKeys))
-  }, [editedKeys, resource.id])
+    localStorage.setItem(`vivre-focus-originals-${resource.id}`, JSON.stringify(originals))
+  }, [originals, resource.id])
 
   useEffect(() => {
     setAnnotations(loadMap(resource.id))
-    try { setEditedKeys(JSON.parse(localStorage.getItem(`vivre-focus-edited-${resource.id}`) || '[]')) } catch { setEditedKeys([]) }
+    setOriginals(loadOriginals(resource.id))
+    setLegacyEdited(loadLegacyEdited(resource.id))
     setPageIndex(0)
     setPendingLiaison(null)
     setDraftNote(null)
@@ -294,7 +341,7 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
     }
   }
 
-  // --- notes texte ------------------------------------------------------------
+  // --- notes texte : création, édition, déplacement ---------------------------
   const commitNote = () => {
     if (!draftNote) return
     const value = draftNote.value.trim()
@@ -313,29 +360,52 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
     setDraftNote(null)
   }
 
-  // --- mode édition -----------------------------------------------------------
+  const onNotePointerDown = (event: React.PointerEvent, note: TextNote) => {
+    if (tool !== 'text' && tool !== 'select') return
+    event.stopPropagation()
+    dragNoteRef.current = { id: note.id, startX: event.clientX, startY: event.clientY, origX: note.x, origY: note.y, moved: false }
+    ;(event.target as Element).setPointerCapture?.(event.pointerId)
+  }
+
+  const onNotePointerMove = (event: React.PointerEvent) => {
+    const drag = dragNoteRef.current
+    if (!drag) return
+    const dx = event.clientX - drag.startX
+    const dy = event.clientY - drag.startY
+    if (!drag.moved && Math.hypot(dx, dy) < 5) return
+    drag.moved = true
+    updatePage((p) => ({ ...p, texts: p.texts.map((note) => (note.id === drag.id ? { ...note, x: drag.origX + dx, y: drag.origY + dy } : note)) }))
+  }
+
+  const onNotePointerUp = (event: React.PointerEvent, note: TextNote) => {
+    const drag = dragNoteRef.current
+    dragNoteRef.current = null
+    if (!drag) return
+    event.stopPropagation()
+    if (!drag.moved && tool === 'text') {
+      setTextSize(note.size)
+      setColor(note.color)
+      setDraftNote({ x: note.x, y: note.y, id: note.id, value: note.text })
+    }
+  }
+
+  // --- mode édition : texte noir pendant la saisie, mots modifiés en vert -----
   const commitParagraph = (key: string, chapterIndex: number, paragraphIndex: number, text: string) => {
+    const before = resource.chapters[chapterIndex]?.paragraphs[paragraphIndex]
     const clean = text.replace(/\s+/g, ' ').trim()
-    if (!clean || clean === resource.chapters[chapterIndex]?.paragraphs[paragraphIndex]) return
+    if (!clean || clean === before) return
+    setOriginals((map) => (key in map ? map : { ...map, [key]: before ?? '' }))
     const chapters = resource.chapters.map((chapter, index) =>
       index === chapterIndex
         ? { ...chapter, paragraphs: chapter.paragraphs.map((paragraph, pIndex) => (pIndex === paragraphIndex ? clean : paragraph)) }
         : chapter,
     )
     onUpdateResource({ ...resource, chapters })
-    setEditedKeys((keys) => (keys.includes(key) ? keys : [...keys, key]))
   }
 
   const activeTool = TOOLS.find((item) => item.id === tool) ?? TOOLS[0]
   const draft = drawingRef.current
-
-  // position de l'arc de couleurs au-dessus de l'outil actif
-  const [arcLeft, setArcLeft] = useState(0)
-  useEffect(() => {
-    const toolbar = toolbarRef.current
-    const button = toolbar?.querySelector(`[data-tool="${tool}"]`) as HTMLElement | null
-    if (toolbar && button) setArcLeft(button.offsetLeft + button.offsetWidth / 2)
-  }, [tool])
+  const showPanel = activeTool.color || activeTool.width || tool === 'text'
 
   return <div className="focus-overlay">
     <header className="focus-top">
@@ -352,30 +422,37 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
 
     <div className="focus-stage">
       <div className="focus-board" ref={boardRef} onClick={onBoardClick}>
-        {page.map((paragraph) => <div key={paragraph.key}>
-          {paragraph.isChapterStart && <h3 className="focus-chapter">{paragraph.chapterTitle}</h3>}
-          <p
-            className={`focus-paragraph ${editedKeys.includes(paragraph.key) ? 'edited' : ''} ${tool === 'edit' ? 'editing' : ''}`}
-            style={{ fontSize }}
-            contentEditable={tool === 'edit'}
-            suppressContentEditableWarning
-            spellCheck={false}
-            onClick={tool === 'edit' ? (event) => event.stopPropagation() : undefined}
-            onBlur={tool === 'edit' ? (event) => commitParagraph(paragraph.key, paragraph.chapterIndex, paragraph.paragraphIndex, event.currentTarget.textContent ?? '') : undefined}
-          >
-            {tool === 'edit'
-              ? paragraph.text
-              : paragraph.text.split(/(\s+)/).map((part, index) => {
-                  if (/\s+/.test(part)) return <span key={index}>{part}</span>
-                  const wordKey = `${paragraph.key}:${index}`
-                  return <FocusWord key={wordKey} wordKey={wordKey} raw={part} grayed={current.grayed} interactive={tool === 'gray' || tool === 'liaison'} />
-                })}
-          </p>
-        </div>)}
+        {page.map((paragraph) => {
+          const modified = modifiedWords[paragraph.key]
+          return <div key={paragraph.key}>
+            {paragraph.isChapterStart && <h3 className="focus-chapter">{paragraph.chapterTitle}</h3>}
+            <p
+              className={`focus-paragraph ${tool === 'edit' ? 'editing' : ''}`}
+              style={{ fontSize }}
+              contentEditable={tool === 'edit'}
+              suppressContentEditableWarning
+              spellCheck={false}
+              onClick={tool === 'edit' ? (event) => event.stopPropagation() : undefined}
+              onBlur={tool === 'edit' ? (event) => commitParagraph(paragraph.key, paragraph.chapterIndex, paragraph.paragraphIndex, event.currentTarget.textContent ?? '') : undefined}
+            >
+              {tool === 'edit'
+                ? paragraph.text
+                : paragraph.text.split(/(\s+)/).map((part, index) => {
+                    if (/\s+/.test(part)) return <span key={index}>{part}</span>
+                    const wordKey = `${paragraph.key}:${index}`
+                    return <FocusWord key={wordKey} wordKey={wordKey} raw={part} grayed={current.grayed}
+                      edited={modified?.has(index / 2) ?? false}
+                      interactive={tool === 'gray' || tool === 'liaison'} />
+                  })}
+            </p>
+          </div>
+        })}
 
         {current.texts.map((note) => <div key={note.id} className="focus-text-note"
           style={{ left: note.x, top: note.y, fontSize: note.size, color: note.color }}
-          onClick={(event) => { if (tool === 'text') { event.stopPropagation(); setTextSize(note.size); setDraftNote({ x: note.x, y: note.y, id: note.id, value: note.text }) } }}>
+          onPointerDown={(event) => onNotePointerDown(event, note)}
+          onPointerMove={onNotePointerMove}
+          onPointerUp={(event) => onNotePointerUp(event, note)}>
           {note.text}
         </div>)}
 
@@ -404,53 +481,55 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
       </div>
     </div>
 
-    {/* annuler / effacer — bord gauche, centré verticalement */}
+    {/* annuler / gomme / effacer — bord gauche, centré verticalement */}
     <div className="focus-side-pill left glass">
       <button title="Annuler (⌘Z)" onClick={undo}>↩</button>
+      <button title="Gomme" className={tool === 'eraser' ? 'active' : ''}
+        onClick={() => { setTool(tool === 'eraser' ? 'select' : 'eraser'); setPendingLiaison(null); setDraftNote(null) }}>⌫</button>
       <button title="Effacer la page" onClick={clearPage}>🗑</button>
     </div>
 
     {/* navigation pages — bord droit, centré verticalement */}
     <div className="focus-side-pill right glass">
-      <button disabled={safePage === 0} onClick={() => { setPageIndex(safePage - 1); setPendingLiaison(null); setDraftNote(null) }}>←</button>
+      <button title="Page précédente" disabled={safePage === 0} onClick={() => { setPageIndex(safePage - 1); setPendingLiaison(null); setDraftNote(null) }}>↑</button>
       <span>{safePage + 1} / {pages.length}</span>
-      <button disabled={safePage >= pages.length - 1} onClick={() => { setPageIndex(safePage + 1); setPendingLiaison(null); setDraftNote(null) }}>→</button>
+      <button title="Page suivante" disabled={safePage >= pages.length - 1} onClick={() => { setPageIndex(safePage + 1); setPendingLiaison(null); setDraftNote(null) }}>↓</button>
     </div>
 
-    <footer className="focus-toolbar glass" ref={toolbarRef}>
-      {TOOLS.map((item) => <button key={item.id} data-tool={item.id}
+    {/* couleurs + épaisseur — panneau vertical bas-droite, sous la navigation */}
+    {showPanel && <div className="focus-panel glass">
+      {activeTool.color && COLORS.map((value) => <button key={value}
+        className={color === value ? 'panel-swatch active' : 'panel-swatch'}
+        style={{ background: value }} title={value} onClick={() => setColor(value)} />)}
+      {activeTool.color && (activeTool.width || tool === 'text') && <span className="panel-sep" />}
+      {activeTool.width && WIDTHS.map((value) => <button key={value}
+        className={width === value ? 'panel-width active' : 'panel-width'}
+        title={`Épaisseur ${value}`} onClick={() => setWidth(value)}><i style={{ height: value }} /></button>)}
+      {tool === 'text' && <>
+        <button className="panel-size" title="Réduire le texte" onClick={() => setTextSize(Math.max(14, textSize - 2))}>A−</button>
+        <button className="panel-size" title="Agrandir le texte" onClick={() => setTextSize(Math.min(44, textSize + 2))}>A+</button>
+      </>}
+    </div>}
+
+    {/* barre d'outils — icônes seules */}
+    <footer className="focus-toolbar glass">
+      {TOOLS.map((item) => <button key={item.id} title={item.label}
         className={tool === item.id ? 'ftool active' : 'ftool'}
         onClick={() => { setTool(item.id); setPendingLiaison(null); if (item.id !== 'text') setDraftNote(null) }}>
-        <b>{item.icon}</b><span>{item.label}</span>
+        <b>{item.icon}</b>
       </button>)}
-
-      {(activeTool.color || activeTool.width) && <div className="focus-arc" style={{ left: arcLeft }}>
-        {activeTool.color && COLORS.map((value, index) => {
-          const angle = (200 + (index * 140) / (COLORS.length - 1)) * (Math.PI / 180)
-          const x = 90 + 62 * Math.cos(angle)
-          const y = 86 - 62 * Math.sin(angle)
-          return <button key={value} className={color === value ? 'arc-swatch active' : 'arc-swatch'}
-            style={{ left: x, top: y, background: value }} onClick={() => setColor(value)} />
-        })}
-        {activeTool.width && <div className="arc-widths">
-          {WIDTHS.map((value) => <button key={value} className={width === value ? 'active' : ''} onClick={() => setWidth(value)}><i style={{ height: value }} /></button>)}
-        </div>}
-        {tool === 'text' && <div className="arc-widths">
-          <button onClick={() => setTextSize(Math.max(16, textSize - 2))}>A−</button>
-          <button onClick={() => setTextSize(Math.min(40, textSize + 2))}>A+</button>
-        </div>}
-      </div>}
     </footer>
   </div>
 }
 
-function FocusWord({ raw, wordKey, grayed, interactive }: {
+function FocusWord({ raw, wordKey, grayed, edited, interactive }: {
   raw: string
   wordKey: string
   grayed: string[]
+  edited: boolean
   interactive: boolean
 }) {
-  return <span className={`focus-word ${interactive ? 'clickable' : ''}`} data-word={wordKey}>
+  return <span className={`focus-word ${interactive ? 'clickable' : ''} ${edited ? 'edited-word' : ''}`} data-word={wordKey}>
     {[...raw].map((letter, index) => {
       const letterKey = `${wordKey}.${index}`
       const userGray = grayed.includes(letterKey)
