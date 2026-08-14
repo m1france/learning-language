@@ -1,6 +1,10 @@
 export type Language = 'en' | 'fr'
+/** Interface language (everything except imported content). */
+export type UiLanguage = 'en' | 'fr' | 'es' | 'zh' | 'ru' | 'pt'
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced' | 'native'
-export type ResourceType = 'story' | 'article' | 'culture' | 'script' | 'book' | 'news' | 'scientific'
+/** Built-in category ids. Users can add their own categories (free-form ids). */
+export const BUILTIN_CATEGORIES = ['story', 'article', 'culture', 'script', 'book', 'news', 'scientific'] as const
+export type CustomCategory = { id: string; label: string }
 export type CoverTone = 'coral' | 'blue' | 'gold' | 'green'
 
 export type Chapter = {
@@ -13,7 +17,8 @@ export type Resource = {
   id: string
   title: string
   author: string
-  type: ResourceType
+  /** Category id — built-in (see BUILTIN_CATEGORIES) or a user-created one. */
+  type: string
   difficulty: Difficulty
   minutes: number
   cover: CoverTone
@@ -45,7 +50,12 @@ export type LearnedWord = {
   word: string
   normalized: string
   language: Language
+  /** User-written pronunciation (IPA or mother-tongue approximation). */
   phonetic?: string
+  /** User-written translation. */
+  translation?: string
+  /** Lemma / parent word chosen by the user (e.g. "avoir" for "ai"). */
+  parent?: string
   partOfSpeech: string
   definitions: DictionarySense[]
   contextSentence: string
@@ -88,8 +98,6 @@ export type MediaSession = {
 export type TtsProvider = 'google' | 'openrouter' | 'elevenlabs' | 'fish' | 'browser'
 
 export type ApiSettings = {
-  dictionaryProvider: 'local' | 'wiktionary' | 'ai'
-  dictionaryEndpoint: string
   openRouterKey: string
   openRouterModel: string
   /** Main agent model (free-form OpenRouter model id), reserved for upcoming AI features. */
@@ -128,17 +136,21 @@ export type WordMark = {
 export type UserSettings = {
   name: string
   learningLanguage: Language
+  /** Language of every interface text (never touches imported content). */
+  uiLanguage: UiLanguage
   theme: 'light' | 'dark'
   readerFontSize: number
   readerWidth: 'comfortable' | 'wide'
   /** Approximate number of words per reader page. */
   readerPageSize: number
   showGrammar: boolean
+  /** Default color per grammar mark type, overridden when the user picks one. */
+  markColors: Partial<Record<GrammarMarkType, string>>
   api: ApiSettings
 }
 
 export type AppState = {
-  version: 2
+  version: 3
   settings: UserSettings
   resources: Resource[]
   progress: Record<string, ReadingProgress>
@@ -154,6 +166,8 @@ export type AppState = {
   customTools: CustomTool[]
   /** Tool names removed by the user from the recommended list. */
   removedTools: string[]
+  /** User-created resource categories. */
+  customCategories: CustomCategory[]
 }
 
 export const todayKey = () => new Date().toISOString().slice(0, 10)

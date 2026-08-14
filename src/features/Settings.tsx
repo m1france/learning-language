@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Language, UserSettings } from '../domain'
+import type { Language, UiLanguage, UserSettings } from '../domain'
+import { UI_LANGUAGES } from '../i18n'
 import { listVoices } from '../ai'
 
 type SettingsProps = {
@@ -8,29 +9,7 @@ type SettingsProps = {
   onResetData: () => void
 }
 
-type Tab = 'profile' | 'reading' | 'dictionary' | 'connections' | 'data'
-
-const DICTIONARY_PRESETS: { id: string; name: string; detail: string; apply: (language: Language) => Partial<UserSettings['api']> }[] = [
-  {
-    id: 'local', name: 'Local & privé', detail: 'Dictionnaire intégré, marche hors ligne, rien ne quitte l’appareil.',
-    apply: () => ({ dictionaryProvider: 'local' }),
-  },
-  {
-    id: 'wiktionary', name: 'Wiktionary', detail: 'Gratuit et complet. Nécessite une connexion.',
-    apply: (language) => ({ dictionaryProvider: 'wiktionary', dictionaryEndpoint: language === 'en' ? 'https://en.wiktionary.org/w/api.php' : 'https://fr.wiktionary.org/w/api.php' }),
-  },
-  {
-    id: 'ai', name: 'IA contextuelle', detail: 'Explication adaptée au contexte exact de la phrase. Nécessite une clé OpenRouter.',
-    apply: () => ({ dictionaryProvider: 'ai' }),
-  },
-]
-
-const MODEL_PRESETS = [
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B (gratuit)', detail: 'Bon équilibre qualité / vitesse.' },
-  { id: 'nvidia/nemotron-3-nano-30b-a3b:free', name: 'Nemotron Nano (gratuit)', detail: 'Rapide, léger.' },
-  { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini Flash (gratuit)', detail: 'Très rapide, bon en français.' },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini (payant)', detail: 'Excellentes explications, faible coût.' },
-]
+type Tab = 'profile' | 'reading' | 'connections' | 'data'
 
 const TTS_PROVIDERS: { id: UserSettings['api']['ttsProvider']; name: string; detail: string }[] = [
   { id: 'google', name: 'Voix naturelle (gratuit)', detail: 'Voix Google de bonne qualité, sans clé ni compte. Recommandé pour démarrer.' },
@@ -60,7 +39,6 @@ export function Settings({ settings, onSave, onResetData }: SettingsProps) {
   const tabs: { id: Tab; icon: string; label: string }[] = [
     { id: 'profile', icon: '◌', label: 'Profil' },
     { id: 'reading', icon: '◫', label: 'Lecture' },
-    { id: 'dictionary', icon: '❝', label: 'Dictionnaire' },
     { id: 'connections', icon: '⌁', label: 'Connexions' },
     { id: 'data', icon: '◐', label: 'Données' },
   ]
@@ -76,13 +54,14 @@ export function Settings({ settings, onSave, onResetData }: SettingsProps) {
       </nav>
       <section className="settings-panel">
         {tab === 'profile' && <>
-          <SettingHeading title="Ton espace d’apprentissage" detail="La langue de l’interface suit l’inverse de la langue apprise." />
+          <SettingHeading title="Ton espace d’apprentissage" detail="La langue d’interface est un choix libre, indépendant de la langue apprise." />
           <div className="settings-fields">
             <label>Ton prénom<input value={draft.name} onChange={(event) => update('name', event.target.value)} /></label>
+            <label>Langue de l’interface<select value={draft.uiLanguage} onChange={(event) => update('uiLanguage', event.target.value as UiLanguage)}>{UI_LANGUAGES.map((language) => <option value={language.id} key={language.id}>{language.flag} {language.name}</option>)}</select></label>
             <label>Langue apprise<select value={draft.learningLanguage} onChange={(event) => update('learningLanguage', event.target.value as Language)}><option value="en">English (américain)</option><option value="fr">Français</option></select></label>
             <label>Apparence<select value={draft.theme} onChange={(event) => update('theme', event.target.value as UserSettings['theme'])}><option value="light">Clair chaleureux</option><option value="dark">Sombre calme</option></select></label>
           </div>
-          <aside className="settings-tip"><span>↔</span><p>{draft.learningLanguage === 'en' ? 'Tu apprends l’anglais américain : l’interface et les explications sont en français.' : 'Tu apprends le français : l’interface et les explications sont en anglais.'}</p></aside>
+          <aside className="settings-tip"><span>🕊</span><p>La langue de l’interface traduit les menus, boutons et instructions — jamais le contenu de tes ressources importées.</p></aside>
         </>}
 
         {tab === 'reading' && <>
@@ -93,27 +72,6 @@ export function Settings({ settings, onSave, onResetData }: SettingsProps) {
             <label>Largeur du texte<select value={draft.readerWidth} onChange={(event) => update('readerWidth', event.target.value as UserSettings['readerWidth'])}><option value="comfortable">Confortable</option><option value="wide">Large</option></select></label>
             <label className="toggle-field"><span><strong>Grammaire visuelle</strong><small>Surligne doucement les verbes dans le lecteur.</small></span><input type="checkbox" checked={draft.showGrammar} onChange={(event) => update('showGrammar', event.target.checked)} /></label>
           </div>
-        </>}
-
-        {tab === 'dictionary' && <>
-          <SettingHeading title="Dictionnaire & explications" detail="Choisis un preset — tout est préconfiguré, tu peux ajuster ensuite." />
-          <div className="preset-grid">
-            {DICTIONARY_PRESETS.map((preset) => {
-              const active = draft.api.dictionaryProvider === preset.apply(draft.learningLanguage).dictionaryProvider
-              return <button key={preset.id} className={active ? 'preset-card selected' : 'preset-card'} onClick={() => setDraft((current) => ({ ...current, api: { ...current.api, ...preset.apply(current.learningLanguage) } }))}>
-                <strong>{preset.name}</strong><p>{preset.detail}</p>{active && <span className="preset-check">✓ actif</span>}
-              </button>
-            })}
-          </div>
-          {draft.api.dictionaryProvider === 'wiktionary' && <label className="inline-field">Point d’accès Wiktionary<input value={draft.api.dictionaryEndpoint} onChange={(event) => updateApi('dictionaryEndpoint', event.target.value)} /></label>}
-          {draft.api.dictionaryProvider === 'ai' && <>
-            <label className="inline-field">Clé OpenRouter<input type="password" value={draft.api.openRouterKey} onChange={(event) => updateApi('openRouterKey', event.target.value)} placeholder="sk-or-…" autoComplete="off" /></label>
-            <div className="preset-grid">
-              {MODEL_PRESETS.map((preset) => <button key={preset.id} className={draft.api.openRouterModel === preset.id ? 'preset-card selected' : 'preset-card'} onClick={() => updateApi('openRouterModel', preset.id)}>
-                <strong>{preset.name}</strong><p>{preset.detail}</p>
-              </button>)}
-            </div>
-          </>}
         </>}
 
         {tab === 'connections' && <>

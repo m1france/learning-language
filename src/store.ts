@@ -1,19 +1,18 @@
-import { type ApiSettings, type AppState, type DictionarySense, type LearnedWord, type Resource, type UserSettings, type WordMark, id, normalizeWord, todayKey } from './domain'
-import { seedResources } from './seed'
+import { type ApiSettings, type AppState, type Resource, type UserSettings, type WordMark, id, normalizeWord, todayKey } from './domain'
 
 const stateKey = 'vivre-la-langue:state:v2'
 
 export const defaultSettings: UserSettings = {
   name: '',
   learningLanguage: 'en',
+  uiLanguage: 'fr',
   theme: 'light',
   readerFontSize: 19,
   readerWidth: 'comfortable',
   readerPageSize: 220,
   showGrammar: true,
+  markColors: {},
   api: {
-    dictionaryProvider: 'local',
-    dictionaryEndpoint: 'https://en.wiktionary.org/w/api.php',
     openRouterKey: '',
     openRouterModel: 'meta-llama/llama-3.3-70b-instruct:free',
     agentModel: 'nvidia/nemotron-3-ultra-550b-a55b:free',
@@ -31,9 +30,10 @@ export const defaultSettings: UserSettings = {
 }
 
 export const createState = (settings: Partial<UserSettings> = {}): AppState => ({
-  version: 2,
+  version: 3,
   settings: { ...defaultSettings, ...settings, api: { ...defaultSettings.api, ...settings.api } },
-  resources: seedResources,
+  // No bundled resources: the library starts empty, the user imports their own texts.
+  resources: [],
   progress: {},
   words: [],
   writings: [],
@@ -43,14 +43,15 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   silentMarks: {},
   customTools: [],
   removedTools: [],
+  customCategories: [],
 })
 
 export const loadState = (): AppState | null => {
   try {
     const raw = localStorage.getItem(stateKey)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as AppState
-    if (parsed.version !== 2 || !parsed.settings || !Array.isArray(parsed.resources)) return null
+    const parsed = JSON.parse(raw) as Omit<AppState, 'version'> & { version: number }
+    if ((parsed.version !== 2 && parsed.version !== 3) || !parsed.settings || !Array.isArray(parsed.resources)) return null
     const api = parsed.settings.api as Partial<ApiSettings> | undefined
     // Migration : déduire ttsProvider de l'ancien réglage ttsModel (fish-audio ne produit pas d'audio via OpenRouter).
     if (api && !api.ttsProvider) {
@@ -60,7 +61,15 @@ export const loadState = (): AppState | null => {
     return {
       ...createState(parsed.settings),
       ...parsed,
-      settings: { ...defaultSettings, ...parsed.settings, api: { ...defaultSettings.api, ...api } },
+      version: 3,
+      settings: {
+        ...defaultSettings,
+        ...parsed.settings,
+        // v2 → v3 : l'interface suivait l'inverse de la langue apprise ; elle devient un choix libre.
+        uiLanguage: parsed.settings.uiLanguage ?? (parsed.settings.learningLanguage === 'en' ? 'fr' : 'en'),
+        markColors: parsed.settings.markColors ?? {},
+        api: { ...defaultSettings.api, ...api },
+      },
       progress: parsed.progress ?? {},
       words: parsed.words ?? [],
       writings: parsed.writings ?? [],
@@ -70,6 +79,7 @@ export const loadState = (): AppState | null => {
       silentMarks: parsed.silentMarks ?? {},
       customTools: parsed.customTools ?? [],
       removedTools: parsed.removedTools ?? [],
+      customCategories: parsed.customCategories ?? [],
     }
   } catch { return null }
 }
@@ -78,47 +88,41 @@ export const saveState = (state: AppState) => localStorage.setItem(stateKey, JSO
 
 export const resetState = () => localStorage.removeItem(stateKey)
 
-const builtinDictionary: Record<string, { phonetic: string; pos: string; senses: DictionarySense[] }> = {
-  awake: { phonetic: 'əˈweɪk', pos: 'adjective', senses: [{ definition: 'not sleeping', translation: 'réveillé·e', example: 'The city was fully awake.' }] },
-  avenue: { phonetic: 'ˈævənuː', pos: 'noun', senses: [{ definition: 'a wide street in a town or city', translation: 'avenue' }] },
-  barista: { phonetic: 'bəˈriːstə', pos: 'noun', senses: [{ definition: 'a person who prepares and serves coffee', translation: 'barista' }] },
-  brunch: { phonetic: 'brʌntʃ', pos: 'noun', senses: [{ definition: 'a late morning meal that combines breakfast and lunch', translation: 'brunch' }] },
-  corner: { phonetic: 'ˈkɔːrnər', pos: 'noun', senses: [{ definition: 'the point where two streets meet', translation: 'coin de rue' }, { definition: 'a part of a room or area away from the center', translation: 'coin' }] },
-  exhibit: { phonetic: 'ɪɡˈzɪbɪt', pos: 'noun', senses: [{ definition: 'an object or collection shown in a museum', translation: 'exposition' }] },
-  friendly: { phonetic: 'ˈfrendli', pos: 'adjective', senses: [{ definition: 'kind and pleasant toward other people', translation: 'amical·e' }] },
-  glow: { phonetic: 'ɡloʊ', pos: 'verb', senses: [{ definition: 'to shine with a soft, steady light', translation: 'briller doucement' }] },
-  neighborhood: { phonetic: 'ˈneɪbərhʊd', pos: 'noun', senses: [{ definition: 'the area near where someone lives', translation: 'quartier' }] },
-  order: { phonetic: 'ˈɔːrdər', pos: 'noun', senses: [{ definition: 'a request for food or drinks in a restaurant', translation: 'commande' }] },
-  remember: { phonetic: 'rɪˈmembər', pos: 'verb', senses: [{ definition: 'to keep information in your mind', translation: 'se souvenir' }] },
-  sidewalk: { phonetic: 'ˈsaɪdwɔːk', pos: 'noun', senses: [{ definition: 'a paved path beside a road for people walking', translation: 'trottoir' }] },
-  small: { phonetic: 'smɔːl', pos: 'adjective', senses: [{ definition: 'little in size, amount, or degree', translation: 'petit·e' }] },
-  talk: { phonetic: 'tɔːk', pos: 'verb', senses: [{ definition: 'to speak with someone', translation: 'parler' }] },
-  usual: { phonetic: 'ˈjuːʒuəl', pos: 'adjective', senses: [{ definition: 'happening in the normal or expected way', translation: 'habituel·le' }] },
-  walked: { phonetic: 'wɔːkt', pos: 'verb', senses: [{ definition: 'moved on foot in the past', translation: 'a marché' }] },
-  would: { phonetic: 'wʊd', pos: 'modal verb', senses: [{ definition: 'used to describe a possible or imagined action', translation: 'conditionnel' }] },
-}
-
-export const lookupWord = (raw: string, sentence: string, language: 'en' | 'fr'): Omit<LearnedWord, 'id' | 'contextSentence' | 'sourceSkill' | 'sourceResourceId' | 'status' | 'intervalDays' | 'nextReview' | 'easeFactor' | 'reviewCount' | 'tags' | 'createdAt'> => {
-  const normalized = normalizeWord(raw)
-  const item = builtinDictionary[normalized]
-  const fallback = language === 'en'
-    ? { phonetic: '', pos: 'word', senses: [{ definition: `“${raw.replace(/[.,!?]/g, '')}” as used in this sentence`, translation: 'à vérifier dans le dictionnaire' }] }
-    : { phonetic: '', pos: 'mot', senses: [{ definition: `“${raw.replace(/[.,!?]/g, '')}” dans ce contexte`, translation: 'check the dictionary' }] }
-  const selected = item ?? fallback
-  return { word: raw.replace(/[.,!?;:]/g, ''), normalized, language, phonetic: selected.phonetic, partOfSpeech: selected.pos, definitions: selected.senses }
-}
-
-export const addWordToDeck = (state: AppState, args: { raw: string; sentence: string; language: 'en' | 'fr'; sourceResourceId?: string; tags?: string[] }): AppState => {
-  const normalized = normalizeWord(args.raw)
+/** Save or update a word the user annotated while reading (own translation, parent, pronunciation). */
+export const upsertWordDetails = (state: AppState, args: {
+  raw: string
+  sentence: string
+  language: 'en' | 'fr'
+  sourceResourceId?: string
+  translation: string
+  parent: string
+  pronunciation: string
+}): AppState => {
+  const cleaned = args.raw.replace(/[.,!?;:()"“”]/g, '').trim()
+  if (!cleaned) return state
+  const normalized = normalizeWord(cleaned)
   const existing = state.words.find((word) => word.normalized === normalized && word.language === args.language)
-  if (existing) return state
-  const dictionary = lookupWord(args.raw, args.sentence, args.language)
+  if (existing) {
+    return {
+      ...state,
+      words: state.words.map((word) => word.id === existing.id
+        ? { ...word, word: cleaned, translation: args.translation, parent: args.parent || undefined, phonetic: args.pronunciation || undefined }
+        : word),
+    }
+  }
   const now = new Date().toISOString()
   return {
     ...state,
     words: [...state.words, {
       id: id('word'),
-      ...dictionary,
+      word: cleaned,
+      normalized,
+      language: args.language,
+      phonetic: args.pronunciation || undefined,
+      translation: args.translation,
+      parent: args.parent || undefined,
+      partOfSpeech: '',
+      definitions: args.translation ? [{ definition: '', translation: args.translation }] : [],
       contextSentence: args.sentence,
       sourceResourceId: args.sourceResourceId,
       sourceSkill: 'reading',
@@ -127,10 +131,17 @@ export const addWordToDeck = (state: AppState, args: { raw: string; sentence: st
       nextReview: todayKey(),
       easeFactor: 2.5,
       reviewCount: 0,
-      tags: args.tags ?? [],
+      tags: [],
       createdAt: now,
     }],
   }
+}
+
+/** All distinct parent words already used, for the autocomplete suggestions. */
+export const knownParents = (state: AppState, language: 'en' | 'fr'): string[] => {
+  const set = new Set<string>()
+  state.words.forEach((word) => { if (word.language === language && word.parent) set.add(word.parent) })
+  return [...set].sort((a, b) => a.localeCompare(b))
 }
 
 export const progressFor = (state: AppState, resource: Resource) => {

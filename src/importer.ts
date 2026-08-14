@@ -1,10 +1,11 @@
-import type { Chapter, Resource, ResourceType } from './domain'
+import type { Chapter, Difficulty, Resource } from './domain'
 import { id } from './domain'
 
 /**
  * URL / file import for the reading library.
  * Direct fetch is tried first (works for sites with permissive CORS), then a
  * chain of public CORS relays. Wikipédia uses its REST API, which is CORS-open.
+ * Files: .txt / .md read directly, .epub unzipped (spine order), .pdf via pdf.js.
  */
 
 type ImportedText = { title: string; author: string; paragraphs: string[] }
@@ -33,6 +34,14 @@ async function fetchText(url: string, timeoutMs = 12000): Promise<string> {
   } finally {
     window.clearTimeout(timer)
   }
+}
+
+function htmlToParagraphs(html: string): string[] {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  doc.querySelectorAll('script, style, nav, footer, header, form, iframe, figure, table, aside, sup').forEach((node) => node.remove())
+  return [...doc.querySelectorAll('p, h2, h3, h4, li, blockquote')]
+    .map((node) => node.textContent?.replace(/\[\d+\]/g, '').replace(/\s+/g, ' ').trim() ?? '')
+    .filter((text) => text.length > 1)
 }
 
 function extractReadable(html: string, pageUrl: string): ImportedText | null {
@@ -72,11 +81,15 @@ function toChapters(paragraphs: string[]): Chapter[] {
   return chapters.length ? chapters : [{ id: id('chapter'), title: 'Texte importé', paragraphs }]
 }
 
+export const autoDifficulty = (words: number): Difficulty =>
+  words > 1400 ? 'advanced' : words > 500 ? 'intermediate' : 'beginner'
+
 export function paragraphsToResource(args: {
   title: string
   author?: string
   paragraphs: string[]
-  type?: ResourceType
+  type?: string
+  difficulty?: Difficulty
   language: 'en' | 'fr'
   sourceUrl?: string
 }): Resource {
@@ -84,9 +97,9 @@ export function paragraphsToResource(args: {
   return {
     id: id('resource'),
     title: args.title.trim() || 'Sans titre',
-    author: args.author?.trim() || 'Importé',
+    author: args.author?.trim() ?? '',
     type: args.type ?? 'article',
-    difficulty: words > 1400 ? 'advanced' : words > 500 ? 'intermediate' : 'beginner',
+    difficulty: args.difficulty ?? autoDifficulty(words),
     minutes: Math.max(1, Math.round(words / 180)),
     cover: (['coral', 'blue', 'gold', 'green'] as const)[Math.floor(Math.random() * 4)],
     language: args.language,
@@ -97,9 +110,10 @@ export function paragraphsToResource(args: {
   }
 }
 
+export type ImportOptions = { type?: string; difficulty?: Difficulty }
 export type ImportResult = { ok: true; resource: Resource } | { ok: false; reason: 'invalid' | 'unreadable' | 'empty' }
 
-export async function importFromUrl(rawUrl: string, language: 'en' | 'fr'): Promise<ImportResult> {
+export async function importFromUrl(rawUrl: string, language: 'en' | 'fr', options: ImportOptions = {}): Promise<ImportResult> {
   let url: URL
   try {
     url = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`)
@@ -125,6 +139,8 @@ export async function importFromUrl(rawUrl: string, language: 'en' | 'fr'): Prom
             author: isWiki ? 'Wikipédia' : readable.author,
             paragraphs: readable.paragraphs,
             language,
+            type: options.type,
+            difficulty: options.difficulty,
             sourceUrl: url.toString(),
           }),
         }
@@ -136,10 +152,113 @@ export async function importFromUrl(rawUrl: string, language: 'en' | 'fr'): Prom
   return { ok: false, reason: 'unreadable' }
 }
 
-export async function importFromFile(file: File, language: 'en' | 'fr'): Promise<ImportResult> {
+// ---------------------------------------------------------------------------
+// EPUB — zip de fichiers XHTML lus dans l'ordre de la spine (JSZip, local)
+// ---------------------------------------------------------------------------
+
+async function importEpub(file: File): Promise<ImportedText | null> {
+  const JSZip = (await import('jszip')).default
+  const zip = await JSZip.loadAsync(file)
+  const containerText = await zip.file('META-INF/container.xml')?.async('text')
+  if (!containerText) return null
+  const container = new DOMParser().parseFromString(containerText, 'text/xml')
+  const opfPath = container.querySelector('rootfile')?.getAttribute('full-path')
+  if (!opfPath) return null
+  const opfText = await zip.file(opfPath)?.async('text')
+  if (!opfText) return null
+  const opf = new DOMParser().parseFromString(opfText, 'text/xml')
+  const base = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : ''
+
+  const manifest = new Map<string, string>()
+  opf.querySelectorAll('manifest item').forEach((item) => {
+    const itemId = item.getAttribute('id')
+    const href = item.getAttribute('href')
+    if (itemId && href) manifest.set(itemId, href)
+  })
+  const spine: string[] = []
+  opf.querySelectorAll('spine itemref').forEach((ref) => {
+    const idref = ref.getAttribute('idref')
+    const href = idref ? manifest.get(idref) : undefined
+    if (href) spine.push(href)
+  })
+
+  const title =
+    opf.querySelector('metadata title')?.textContent?.trim() ||
+    file.name.replace(/\.epub$/i, '')
+  const author = opf.querySelector('metadata creator')?.textContent?.trim() ?? ''
+
+  const chapters: { title: string; paragraphs: string[] }[] = []
+  for (const href of spine.slice(0, 120)) {
+    const entry = zip.file(base + href) ?? zip.file(href)
+    if (!entry) continue
+    const html = await entry.async('text')
+    const paragraphs = htmlToParagraphs(html)
+    if (paragraphs.length) chapters.push({ title: paragraphs[0].length < 90 ? paragraphs[0] : '', paragraphs })
+    if (chapters.reduce((sum, chapter) => sum + chapter.paragraphs.length, 0) > 1500) break
+  }
+  const paragraphs = chapters.flatMap((chapter) => chapter.paragraphs)
+  if (!paragraphs.length) return null
+  return { title: title.slice(0, 90), author, paragraphs }
+}
+
+// ---------------------------------------------------------------------------
+// PDF — texte extrait page par page avec pdf.js (local, aucun envoi réseau)
+// ---------------------------------------------------------------------------
+
+async function importPdf(file: File): Promise<ImportedText | null> {
+  const pdfjs = await import('pdfjs-dist')
+  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
+  const data = await file.arrayBuffer()
+  const pdf = await pdfjs.getDocument({ data }).promise
+  const lines: string[] = []
+  for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, 250); pageNumber++) {
+    const page = await pdf.getPage(pageNumber)
+    const content = await page.getTextContent()
+    let line = ''
+    for (const item of content.items) {
+      if (!('str' in item)) continue
+      line += (line && !line.endsWith(' ') && item.str ? ' ' : '') + item.str
+      if (item.hasEOL) { lines.push(line.trim()); line = '' }
+    }
+    if (line.trim()) lines.push(line.trim())
+    lines.push('') // page break = paragraph break
+  }
+  const paragraphs = lines
+    .join('\n')
+    .split(/\n{2,}/)
+    .map((block) => block.replace(/\s+/g, ' ').trim())
+    .filter((block) => block.length > 40)
+    .slice(0, 800)
+  if (!paragraphs.length) return null
+  return { title: file.name.replace(/\.pdf$/i, ''), author: '', paragraphs }
+}
+
+export async function importFromFile(file: File, language: 'en' | 'fr', options: ImportOptions = {}): Promise<ImportResult> {
   const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
+  const title = file.name.replace(/\.[^.]+$/, '')
+
+  if (extension === 'epub') {
+    try {
+      const imported = await importEpub(file)
+      if (!imported) return { ok: false, reason: 'unreadable' }
+      return { ok: true, resource: paragraphsToResource({ ...imported, title: imported.title || title, language, type: options.type ?? 'book', difficulty: options.difficulty }) }
+    } catch {
+      return { ok: false, reason: 'unreadable' }
+    }
+  }
+
+  if (extension === 'pdf') {
+    try {
+      const imported = await importPdf(file)
+      if (!imported) return { ok: false, reason: 'unreadable' }
+      return { ok: true, resource: paragraphsToResource({ ...imported, title: imported.title || title, language, type: options.type ?? 'book', difficulty: options.difficulty }) }
+    } catch {
+      return { ok: false, reason: 'unreadable' }
+    }
+  }
+
   if (extension !== 'txt' && extension !== 'md' && file.type !== 'text/plain') {
-    // .epub / .docx / .pdf need heavier parsers; ask for pasted text instead.
     return { ok: false, reason: 'unreadable' }
   }
   const text = await file.text()
@@ -151,10 +270,10 @@ export async function importFromFile(file: File, language: 'en' | 'fr'): Promise
   return {
     ok: true,
     resource: paragraphsToResource({
-      title: file.name.replace(/\.(txt|md)$/i, ''),
-      author: 'Fichier importé',
+      title,
       paragraphs,
-      type: 'book',
+      type: options.type ?? 'book',
+      difficulty: options.difficulty,
       language,
     }),
   }

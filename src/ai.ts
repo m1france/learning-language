@@ -1,178 +1,26 @@
 import type { ApiSettings, Language } from './domain'
 
-/**
- * AI helpers:
- * - contextual word explanation through OpenRouter (never leaks chain-of-thought)
- * - high-quality TTS through an OpenRouter audio model, with a careful
- *   browser-voice fallback (picks the most natural installed voice)
- */
-
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
-/** Removes any reasoning / meta commentary that a model may prepend or append. */
-export function cleanAiText(raw: string): string {
-  const bannedStarts = [
-    'the user', "l'utilisateur", 'let me', 'laissez-moi', "d'abord", 'first,', 'okay', 'ok,',
-    'sure', 'bien sûr', 'voici', 'here is', 'analysis', 'raisonnement', 'thinking', 'thought',
-    '→', '->', 'step ', 'étape ', 'note:', 'remarque:', 'i need', 'je dois', 'we need',
-  ]
-  const lines = raw
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .filter((line) => {
-      const lower = line.toLowerCase().replace(/^[-*•#\d.)\s]+/, '')
-      return !bannedStarts.some((start) => lower.startsWith(start))
-    })
-  const joined = lines.join('\n').replace(/\*\*/g, '').replace(/^#+\s*/gm, '').trim()
-  // If the model still wrapped the real answer after a separator, keep the tail.
-  const parts = joined.split(/\n\s*---+\s*\n/)
-  return (parts[parts.length - 1] ?? joined).trim()
+/** Scores a browser voice: prefer natural / online / high-quality voices for the target language. */
+const voiceScore = (voice: SpeechSynthesisVoice, lang: Language, preferredName?: string): number => {
+  const name = voice.name.toLowerCase()
+  const langMatch = voice.lang.toLowerCase().startsWith(lang) ? 100 : 0
+  const preferred = preferredName && voice.name === preferredName ? 500 : 0
+  const natural = /natural|neural|online|premium|enhanced|google|samantha|aur[eé]lie|thomas|am[eé]lie/.test(name) ? 40 : 0
+  const bad = /compact|espeak|festival/.test(name) ? -50 : 0
+  return langMatch + preferred + natural + bad + (voice.default ? 10 : 0)
 }
 
-export type WordContextResult = {
-  explanation: string
-  translation: string
-  partOfSpeech: string
-}
-
-export async function explainWordInContext(args: {
-  word: string
-  sentence: string
-  previousSentences: string[]
-  learningLanguage: Language
-  api: ApiSettings
-}): Promise<WordContextResult | null> {
-  const { word, sentence, previousSentences, learningLanguage, api } = args
-  if (!api.openRouterKey) return null
-  const answerLanguage = learningLanguage === 'en' ? 'français' : 'anglais'
-  const learnedLanguage = learningLanguage === 'en' ? 'anglais (américain)' : 'français'
-  const context = [...previousSentences, sentence].filter(Boolean).join(' ')
-
-  const system = [
-    `Tu es un dictionnaire contextuel pour un élève qui apprend l'${learnedLanguage}.`,
-    `On te donne un mot et son contexte (les phrases qui précèdent + la phrase actuelle).`,
-    `Tu expliques UNIQUEMENT ce que ce mot signifie DANS CE CONTEXTE PRÉCIS, pas ses autres sens.`,
-    `Tu réponds en ${answerLanguage}, clairement, en 1 à 3 phrases courtes, sans détour ni blabla.`,
-    `INTERDIT : montrer ton raisonnement, décrire la demande, citer la phrase entière, utiliser du markdown,`,
-    `commencer par une flèche, dire "le mot", "the user", "the sentence", ou donner des étapes.`,
-    `Format EXACT de la réponse, trois lignes et rien d'autre :`,
-    `POS: <nature du mot en ${answerLanguage}, ex: nom, verbe, adjectif, adverbe, expression>`,
-    `TRAD: <traduction la plus naturelle dans ce contexte>`,
-    `EXPL: <explication claire et directe du sens du mot ici, en ${answerLanguage}>`,
-  ].join('\n')
-
-  try {
-    const response = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${api.openRouterKey}`,
-      },
-      body: JSON.stringify({
-        model: api.openRouterModel,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: `Mot : « ${word} »\nContexte : « ${context} »` },
-        ],
-        temperature: 0.2,
-        max_tokens: 220,
-      }),
-    })
-    if (!response.ok) return null
-    const data = (await response.json()) as { choices?: { message?: { content?: string } }[] }
-    const content = data.choices?.[0]?.message?.content ?? ''
-    const pos = /POS\s*:\s*(.+)/i.exec(content)?.[1] ?? ''
-    const trad = /TRAD\s*:\s*(.+)/i.exec(content)?.[1] ?? ''
-    const expl = /EXPL\s*:\s*([\s\S]+)/i.exec(content)?.[1] ?? content
-    return {
-      partOfSpeech: cleanAiText(pos) || '',
-      translation: cleanAiText(trad) || '',
-      explanation: cleanAiText(expl) || cleanAiText(content),
-    }
-  } catch {
-    return null
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Wiktionary dictionary (https://publicapi.dev/wiktionary-api)
-// ---------------------------------------------------------------------------
-
-function stripHtml(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  return (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim()
-}
-
-export type WiktionaryResult = { partOfSpeech: string; definitions: string[] }
-
-/**
- * Query the Wiktionary REST definition API for a word.
- * `endpoint` may be either the classic /w/api.php URL or the REST base; the
- * host is reused. For French-speaking learners of English, the French
- * Wiktionary is queried too so the gloss can be shown in French.
- */
-export async function lookupWiktionary(word: string, learningLanguage: Language, endpoint: string): Promise<WiktionaryResult | null> {
-  let host = learningLanguage === 'en' ? 'en.wiktionary.org' : 'fr.wiktionary.org'
-  try {
-    const url = new URL(endpoint)
-    if (url.hostname.includes('wiktionary.org')) host = url.hostname
-  } catch { /* keep default host */ }
-
-  const glossHost = learningLanguage === 'en' ? 'fr.wiktionary.org' : 'en.wiktionary.org'
-  const query = encodeURIComponent(word.toLowerCase())
-
-  const parse = async (h: string): Promise<{ partOfSpeech: string; definitions: string[] } | null> => {
-    const response = await fetch(`https://${h}/api/rest_v1/page/definition/${query}`)
-    if (!response.ok) return null
-    const data = (await response.json()) as Record<string, { partOfSpeech?: string; definitions?: { definition?: string }[] }[]>
-    const entries = Object.values(data).flat()
-    const partOfSpeech = entries.find((entry) => entry.partOfSpeech)?.partOfSpeech ?? ''
-    const definitions = entries
-      .flatMap((entry) => entry.definitions ?? [])
-      .map((definition) => stripHtml(definition.definition ?? ''))
-      .filter((text) => text.length > 3 && !/^#?\s*(plural|past|third-person|present participle)/i.test(text))
-      .slice(0, 3)
-    return definitions.length ? { partOfSpeech, definitions } : null
-  }
-
-  try {
-    // Gloss in the learner's UI language first (fr.wiktionary for English words), then the main host.
-    const gloss = await parse(glossHost)
-    const main = host === glossHost ? null : await parse(host)
-    const partOfSpeech = gloss?.partOfSpeech || main?.partOfSpeech || ''
-    const definitions = [...(gloss?.definitions ?? []), ...(main?.definitions ?? [])]
-      .filter((text, index, all) => all.indexOf(text) === index)
-      .slice(0, 3)
-    if (!definitions.length) return null
-    return { partOfSpeech, definitions }
-  } catch {
-    return null
-  }
-}
-
-// ---------------------------------------------------------------------------
-// TTS
-// ---------------------------------------------------------------------------
-
+/** Single shared audio element for remote TTS playback. */
 let audioElement: HTMLAudioElement | null = null
 
-/** Score how natural an installed browser voice sounds, to avoid robotic defaults. */
-function voiceScore(voice: SpeechSynthesisVoice, lang: Language): number {
-  const name = voice.name.toLowerCase()
-  const target = lang === 'en' ? 'en' : 'fr'
-  let score = 0
-  if (voice.lang.toLowerCase().startsWith(target)) score += 4
-  if (lang === 'en' && /en[-_]us/i.test(voice.lang)) score += 3
-  if (lang === 'fr' && /fr[-_]fr/i.test(voice.lang)) score += 2
-  if (name.includes('natural') || name.includes('neural')) score += 6
-  if (name.includes('premium') || name.includes('enhanced')) score += 5
-  if (name.includes('google')) score += 4
-  if (/(samantha|alex|ava|zoe|allison|susan|karen|daniel|amelie|amélie|thomas|audrey|aurelie)/.test(name)) score += 3
-  if (voice.localService) score += 1
-  if (name.includes('compact')) score -= 4
-  return score
-}
+/**
+ * TTS helpers:
+ * - high-quality voices through an OpenRouter audio model, ElevenLabs,
+ *   Fish Audio or Google Translate, with a careful browser-voice fallback
+ *   (picks the most natural installed voice).
+ */
 
 export function bestVoice(lang: Language, preferredName?: string): SpeechSynthesisVoice | null {
   if (typeof speechSynthesis === 'undefined') return null
