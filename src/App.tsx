@@ -31,6 +31,13 @@ export default function App() {
   const [page, setPage] = useState<Page>('home')
   const [readerId, setReaderId] = useState<string | null>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem('vivre-side-collapsed') === '1')
+
+  const toggleSide = () => {
+    const next = !sideCollapsed
+    setSideCollapsed(next)
+    localStorage.setItem('vivre-side-collapsed', next ? '1' : '0')
+  }
 
   useEffect(() => { if (state) saveState(state) }, [state])
   useEffect(() => { if (state) document.documentElement.dataset.theme = state.settings.theme }, [state?.settings.theme]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -45,8 +52,8 @@ export default function App() {
 
   const go = (next: Page) => { setReaderId(null); setPage(next) }
 
-  return <main className="app-shell">
-    <Sidebar page={page} setPage={go} t={t} theme={state.settings.theme} toggleTheme={() => change({ ...state, settings: { ...state.settings, theme: state.settings.theme === 'light' ? 'dark' : 'light' } })} name={state.settings.name} />
+  return <main className={`app-shell ${sideCollapsed ? 'side-collapsed' : ''}`}>
+    <Sidebar page={page} setPage={go} t={t} theme={state.settings.theme} toggleTheme={() => change({ ...state, settings: { ...state.settings, theme: state.settings.theme === 'light' ? 'dark' : 'light' } })} name={state.settings.name} collapsed={sideCollapsed} onToggleCollapse={toggleSide} />
     <section className="page-canvas">
       <header className="mobile-header"><Brand /><button className="avatar">{state.settings.name.slice(0, 1).toUpperCase()}</button></header>
       {reader ? (
@@ -109,8 +116,13 @@ function Onboarding({ onComplete }: { onComplete: (name: string, uiLanguage: UiL
   </main>
 }
 
-function Sidebar({ page, setPage, t, theme, toggleTheme, name }: { page: Page; setPage: (p: Page) => void; t: UI; theme: string; toggleTheme: () => void; name: string }) {
-  return <aside className="sidebar"><Brand /><nav>{navItems.map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)} key={item.id}><b>{item.icon}</b>{t[item.label]}</button>)}</nav><div className="side-bottom"><button className="theme-toggle" onClick={toggleTheme}>{theme === 'light' ? '◐' : '◑'} <span>{theme === 'light' ? t.darkMode : t.lightMode}</span></button><div className="profile-mini"><span className="avatar">{name.slice(0, 1).toUpperCase()}</span><div><strong>{name}</strong><small>{t.roleLabel}</small></div><span>⌄</span></div></div></aside>
+function Sidebar({ page, setPage, t, theme, toggleTheme, name, collapsed, onToggleCollapse }: { page: Page; setPage: (p: Page) => void; t: UI; theme: string; toggleTheme: () => void; name: string; collapsed: boolean; onToggleCollapse: () => void }) {
+  return <aside className="sidebar">
+    <button className="side-collapse" onClick={onToggleCollapse} title={collapsed ? t.expandSidebar : t.collapseSidebar} aria-label={collapsed ? t.expandSidebar : t.collapseSidebar}>{collapsed ? '»' : '«'}</button>
+    <Brand />
+    <nav>{navItems.map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)} key={item.id} title={collapsed ? t[item.label] : undefined}><b>{item.icon}</b><span className="side-label">{t[item.label]}</span></button>)}</nav>
+    <div className="side-bottom"><button className="theme-toggle" onClick={toggleTheme}>{theme === 'light' ? '◐' : '◑'} <span className="side-label">{theme === 'light' ? t.darkMode : t.lightMode}</span></button><div className="profile-mini"><span className="avatar">{name.slice(0, 1).toUpperCase()}</span><div className="side-label"><strong>{name}</strong><small>{t.roleLabel}</small></div><span className="side-label">⌄</span></div></div>
+  </aside>
 }
 
 /** Discreet round flag icons — switch the whole interface language. */

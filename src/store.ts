@@ -97,6 +97,8 @@ export const upsertWordDetails = (state: AppState, args: {
   translation: string
   parent: string
   pronunciation: string
+  knowledge?: number
+  tags?: string[]
 }): AppState => {
   const cleaned = args.raw.replace(/[.,!?;:()"“”]/g, '').trim()
   if (!cleaned) return state
@@ -106,7 +108,16 @@ export const upsertWordDetails = (state: AppState, args: {
     return {
       ...state,
       words: state.words.map((word) => word.id === existing.id
-        ? { ...word, word: cleaned, translation: args.translation, parent: args.parent || undefined, phonetic: args.pronunciation || undefined }
+        ? {
+            ...word,
+            word: cleaned,
+            translation: args.translation,
+            parent: args.parent || undefined,
+            phonetic: args.pronunciation || undefined,
+            knowledge: args.knowledge,
+            tags: args.tags ?? [],
+            definitions: args.translation ? [{ definition: '', translation: args.translation }] : word.definitions,
+          }
         : word),
     }
   }
@@ -122,6 +133,7 @@ export const upsertWordDetails = (state: AppState, args: {
       translation: args.translation,
       parent: args.parent || undefined,
       partOfSpeech: '',
+      knowledge: args.knowledge,
       definitions: args.translation ? [{ definition: '', translation: args.translation }] : [],
       contextSentence: args.sentence,
       sourceResourceId: args.sourceResourceId,
@@ -131,10 +143,17 @@ export const upsertWordDetails = (state: AppState, args: {
       nextReview: todayKey(),
       easeFactor: 2.5,
       reviewCount: 0,
-      tags: [],
+      tags: args.tags ?? [],
       createdAt: now,
     }],
   }
+}
+
+/** All distinct custom tags already used, for the tag suggestions. */
+export const knownTags = (state: AppState, language: 'en' | 'fr'): string[] => {
+  const set = new Set<string>()
+  state.words.forEach((word) => { if (word.language === language) word.tags.forEach((tag) => set.add(tag)) })
+  return [...set].sort((a, b) => a.localeCompare(b))
 }
 
 /** All distinct parent words already used, for the autocomplete suggestions. */

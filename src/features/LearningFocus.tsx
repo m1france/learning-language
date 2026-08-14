@@ -100,8 +100,10 @@ function paginate(paragraphs: ReturnType<typeof flattenParagraphs>, wordsPerPage
 
 /**
  * Diff caractère par caractère : indices (dans le texte actuel) des caractères
- * absents du texte d'origine. Pré/suffixe commun ignorés, LCS sur le milieu —
- * seules les lettres réellement ajoutées/remplacées ressortent en vert.
+ * absents du texte d'origine. Pré/suffixe commun ignorés, LCS sur le milieu.
+ * En cas d'égalité dans le LCS, on préfère marquer le caractère courant comme
+ * nouveau : ainsi une lettre déplacée (« faim » → « fian ») ressort en vert,
+ * pas seulement les lettres ajoutées.
  */
 function modifiedCharIndices(original: string, current: string): Set<number> {
   const modified = new Set<number>()
@@ -134,7 +136,7 @@ function modifiedCharIndices(original: string, current: string): Set<number> {
   let j = 0
   while (i < m && j < n) {
     if (midA[i] === midB[j]) { i++; j++ }
-    else if (dp[i + 1][j] >= dp[i][j + 1]) { i++ }
+    else if (dp[i + 1][j] > dp[i][j + 1]) { i++ }
     else { modified.add(p + j); j++ }
   }
   while (j < n) { modified.add(p + j); j++ }
@@ -323,6 +325,29 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
     setSelectedNote(null)
     setSelectedStroke(null)
     updatePage(() => emptyPage())
+    // Restaure aussi le texte d'origine des paragraphes modifiés avec l'outil Édition.
+    const restorable = page.filter((paragraph) => originals[paragraph.key] !== undefined && originals[paragraph.key] !== paragraph.text)
+    if (restorable.length) {
+      const chapters = resource.chapters.map((chapter, chapterIndex) => ({
+        ...chapter,
+        paragraphs: chapter.paragraphs.map((text, paragraphIndex) => {
+          const entry = restorable.find((paragraph) => paragraph.chapterIndex === chapterIndex && paragraph.paragraphIndex === paragraphIndex)
+          return entry ? originals[entry.key] : text
+        }),
+      }))
+      onUpdateResource({ ...resource, chapters })
+      setOriginals((map) => {
+        const next = { ...map }
+        restorable.forEach((paragraph) => { delete next[paragraph.key] })
+        return next
+      })
+      setLegacyEdited((keys) => {
+        const next = keys.filter((key) => !restorable.some((paragraph) => paragraph.key === key))
+        localStorage.setItem(`vivre-focus-edited-${resource.id}`, JSON.stringify(next))
+        return next
+      })
+    }
+    setEditValues({})
   }
 
   // --- notes texte : validation de la saisie en cours -------------------------
@@ -870,7 +895,7 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
       <button title="Annuler (⌘Z)" onClick={undo}>↩</button>
       <button title="Gomme" className={tool === 'eraser' ? 'active' : ''}
         onClick={() => { commitNote(); setTool(tool === 'eraser' ? 'select' : 'eraser'); setPendingLiaison(null); setSelectedNote(null); setSelectedStroke(null) }}>⌫</button>
-      <button title="Effacer la page" onClick={clearPage}>🗑</button>
+      <button title="Nettoyer la page" onClick={clearPage}>🗑</button>
     </div>
 
     {/* couleurs + épaisseur : repliées derrière une flèche discrète à droite */}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, GrammarMarkStyle, GrammarMarkType, Language, Resource, UiLanguage, WordMark } from '../domain'
 import { normalizeWord } from '../domain'
-import { knownParents } from '../store'
+import { knownParents, knownTags } from '../store'
 import { copy, readerCopy } from '../i18n'
 
 type Entry = {
@@ -25,7 +25,12 @@ type WordDetails = {
   translation: string
   parent: string
   pronunciation: string
+  knowledge?: number
+  tags?: string[]
 }
+
+/** Couleurs du niveau de connaissance 1 → 5 (rouge → vert clair). */
+const KNOWLEDGE_COLORS = ['#dc2626', '#ea580c', '#d97706', '#65a30d', '#16a34a']
 
 const PAGE_SIZE_OPTIONS = [120, 220, 350, 500] as const
 
@@ -241,7 +246,8 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const progress = Math.round(((safePage + 1) / pages.length) * 100)
   const activeType = markMode && markMode !== 'silent' ? markMode : null
 
-  return <div className={`reader-page ${markMode === 'silent' ? 'arm-silent' : ''} ${markMode && markMode !== 'silent' ? 'arm-word' : ''}`} onClick={() => setSelected(null)}>
+  return <div className={`reader-page ${markMode === 'silent' ? 'arm-silent' : ''} ${markMode && markMode !== 'silent' ? 'arm-word' : ''}`}
+    onClick={() => { setSelected(null); if (wikiArmed) setWikiArmed(false) }}>
     <header className="reader-top">
       <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}>{t.back}</button>
       <div className="reader-controls">
@@ -317,6 +323,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
     {selected && <WordPanel ui={ui} selected={selected} state={state} language={resource.language}
       onClose={() => setSelected(null)}
+      onOpenWord={(raw) => setSelected((current) => ({ raw, sentence: current?.sentence ?? '', x: current?.x ?? 80, y: current?.y ?? 120 }))}
       onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })} />}
 
     {markMode && markMode !== 'silent' && activeType && <MarkMenu ui={ui} type={activeType} name={t.marks[activeType]} color={typeColor(activeType)}
@@ -367,14 +374,15 @@ function WikiPanel({ word, language, onClose }: { word: string; language: Langua
  * next to × switches to the editable form. New words open the form directly.
  * `docked` = fixed inside the Learning Focus side panel instead of floating.
  */
-function WordPanel({ ui, selected, state, language, docked, onClose, onSave }: {
+function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onOpenWord }: {
   ui: UiLanguage
   selected: { raw: string; sentence: string; x?: number; y?: number }
   state: AppState
   language: Language
   docked?: boolean
   onClose: () => void
-  onSave: (details: { raw: string; translation: string; parent: string; pronunciation: string }) => void
+  onSave: (details: { raw: string; translation: string; parent: string; pronunciation: string; knowledge?: number; tags?: string[] }) => void
+  onOpenWord: (raw: string) => void
 }) {
   const t = readerCopy[ui]
   const findExisting = () => state.words.find((word) => word.normalized === normalizeWord(selected.raw) && word.language === language)
@@ -382,6 +390,20 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave }: {
   const [parent, setParent] = useState(() => findExisting()?.parent ?? '')
   const [pronunciation, setPronunciation] = useState(() => findExisting()?.phonetic ?? '')
   const [translation, setTranslation] = useState(() => findExisting()?.translation ?? findExisting()?.definitions[0]?.translation ?? '')
+  // Migration douce : un ancien tag prédéfini (partOfSpeech) devient un tag personnalisé.
+  const initialTags = () => {
+    const existing = findExisting()
+    if (!existing) return [] as string[]
+    if (existing.tags?.length) return existing.tags
+    if (existing.partOfSpeech) {
+      const legacy = (readerCopy[ui].tags as Record<string, string>)[existing.partOfSpeech]
+      return [legacy ?? existing.partOfSpeech]
+    }
+    return [] as string[]
+  }
+  const [tags, setTags] = useState<string[]>(initialTags)
+  const [tagInput, setTagInput] = useState('')
+  const [knowledge, setKnowledge] = useState<number | undefined>(() => findExisting()?.knowledge)
   const [saved, setSaved] = useState(false)
   const [parentTyping, setParentTyping] = useState(false)
   const [viewing, setViewing] = useState(() => Boolean(findExisting()))
@@ -393,6 +415,11 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave }: {
     setParent(existing?.parent ?? '')
     setPronunciation(existing?.phonetic ?? '')
     setTranslation(existing?.translation ?? existing?.definitions[0]?.translation ?? '')
+    setTags(existing
+      ? (existing.tags?.length ? existing.tags : (existing.partOfSpeech ? [(readerCopy[ui].tags as Record<string, string>)[existing.partOfSpeech] ?? existing.partOfSpeech] : []))
+      : [])
+    setTagInput('')
+    setKnowledge(existing?.knowledge)
     setSaved(false)
     setParentTyping(false)
     setViewing(Boolean(existing))
@@ -405,9 +432,24 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave }: {
     ? parents.filter((item) => item.toLowerCase().includes(query) && item !== parent.trim()).slice(0, 6)
     : []
 
+  // Tags personnalisés : création libre + suggestions des tags déjà utilisés.
+  const allTags = knownTags(state, language)
+  const tagQuery = tagInput.trim().toLowerCase()
+  const tagSuggestions = tagQuery
+    ? allTags.filter((item) => item.toLowerCase().includes(tagQuery) && !tags.includes(item)).slice(0, 6)
+    : allTags.filter((item) => !tags.includes(item)).slice(0, 6)
+
+  const addTag = (value: string) => {
+    const cleaned = value.trim().replace(/,+$/, '')
+    if (cleaned && !tags.includes(cleaned)) { setTags([...tags, cleaned]); setSaved(false) }
+    setTagInput('')
+  }
+
+  const removeTag = (value: string) => { setTags(tags.filter((item) => item !== value)); setSaved(false) }
+
   const submit = () => {
     if (!word.trim()) return
-    onSave({ raw: word.trim(), translation: translation.trim(), parent: parent.trim(), pronunciation: pronunciation.trim() })
+    onSave({ raw: word.trim(), translation: translation.trim(), parent: parent.trim(), pronunciation: pronunciation.trim(), knowledge, tags })
     setSaved(true)
   }
 
@@ -416,11 +458,35 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave }: {
     <button className="wp-icon" aria-label="×" onClick={onClose}>×</button>
   </div>
 
+  // Données de la vue lecture seule : fiche du parent et mots liés.
+  const parentEntry = parent ? state.words.find((item) => item.normalized === normalizeWord(parent) && item.language === language) : undefined
+  const linked = state.words.filter((item) => item.language === language && item.parent
+    && normalizeWord(item.parent) === normalizeWord(word) && item.normalized !== normalizeWord(word))
+
   const view = <>
-    <strong className="wp-view-word">{word}</strong>
-    {parent && <div className="wp-view-field"><span>{t.parentLabel}</span><span className="wp-tag readonly">{parent}</span></div>}
+    <div className="wp-view-head">
+      <strong className="wp-view-word">{word}</strong>
+      {tags.map((item) => <span key={item} className="wp-pos">{item}</span>)}
+    </div>
+    {knowledge !== undefined && <div className="wp-knowledge-view">
+      {knowledge === 6
+        ? <span className="wp-known-check">✓ {t.knownByHeart}</span>
+        : <span className="wp-dots" title={`${knowledge} / 5`}>{[1, 2, 3, 4, 5].map((n) => <i key={n}
+            style={n <= knowledge ? { background: KNOWLEDGE_COLORS[knowledge - 1] } : undefined} />)}</span>}
+    </div>}
+    {parent && <div className="wp-view-field"><span>{t.parentLabel}</span>
+      <div className="wp-parent-line">
+        <button className="wp-parent-tag" title={t.openLinkedWord} onClick={() => onOpenWord(parent)}>{parent}</button>
+        {(parentEntry?.tags ?? []).map((item) => <span key={item} className="wp-pos">{item}</span>)}
+        {parentEntry?.translation && <em className="wp-parent-translation">{parentEntry.translation}</em>}
+      </div>
+    </div>}
     {pronunciation && <div className="wp-view-field"><span>{t.pronunciationLabel}</span><p className="wp-view-text">{pronunciation}</p></div>}
     {translation && <div className="wp-view-field"><span>{t.translationLabel}</span><p className="wp-view-text">{translation}</p></div>}
+    {linked.length > 0 && <div className="wp-view-field"><span>{t.linkedWordsLabel}</span>
+      <div className="wp-linked">{linked.map((item) => <button key={item.id} className="wp-parent-tag" title={t.openLinkedWord}
+        onClick={() => onOpenWord(item.word)}>{item.word}</button>)}</div>
+    </div>}
   </>
 
   const form = <>
@@ -428,6 +494,42 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave }: {
       <span>{t.wordLabel}</span>
       <input value={word} onChange={(event) => { setWord(event.target.value); setSaved(false) }} />
     </label>
+
+    <div className="wp-field">
+      <span>{t.tagLabel}</span>
+      <div className="wp-tags">
+        {tags.map((item) => <span key={item} className="wp-tag-chip active">{item}
+          <button type="button" aria-label="×" onClick={() => removeTag(item)}>×</button>
+        </span>)}
+        <input className="wp-tag-input" value={tagInput} placeholder={tags.length ? '' : t.tagLabel}
+          onChange={(event) => {
+            const value = event.target.value
+            if (value.endsWith(',')) addTag(value)
+            else { setTagInput(value); setSaved(false) }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') { event.preventDefault(); addTag(tagInput) }
+            if (event.key === 'Backspace' && !tagInput && tags.length) removeTag(tags[tags.length - 1])
+          }}
+          onBlur={() => { if (tagInput.trim()) addTag(tagInput) }} />
+      </div>
+      {tagSuggestions.length > 0 && <div className="wp-tags">
+        {tagSuggestions.map((item) => <button key={item} type="button" className="wp-tag-chip"
+          onClick={() => addTag(item)}>{item}</button>)}
+      </div>}
+    </div>
+
+    <div className="wp-field">
+      <span>{t.knowledgeLabel}</span>
+      <div className="wp-knowledge">
+        {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button"
+          className={knowledge === n ? 'kl-btn active' : 'kl-btn'}
+          style={{ ['--kl' as string]: KNOWLEDGE_COLORS[n - 1] }}
+          onClick={() => { setKnowledge(knowledge === n ? undefined : n); setSaved(false) }}>{n}</button>)}
+        <button type="button" className={knowledge === 6 ? 'kl-btn known active' : 'kl-btn known'} title={t.knownByHeart} aria-label={t.knownByHeart}
+          onClick={() => { setKnowledge(knowledge === 6 ? undefined : 6); setSaved(false) }}>✓</button>
+      </div>
+    </div>
 
     <div className="wp-field">
       <span>{t.parentLabel}</span>
@@ -517,7 +619,7 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord }: {
     setWikiWord(wikiLookup(raw))
   }
 
-  return <div className="focus-reader">
+  return <div className="focus-reader" onClick={() => { setSelected(null); if (wikiArmed) setWikiArmed(false) }}>
     <header className="focus-top">
       <strong className="focus-title">{resource.title}</strong>
       <div className="focus-nav">
@@ -542,6 +644,7 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord }: {
         {selected
           ? <WordPanel ui={ui} selected={selected} state={state} language={resource.language} docked
               onClose={() => setSelected(null)}
+              onOpenWord={(raw) => setSelected({ raw, sentence: '' })}
               onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })} />
           : <p className="focus-hint">{t.focusHint}</p>}
       </aside>
@@ -628,7 +731,7 @@ function Word({ raw, language, state, markMode, onClick, onLetterClick }: {
   const key = markKey(language, normalized)
   const mark = state.wordMarks[key]
   const grayed = state.silentMarks[key] ?? []
-  const inDeck = state.words.some((word) => word.normalized === normalized && word.language === language)
+  const savedWord = state.words.find((word) => word.normalized === normalized && word.language === language)
 
   const letters = [...raw]
   let alphaIndex = -1
@@ -646,7 +749,10 @@ function Word({ raw, language, state, markMode, onClick, onLetterClick }: {
 
   const markClass = mark ? `marked-${mark.style}` : ''
   const style = mark ? ({ ['--mark-color' as string]: mark.color } as React.CSSProperties) : undefined
-  const deckClass = inDeck ? 'word-known' : ''
+  // Surlignage LUTE : niveau 1-5 = pointillés colorés, 6 (connu par cœur) = aucun surlignage.
+  const deckClass = !savedWord || savedWord.knowledge === 6
+    ? ''
+    : savedWord.knowledge ? `word-known kl-${savedWord.knowledge}` : 'word-known'
 
   if (markMode === 'silent') return <span className={`word as-span ${markClass} ${deckClass}`} style={style}>{spans}</span>
   return <button className={`word ${markClass} ${deckClass}`} style={style}

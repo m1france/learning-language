@@ -35,6 +35,8 @@ export type AppCopy = {
   interfaceQuestion: string
   welcome: string
   darkMode: string
+  collapseSidebar: string
+  expandSidebar: string
   lightMode: string
   roleLabel: string
   home: string
@@ -102,7 +104,7 @@ const fr: AppCopy = {
   onboardIntro: 'Des pratiques naturelles, sans pression ni test de niveau.',
   start: 'Commencer', name: 'Ton prénom', nameHint: 'Comment peut-on t’appeler ?',
   interfaceQuestion: 'Quelle langue d’interface veux-tu choisir ?',
-  welcome: 'Bienvenue', darkMode: 'Mode sombre', lightMode: 'Mode clair', roleLabel: 'Apprenant au quotidien', home: 'Accueil', reading: 'Lire', speaking: 'Parler', writing: 'Écrire', life: 'Vivre', settings: 'Paramètres',
+  welcome: 'Bienvenue', darkMode: 'Mode sombre', collapseSidebar: 'Réduire la barre latérale', expandSidebar: 'Agrandir la barre latérale', lightMode: 'Mode clair', roleLabel: 'Apprenant au quotidien', home: 'Accueil', reading: 'Lire', speaking: 'Parler', writing: 'Écrire', life: 'Vivre', settings: 'Paramètres',
   today: 'Aujourd’hui', continueReading: 'Continuer à lire', library: 'Bibliothèque', add: 'Ajouter une ressource',
   all: 'Tout', allLevels: 'Tous niveaux', dayCard: 'Ta carte du jour', startActivity: 'Commencer l’activité',
   dailyPrompt: 'Le Mur des Mots', save: 'Enregistrer', publish: 'Publier sur le Mur', published: 'Publié — bienvenue sur le Mur.',
@@ -133,7 +135,7 @@ const en: AppCopy = {
   onboardIntro: 'Natural practice, without pressure or a placement test.',
   start: 'Get started', name: 'Your first name', nameHint: 'What should we call you?',
   interfaceQuestion: 'Which interface language do you want to choose?',
-  welcome: 'Welcome', darkMode: 'Dark mode', lightMode: 'Light mode', roleLabel: 'Everyday learner', home: 'Home', reading: 'Read', speaking: 'Speak', writing: 'Write', life: 'Live', settings: 'Settings',
+  welcome: 'Welcome', darkMode: 'Dark mode', collapseSidebar: 'Collapse sidebar', expandSidebar: 'Expand sidebar', lightMode: 'Light mode', roleLabel: 'Everyday learner', home: 'Home', reading: 'Read', speaking: 'Speak', writing: 'Write', life: 'Live', settings: 'Settings',
   today: 'Today', continueReading: 'Keep reading', library: 'Library', add: 'Add a resource',
   all: 'All', allLevels: 'All levels', dayCard: 'Your card for today', startActivity: 'Start activity',
   dailyPrompt: 'The Word Wall', save: 'Save', publish: 'Publish to the Wall', published: 'Published — welcome to the Wall.',
@@ -164,7 +166,7 @@ const es: AppCopy = {
   onboardIntro: 'Práctica natural, sin presión ni prueba de nivel.',
   start: 'Empezar', name: 'Tu nombre', nameHint: '¿Cómo te llamamos?',
   interfaceQuestion: '¿Qué idioma de interfaz quieres elegir?',
-  welcome: 'Bienvenido', darkMode: 'Modo oscuro', lightMode: 'Modo claro', roleLabel: 'Aprendiz cotidiano', home: 'Inicio', reading: 'Leer', speaking: 'Hablar', writing: 'Escribir', life: 'Vivir', settings: 'Ajustes',
+  welcome: 'Bienvenido', darkMode: 'Modo oscuro', collapseSidebar: 'Reducir la barra lateral', expandSidebar: 'Ampliar la barra lateral', lightMode: 'Modo claro', roleLabel: 'Aprendiz cotidiano', home: 'Inicio', reading: 'Leer', speaking: 'Hablar', writing: 'Escribir', life: 'Vivir', settings: 'Ajustes',
   today: 'Hoy', continueReading: 'Seguir leyendo', library: 'Biblioteca', add: 'Añadir un recurso',
   all: 'Todo', allLevels: 'Todos los niveles', dayCard: 'Tu tarjeta del día', startActivity: 'Empezar la actividad',
   dailyPrompt: 'El Muro de Palabras', save: 'Guardar', publish: 'Publicar en el Muro', published: 'Publicado — bienvenido al Muro.',
@@ -195,7 +197,7 @@ const zh: AppCopy = {
   onboardIntro: '自然练习，没有压力，也没有分级测试。',
   start: '开始', name: '你的名字', nameHint: '我们该怎么称呼你？',
   interfaceQuestion: '你想选择哪种界面语言？',
-  welcome: '欢迎', darkMode: '深色模式', lightMode: '浅色模式', roleLabel: '日常学习者', home: '首页', reading: '阅读', speaking: '口语', writing: '写作', life: '生活', settings: '设置',
+  welcome: '欢迎', darkMode: '深色模式', collapseSidebar: '收起侧边栏', expandSidebar: '展开侧边栏', lightMode: '浅色模式', roleLabel: '日常学习者', home: '首页', reading: '阅读', speaking: '口语', writing: '写作', life: '生活', settings: '设置',
   today: '今天', continueReading: '继续阅读', library: '书库', add: '添加资源',
   all: '全部', allLevels: '所有级别', dayCard: '今日卡片', startActivity: '开始活动',
   dailyPrompt: '单词墙', save: '保存', publish: '发布到单词墙', published: '已发布——欢迎来到单词墙。',
@@ -226,7 +228,7 @@ const ru: AppCopy = {
   onboardIntro: 'Естественная практика, без давления и теста на уровень.',
   start: 'Начать', name: 'Твоё имя', nameHint: 'Как к тебе обращаться?',
   interfaceQuestion: 'Какой язык интерфейса выбрать?',
-  welcome: 'Добро пожаловать', darkMode: 'Тёмная тема', lightMode: 'Светлая тема', roleLabel: 'Учусь каждый день', home: 'Главная', reading: 'Читать', speaking: 'Говорить', writing: 'Писать', life: 'Жить', settings: 'Настройки',
+  welcome: 'Добро пожаловать', darkMode: 'Тёмная тема', collapseSidebar: 'Свернуть панель', expandSidebar: 'Развернуть панель', lightMode: 'Светлая тема', roleLabel: 'Учусь каждый день', home: 'Главная', reading: 'Читать', speaking: 'Говорить', writing: 'Писать', life: 'Жить', settings: 'Настройки',
   today: 'Сегодня', continueReading: 'Продолжить чтение', library: 'Библиотека', add: 'Добавить ресурс',
   all: 'Все', allLevels: 'Все уровни', dayCard: 'Твоя карточка дня', startActivity: 'Начать занятие',
   dailyPrompt: 'Стена слов', save: 'Сохранить', publish: 'Опубликовать на Стене', published: 'Опубликовано — добро пожаловать на Стену.',
@@ -257,7 +259,7 @@ const pt: AppCopy = {
   onboardIntro: 'Prática natural, sem pressão nem teste de nível.',
   start: 'Começar', name: 'O teu nome', nameHint: 'Como podemos chamar-te?',
   interfaceQuestion: 'Que língua de interface queres escolher?',
-  welcome: 'Bem-vindo', darkMode: 'Modo escuro', lightMode: 'Modo claro', roleLabel: 'Aprendiz do dia a dia', home: 'Início', reading: 'Ler', speaking: 'Falar', writing: 'Escrever', life: 'Viver', settings: 'Definições',
+  welcome: 'Bem-vindo', darkMode: 'Modo escuro', collapseSidebar: 'Recolher a barra lateral', expandSidebar: 'Expandir a barra lateral', lightMode: 'Modo claro', roleLabel: 'Aprendiz do dia a dia', home: 'Início', reading: 'Ler', speaking: 'Falar', writing: 'Escrever', life: 'Viver', settings: 'Definições',
   today: 'Hoje', continueReading: 'Continuar a ler', library: 'Biblioteca', add: 'Adicionar um recurso',
   all: 'Tudo', allLevels: 'Todos os níveis', dayCard: 'O teu cartão do dia', startActivity: 'Começar a atividade',
   dailyPrompt: 'O Muro das Palavras', save: 'Guardar', publish: 'Publicar no Muro', published: 'Publicado — bem-vindo ao Muro.',
@@ -320,6 +322,13 @@ export type ReaderCopy = {
   parentLabel: string
   pronunciationLabel: string
   translationLabel: string
+  tagLabel: string
+  tags: { noun: string; verb: string; adjective: string; adverb: string; expression: string; other: string }
+  knowledgeLabel: string
+  knownByHeart: string
+  contextLabel: string
+  linkedWordsLabel: string
+  openLinkedWord: string
   saveWord: string
   savedWord: string
   editWord: string
@@ -345,6 +354,10 @@ const frReader: ReaderCopy = {
   wordLabel: 'Mot', parentLabel: 'Mot parent',
   pronunciationLabel: 'Prononciation',
   translationLabel: 'Traduction',
+  tagLabel: 'Tag',
+  tags: { noun: 'Nom', verb: 'Verbe', adjective: 'Adjectif', adverb: 'Adverbe', expression: 'Expression', other: 'Autre' },
+  knowledgeLabel: 'Niveau de connaissance', knownByHeart: 'Connu par cœur',
+  contextLabel: 'Phrase d’origine', linkedWordsLabel: 'Mots liés', openLinkedWord: 'Ouvrir la fiche de ce mot',
   saveWord: 'Enregistrer le mot', savedWord: '✓ Enregistré', editWord: 'Modifier',
   wikiOpen: 'Dictionnaire : active puis clique sur un mot',
   focusHint: 'Clique sur un mot pour noter sa traduction, son parent et sa prononciation.',
@@ -369,6 +382,10 @@ const enReader: ReaderCopy = {
   wordLabel: 'Word', parentLabel: 'Parent word',
   pronunciationLabel: 'Pronunciation',
   translationLabel: 'Translation',
+  tagLabel: 'Tag',
+  tags: { noun: 'Noun', verb: 'Verb', adjective: 'Adjective', adverb: 'Adverb', expression: 'Expression', other: 'Other' },
+  knowledgeLabel: 'Knowledge level', knownByHeart: 'Known by heart',
+  contextLabel: 'Source sentence', linkedWordsLabel: 'Linked words', openLinkedWord: 'Open this word’s card',
   saveWord: 'Save word', savedWord: '✓ Saved', editWord: 'Edit',
   wikiOpen: 'Dictionary: toggle on, then click a word',
   focusHint: 'Click a word to note its translation, parent and pronunciation.',
@@ -392,6 +409,10 @@ const esReader: ReaderCopy = {
   wordLabel: 'Palabra', parentLabel: 'Palabra padre',
   pronunciationLabel: 'Pronunciación',
   translationLabel: 'Traducción',
+  tagLabel: 'Etiqueta',
+  tags: { noun: 'Sustantivo', verb: 'Verbo', adjective: 'Adjetivo', adverb: 'Adverbio', expression: 'Expresión', other: 'Otro' },
+  knowledgeLabel: 'Nivel de conocimiento', knownByHeart: 'Aprendido de memoria',
+  contextLabel: 'Frase de origen', linkedWordsLabel: 'Palabras vinculadas', openLinkedWord: 'Abrir la ficha de esta palabra',
   saveWord: 'Guardar palabra', savedWord: '✓ Guardado', editWord: 'Editar',
   wikiOpen: 'Diccionario: actívalo y haz clic en una palabra',
   focusHint: 'Haz clic en una palabra para anotar su traducción, su padre y su pronunciación.',
@@ -415,6 +436,10 @@ const zhReader: ReaderCopy = {
   wordLabel: '单词', parentLabel: '主词',
   pronunciationLabel: '发音',
   translationLabel: '翻译',
+  tagLabel: '标签',
+  tags: { noun: '名词', verb: '动词', adjective: '形容词', adverb: '副词', expression: '短语', other: '其他' },
+  knowledgeLabel: '掌握程度', knownByHeart: '熟记于心',
+  contextLabel: '原句', linkedWordsLabel: '相关词', openLinkedWord: '打开该词的卡片',
   saveWord: '保存单词', savedWord: '✓ 已保存', editWord: '编辑',
   wikiOpen: '词典：先启用，再点击单词',
   focusHint: '点击单词，记录它的翻译、主词和发音。',
@@ -438,6 +463,10 @@ const ruReader: ReaderCopy = {
   wordLabel: 'Слово', parentLabel: 'Родительское слово',
   pronunciationLabel: 'Произношение',
   translationLabel: 'Перевод',
+  tagLabel: 'Тег',
+  tags: { noun: 'Существительное', verb: 'Глагол', adjective: 'Прилагательное', adverb: 'Наречие', expression: 'Выражение', other: 'Другое' },
+  knowledgeLabel: 'Уровень знания', knownByHeart: 'Знаю наизусть',
+  contextLabel: 'Исходное предложение', linkedWordsLabel: 'Связанные слова', openLinkedWord: 'Открыть карточку этого слова',
   saveWord: 'Сохранить слово', savedWord: '✓ Сохранено', editWord: 'Изменить',
   wikiOpen: 'Словарь: включи, затем нажми на слово',
   focusHint: 'Нажми на слово, чтобы записать перевод, родителя и произношение.',
@@ -461,6 +490,10 @@ const ptReader: ReaderCopy = {
   wordLabel: 'Palavra', parentLabel: 'Palavra-mãe',
   pronunciationLabel: 'Pronúncia',
   translationLabel: 'Tradução',
+  tagLabel: 'Etiqueta',
+  tags: { noun: 'Nome', verb: 'Verbo', adjective: 'Adjetivo', adverb: 'Advérbio', expression: 'Expressão', other: 'Outro' },
+  knowledgeLabel: 'Nível de conhecimento', knownByHeart: 'Decorado',
+  contextLabel: 'Frase de origem', linkedWordsLabel: 'Palavras ligadas', openLinkedWord: 'Abrir a ficha desta palavra',
   saveWord: 'Guardar palavra', savedWord: '✓ Guardado', editWord: 'Editar',
   wikiOpen: 'Dicionário: ativa e clica numa palavra',
   focusHint: 'Clica numa palavra para anotar a tradução, o pai e a pronúncia.',

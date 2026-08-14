@@ -57,6 +57,8 @@ export type LearnedWord = {
   /** Lemma / parent word chosen by the user (e.g. "avoir" for "ai"). */
   parent?: string
   partOfSpeech: string
+  /** Niveau de connaissance : 1 (découvert) à 5 (presque acquis), 6 = connu par cœur (plus de surlignage). */
+  knowledge?: number
   definitions: DictionarySense[]
   contextSentence: string
   sourceResourceId?: string
