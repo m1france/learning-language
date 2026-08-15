@@ -1,6 +1,14 @@
-import { type ApiSettings, type AppState, type Resource, type UserSettings, type WordMark, id, normalizeWord, todayKey } from './domain'
+import { type ApiSettings, type AppState, type Language, type MarkingDefinition, type Resource, type UserSettings, type WordMark, id, normalizeWord, todayKey } from './domain'
 
 const stateKey = 'vivre-la-langue:state:v2'
+
+export const DEFAULT_MARKINGS: MarkingDefinition[] = [
+  { id: 'verb', label: 'Verbe', color: '#16a34a' },
+  { id: 'noun', label: 'Nom', color: '#2563eb' },
+  { id: 'adjective', label: 'Adjectif', color: '#d97706' },
+  { id: 'adverb', label: 'Adverbe', color: '#dc2626' },
+  { id: 'expression', label: 'Expression', color: '#7c3aed' },
+]
 
 export const defaultSettings: UserSettings = {
   name: '',
@@ -11,6 +19,7 @@ export const defaultSettings: UserSettings = {
   readerWidth: 'comfortable',
   readerPageSize: 220,
   showGrammar: true,
+  readerToolbarStyle: 'liquid',
   markColors: {},
   api: {
     openRouterKey: '',
@@ -41,6 +50,7 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   completedScenarios: [],
   wordMarks: {},
   silentMarks: {},
+  markings: DEFAULT_MARKINGS,
   customTools: [],
   removedTools: [],
   customCategories: [],
@@ -68,6 +78,7 @@ export const loadState = (): AppState | null => {
         ...parsed.settings,
         // v2 → v3 : l'interface suivait l'inverse de la langue apprise ; elle devient un choix libre.
         uiLanguage: parsed.settings.uiLanguage ?? (parsed.settings.learningLanguage === 'en' ? 'fr' : 'en'),
+        readerToolbarStyle: parsed.settings.readerToolbarStyle ?? 'liquid',
         markColors: parsed.settings.markColors ?? {},
         api: { ...defaultSettings.api, ...api },
       },
@@ -78,6 +89,7 @@ export const loadState = (): AppState | null => {
       completedScenarios: parsed.completedScenarios ?? [],
       wordMarks: parsed.wordMarks ?? {},
       silentMarks: parsed.silentMarks ?? {},
+      markings: parsed.markings && parsed.markings.length > 0 ? parsed.markings : DEFAULT_MARKINGS,
       customTools: parsed.customTools ?? [],
       removedTools: parsed.removedTools ?? [],
       customCategories: parsed.customCategories ?? [],
@@ -148,6 +160,15 @@ export const upsertWordDetails = (state: AppState, args: {
       tags: args.tags ?? [],
       createdAt: now,
     }],
+  }
+}
+
+/** Delete a word from the user's learned/annotated words. */
+export const deleteWord = (state: AppState, rawOrNormalized: string, language: 'en' | 'fr'): AppState => {
+  const norm = normalizeWord(rawOrNormalized)
+  return {
+    ...state,
+    words: state.words.filter((w) => !(w.normalized === norm && w.language === language)),
   }
 }
 
@@ -242,3 +263,94 @@ export const toggleSilentMark = (state: AppState, key: string, letterIndex: numb
   else silentMarks[key] = next
   return { ...state, silentMarks }
 }
+
+/** Reset all word markings and silent marks for a given language (or all marks). */
+export const resetResourceMarks = (state: AppState, language?: Language): AppState => {
+  if (!language) return { ...state, wordMarks: {}, silentMarks: {} }
+  const wordMarks = { ...state.wordMarks }
+  const silentMarks = { ...state.silentMarks }
+  const prefix = `${language}:`
+  Object.keys(wordMarks).forEach((key) => {
+    if (key.startsWith(prefix)) delete wordMarks[key]
+  })
+  Object.keys(silentMarks).forEach((key) => {
+    if (key.startsWith(prefix)) delete silentMarks[key]
+  })
+  return { ...state, wordMarks, silentMarks }
+}
+
+/** Add a new marking definition. */
+export const addMarking = (state: AppState, label: string, color: string): AppState => {
+  const cleaned = label.trim()
+  if (!cleaned) return state
+  const markings = [...(state.markings ?? DEFAULT_MARKINGS)]
+  const newMarking: MarkingDefinition = {
+    id: id('mark'),
+    label: cleaned,
+    color: color || '#2563eb',
+  }
+  markings.push(newMarking)
+  return {
+    ...state,
+    markings,
+    settings: {
+      ...state.settings,
+      markColors: { ...state.settings.markColors, [newMarking.id]: newMarking.color },
+    },
+  }
+}
+
+/** Rename an existing marking. */
+export const renameMarking = (state: AppState, markingId: string, newLabel: string): AppState => {
+  const cleaned = newLabel.trim()
+  if (!cleaned) return state
+  const current = state.markings ?? DEFAULT_MARKINGS
+  const markings = current.map((m) => (m.id === markingId ? { ...m, label: cleaned } : m))
+  return { ...state, markings }
+}
+
+/** Delete a marking definition and clean up associated wordMarks. */
+export const deleteMarking = (state: AppState, markingId: string): AppState => {
+  const current = state.markings ?? DEFAULT_MARKINGS
+  const markings = current.filter((m) => m.id !== markingId)
+  const wordMarks = { ...state.wordMarks }
+  Object.keys(wordMarks).forEach((key) => {
+    if (wordMarks[key]?.type === markingId) {
+      delete wordMarks[key]
+    }
+  })
+  const markColors = { ...state.settings.markColors }
+  delete markColors[markingId]
+  return {
+    ...state,
+    markings,
+    wordMarks,
+    settings: { ...state.settings, markColors },
+  }
+}
+
+/** Reorder markings array from one index to another. */
+export const reorderMarkings = (state: AppState, fromIndex: number, toIndex: number): AppState => {
+  const current = [...(state.markings ?? DEFAULT_MARKINGS)]
+  if (fromIndex < 0 || fromIndex >= current.length || toIndex < 0 || toIndex >= current.length || fromIndex === toIndex) {
+    return state
+  }
+  const [moved] = current.splice(fromIndex, 1)
+  current.splice(toIndex, 0, moved)
+  return { ...state, markings: current }
+}
+
+/** Update default color for a marking. */
+export const setMarkingColor = (state: AppState, markingId: string, color: string): AppState => {
+  const current = state.markings ?? DEFAULT_MARKINGS
+  const markings = current.map((m) => (m.id === markingId ? { ...m, color } : m))
+  return {
+    ...state,
+    markings,
+    settings: {
+      ...state.settings,
+      markColors: { ...state.settings.markColors, [markingId]: color },
+    },
+  }
+}
+

@@ -126,8 +126,16 @@ export type CustomTool = {
   url?: string
 }
 
-export type GrammarMarkType = 'verb' | 'noun' | 'adjective' | 'adverb' | 'expression'
+export type GrammarMarkType = 'verb' | 'noun' | 'adjective' | 'adverb' | 'expression' | string
 export type GrammarMarkStyle = 'highlight' | 'underline' | 'overlay'
+
+export type MarkingDefinition = {
+  id: string
+  label: string
+  color: string
+}
+
+export type ReaderToolbarStyle = 'liquid' | 'opaque' | 'solid'
 
 export type WordMark = {
   type: GrammarMarkType
@@ -146,8 +154,9 @@ export type UserSettings = {
   /** Approximate number of words per reader page. */
   readerPageSize: number
   showGrammar: boolean
+  readerToolbarStyle?: ReaderToolbarStyle
   /** Default color per grammar mark type, overridden when the user picks one. */
-  markColors: Partial<Record<GrammarMarkType, string>>
+  markColors: Partial<Record<string, string>>
   api: ApiSettings
 }
 
@@ -164,6 +173,8 @@ export type AppState = {
   wordMarks: Record<string, WordMark>
   /** User-grayed letters: `${language}:${normalized}` → indices of letters (alpha order) greyed by the user. */
   silentMarks: Record<string, number[]>
+  /** User-defined grammar and semantic markings in display order. */
+  markings?: MarkingDefinition[]
   /** User-added tools shown in the "Vivre" section. */
   customTools: CustomTool[]
   /** Tool names removed by the user from the recommended list. */

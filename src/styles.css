@@ -3721,15 +3721,15 @@ h2 {
 
 /* ===== Marquage grammatical (sidebar + mots marqués) ===== */
 .mark-panel {
-  margin-top: 22px;
-  border-top: 1px solid var(--line);
-  padding-top: 13px;
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0;
   display: grid;
   gap: 5px;
 }
 
 .mark-panel .eyebrow {
-  margin-bottom: 5px;
+  margin-bottom: 3px;
 }
 
 .mark-type {
@@ -3744,6 +3744,8 @@ h2 {
   color: var(--muted);
   text-align: left;
   transition: .15s;
+  cursor: pointer;
+  width: 100%;
 }
 
 .mark-type i {
@@ -3765,6 +3767,224 @@ h2 {
   color: var(--ink);
   border-color: var(--type-color);
   box-shadow: inset 0 0 0 1px var(--type-color);
+}
+
+.mark-type-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px dashed var(--line-strong, #c8c5be);
+  background: transparent;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s ease;
+  width: 100%;
+}
+
+.mark-type-add:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.mark-inline-input {
+  background: var(--white);
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  color: var(--ink);
+  width: 100%;
+  outline: none;
+  font-family: inherit;
+}
+
+/* Menu contextuel clic-droit sur un marquage */
+.mark-context-menu {
+  position: fixed;
+  z-index: 100;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+  padding: 4px;
+  min-width: 130px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: contextFadeIn .12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes contextFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.mark-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background .12s;
+}
+
+.mark-context-item:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.mark-context-item.danger {
+  color: #dc2626;
+}
+
+.mark-context-item.danger:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+/* Modal création marquage */
+.mark-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  animation: contextFadeIn .15s ease-out;
+}
+
+.mark-modal-card {
+  background: var(--white);
+  border-radius: 18px;
+  padding: 24px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mark-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mark-modal-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.mark-modal-head button {
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.mark-modal-head button:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.mark-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mark-modal-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.mark-modal-field input[type="text"] {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--paper, #faf9f6);
+  color: var(--ink);
+  outline: none;
+  font-family: inherit;
+  transition: border-color .15s;
+}
+
+.mark-modal-field input[type="text"]:focus {
+  border-color: var(--ink);
+  background: var(--white);
+}
+
+.mark-color-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.mark-color-choice-btn {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform .15s, border-color .15s;
+  padding: 0;
+}
+
+.mark-color-choice-btn:hover:not(:disabled) {
+  transform: scale(1.12);
+}
+
+.mark-color-choice-btn.selected {
+  border-color: var(--ink);
+  transform: scale(1.14);
+}
+
+.mark-color-choice-btn:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+}
+
+.mark-color-choice-btn:disabled::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  width: 80%;
+  height: 2px;
+  background: #78716c;
+  transform: rotate(45deg);
+}
+
+.mark-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .word {
@@ -3812,13 +4032,33 @@ h2 {
   outline-offset: 1px;
 }
 
-/* ===== Menu de marquage — liquid glass ===== */
+/* ===== Menu de marquage — liquid glass iOS 27 ===== */
 .glass {
-  background: color-mix(in srgb, var(--white) 72%, transparent);
-  backdrop-filter: blur(18px) saturate(1.5);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
-  box-shadow: 0 12px 40px rgba(40, 36, 30, .18), inset 0 1px 0 rgba(255, 255, 255, .55);
+  background: color-mix(in srgb, var(--white) 90%, transparent);
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  border: 1px solid color-mix(in srgb, var(--white) 85%, transparent);
+  box-shadow: 0 16px 40px rgba(35, 30, 25, .16), inset 0 1px 1px rgba(255, 255, 255, .9);
+}
+
+[data-theme='dark'] .glass {
+  background: color-mix(in srgb, #1c1c1e 92%, transparent);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .15);
+}
+
+.glass.toolbar-opaque {
+  background: color-mix(in srgb, var(--white) 96%, transparent);
+  backdrop-filter: blur(34px);
+  -webkit-backdrop-filter: blur(34px);
+}
+
+.glass.toolbar-solid {
+  background: var(--white);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12);
 }
 
 .mark-menu-wrap {
@@ -3837,7 +4077,7 @@ h2 {
   align-items: center;
   gap: 4px;
   border-radius: 999px;
-  padding: 8px 10px;
+  padding: 8px 12px;
 }
 
 .mark-menu-type {
@@ -3923,8 +4163,8 @@ h2 {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, .9);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 22%, transparent), 0 2px 6px rgba(40, 36, 30, .22);
+  border: 2px solid rgba(255, 255, 255, .95);
+  box-shadow: none;
   padding: 0;
   cursor: pointer;
   transition: transform .15s;
@@ -3943,12 +4183,18 @@ h2 {
   display: grid;
   place-items: center;
   cursor: pointer;
-  background: color-mix(in srgb, var(--white) 72%, transparent);
-  backdrop-filter: blur(18px) saturate(1.5);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
-  box-shadow: 0 12px 40px rgba(40, 36, 30, .18), inset 0 1px 0 rgba(255, 255, 255, .55);
+  background: color-mix(in srgb, var(--white) 90%, transparent);
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  border: 1px solid color-mix(in srgb, var(--white) 85%, transparent);
+  box-shadow: 0 16px 40px rgba(35, 30, 25, .16), inset 0 1px 1px rgba(255, 255, 255, .9);
   transition: transform .15s;
+}
+
+[data-theme='dark'] .mark-menu-close {
+  background: color-mix(in srgb, #1c1c1e 92%, transparent);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .15);
 }
 
 .mark-menu-close:hover {
@@ -3967,16 +4213,102 @@ h2 {
   gap: 7px;
 }
 
-.mark-palette button {
+.mark-palette button.mark-palette-color {
   width: 22px;
   height: 22px;
   border-radius: 50%;
   border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
 }
 
-.mark-palette button.active {
+.mark-palette button.mark-palette-color.active {
   border-color: var(--ink);
   transform: scale(1.12);
+}
+
+.mark-palette-custom-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px dashed var(--muted);
+  background: transparent;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  transition: all .15s;
+}
+
+.mark-palette-custom-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  transform: scale(1.12);
+}
+
+.mark-hex-panel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 170px;
+}
+
+.mark-hex-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mark-hex-preview {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  flex: none;
+  cursor: pointer;
+}
+
+.mark-hex-native-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.mark-hex-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-family: monospace;
+  text-transform: uppercase;
+}
+
+.mark-hex-back-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  padding: 2px;
+}
+
+.mark-hex-back-btn:hover {
+  color: var(--ink);
 }
 
 .mark-exit {
@@ -4242,6 +4574,7 @@ h2 {
   top: 8px;
   right: 10px;
   display: flex;
+  align-items: center;
   gap: 2px;
   z-index: 2;
 }
@@ -4250,18 +4583,32 @@ h2 {
   border: 0;
   background: none;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
-  width: 27px;
-  height: 27px;
-  border-radius: 7px;
+  width: 25px;
+  height: 25px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
+  transition: color .15s ease, background .15s ease;
 }
 
 .wp-icon:hover {
   color: var(--ink);
   background: var(--paper);
+}
+
+.wp-icon.wp-icon-edit {
+  font-size: 12px;
+}
+
+.wp-icon.wp-icon-delete {
+  font-size: 12px;
+}
+
+.wp-icon.wp-icon-delete:hover {
+  color: #dc2626;
+  background: color-mix(in srgb, #dc2626 12%, transparent);
 }
 
 .wp-view-word {
@@ -4850,74 +5197,120 @@ h2 {
   }
 }
 
-/* Tag Input inline transparent avec autocomplétion (style Google) */
-.wp-tags.tag-container {
+/* Tag Input inline transparent avec autocomplétion (style Google) & tags texte brut */
+.wp-tag-line-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 0 6px 0;
+  gap: 12px;
+  position: relative;
+  transition: border-color .15s ease;
   min-height: 32px;
 }
 
-.wp-tag-inline-wrapper {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  border-bottom: 1px solid var(--line);
-  min-width: 75px;
-  flex: 1;
-  max-width: 160px;
-  background: transparent;
-  transition: border-color .15s ease;
-}
-
-.wp-tag-inline-wrapper:focus-within {
+.wp-tag-line-row:focus-within {
   border-bottom-color: var(--ink);
 }
 
-.wp-tag-ghost-container {
+.wp-tag-input-box {
+  position: relative;
+  flex: 1;
+  min-width: 60px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.wp-tag-ghost-text,
+.wp-tag-input-field {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: 0;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.wp-tag-ghost-text {
   position: absolute;
   left: 0;
   top: 0;
-  bottom: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   pointer-events: none;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1;
-  padding: 4px 2px;
   white-space: pre;
-  box-sizing: border-box;
   overflow: hidden;
+  user-select: none;
 }
 
 .wp-tag-ghost-typed {
   visibility: hidden;
+  color: transparent;
+  font: inherit;
+  letter-spacing: inherit;
 }
 
 .wp-tag-ghost-suffix {
   color: var(--muted);
   opacity: 0.55;
-  font-style: normal;
+  font: inherit;
+  letter-spacing: inherit;
 }
 
-.wp-tag-input-inline {
+.wp-tag-input-field {
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 100%;
-  border: none !important;
+  height: 100%;
+  border: 0 !important;
   background: transparent !important;
-  font-family: inherit;
-  font-size: 12px;
   color: var(--ink);
-  padding: 4px 2px !important;
   outline: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  box-sizing: border-box;
+  caret-color: var(--ink);
 }
 
-.wp-tag-input-inline::placeholder {
+.wp-tag-input-field::placeholder {
   color: color-mix(in srgb, var(--muted) 65%, transparent);
+  font: inherit;
+  opacity: 1;
+}
+
+.wp-tag-text-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.wp-tag-text-item {
+  border: 0;
+  background: transparent;
+  padding: 0 3px;
+  margin: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  line-height: 20px;
+  transition: color .15s ease, opacity .15s ease;
+  position: relative;
+}
+
+.wp-tag-text-item:hover {
+  color: #dc2626;
+  opacity: 0.85;
+  text-decoration: line-through;
 }
 
 /* Footer de la popup mot : bouton enregistrer + mot sélectionné */
@@ -5098,4 +5491,195 @@ h2 {
   border: 1px dashed var(--line);
   border-radius: 10px;
   background: var(--paper);
+}
+
+/* ===== Paramètres : Gestion des Marquages ===== */
+.settings-markings-section {
+  display: grid;
+  gap: 20px;
+  max-width: 680px;
+}
+
+.markings-add-bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.markings-add-bar input[type="text"] {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.markings-add-bar input[type="text"]:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.markings-add-bar input[type="color"] {
+  flex: none;
+  width: 42px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px;
+  background: var(--white);
+  cursor: pointer;
+}
+
+.marking-mgmt-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+  gap: 12px;
+}
+
+.marking-mgmt-card:hover {
+  border-color: color-mix(in srgb, var(--ink) 25%, var(--line));
+}
+
+.marking-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.marking-reorder-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.marking-reorder-btn {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--muted);
+  width: 22px;
+  height: 18px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  transition: all .12s;
+}
+
+.marking-reorder-btn:hover:not(:disabled) {
+  background: var(--white);
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.marking-reorder-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.marking-mgmt-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.marking-card-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.marking-color-picker-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.marking-color-swatch-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--white);
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: pointer;
+  padding: 0;
+}
+
+/* ===== Page Context Menu (Reader Global Right-Click) ===== */
+.page-context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 220px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18), 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  backdrop-filter: blur(20px);
+  animation: markContextIn 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.page-context-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.page-context-item i {
+  font-style: normal;
+  font-size: 14px;
+  opacity: 0.75;
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-context-item:hover {
+  background: var(--accent-light);
+  color: var(--ink);
+}
+
+.page-context-item.danger:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.page-context-sep {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 6px;
+}
+
+.word .edited-char,
+.letter-cell.edited-char {
+  color: #16a34a !important;
+  font-weight: 600;
 }

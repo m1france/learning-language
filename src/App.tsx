@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, Difficulty, Resource, UiLanguage } from './domain'
 import { BUILTIN_CATEGORIES, id } from './domain'
-import { createState, deleteResource, loadState, progressFor, resetState, saveState, setWordMark, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
+import { addMarking, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
 import { importFromFile, importFromUrl, paragraphsToResource } from './importer'
 import { Reader, Cover } from './features/Reader'
 import { LearningFocus } from './features/LearningFocus'
@@ -66,11 +66,16 @@ export default function App() {
             progress: { ...state.progress, [resourceId]: { resourceId, chapterIndex, paragraphIndex, completed: false, updatedAt: new Date().toISOString() } },
           })}
           onSaveWord={(args) => change(upsertWordDetails(state, args))}
+          onDeleteWord={(raw, language) => change(deleteWord(state, raw, language))}
           onOpenFocus={(resource) => setFocusId(resource.id)}
           onPageSize={(size) => change({ ...state, settings: { ...state.settings, readerPageSize: size } })}
           onWordMark={(key, mark) => change(setWordMark(state, key, mark))}
           onSilentMark={(key, letterIndex) => change(toggleSilentMark(state, key, letterIndex))}
-          onMarkColor={(type, color) => change({ ...state, settings: { ...state.settings, markColors: { ...state.settings.markColors, [type]: color } } })} />
+          onMarkColor={(type, color) => change({ ...state, settings: { ...state.settings, markColors: { ...state.settings.markColors, [type]: color } } })}
+          onAddMarking={(label, color) => change(addMarking(state, label, color))}
+          onRenameMarking={(markingId, newLabel) => change(renameMarking(state, markingId, newLabel))}
+          onDeleteMarking={(markingId) => change(deleteMarking(state, markingId))}
+          onResetMarks={(language) => change(resetResourceMarks(state, language))} />
       ) : (
         <>
           {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}

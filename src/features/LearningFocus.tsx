@@ -105,7 +105,7 @@ function paginate(paragraphs: ReturnType<typeof flattenParagraphs>, wordsPerPage
  * nouveau : ainsi une lettre déplacée (« faim » → « fian ») ressort en vert,
  * pas seulement les lettres ajoutées.
  */
-function modifiedCharIndices(original: string, current: string): Set<number> {
+export function modifiedCharIndices(original: string, current: string): Set<number> {
   const modified = new Set<number>()
   if (original === current) return modified
   let p = 0
@@ -176,7 +176,7 @@ const loadMap = (resourceId: string): AnnotationMap => {
   } catch { return {} }
 }
 
-const loadOriginals = (resourceId: string): Record<string, string> => {
+export const loadOriginals = (resourceId: string): Record<string, string> => {
   try { return JSON.parse(localStorage.getItem(`vivre-focus-originals-${resourceId}`) || '{}') } catch { return {} }
 }
 

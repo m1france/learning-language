@@ -308,8 +308,20 @@ export type ReaderCopy = {
   focus: string
   chapterDefault: string
   marking: string
-  marks: { verb: string; noun: string; adjective: string; adverb: string; expression: string }
+  marks: { verb: string; noun: string; adjective: string; adverb: string; expression: string; [key: string]: string }
   silentLetter: string
+  addMarking: string
+  newMarking: string
+  markingName: string
+  markingNamePlaceholder: string
+  createMarking: string
+  rename: string
+  delete: string
+  colorAlreadyUsed: string
+  customColor: string
+  hexCode: string
+  moveUp: string
+  moveDown: string
   styleHighlight: string
   styleUnderline: string
   styleOverlay: string
@@ -335,6 +347,9 @@ export type ReaderCopy = {
   wikiOpen: string
   focusHint: string
   focusExit: string
+  resetFormatting: string
+  resetTeacherMode: string
+  backToLibrary: string
 }
 
 const frReader: ReaderCopy = {
@@ -347,6 +362,18 @@ const frReader: ReaderCopy = {
   marking: 'Marquage',
   marks: { verb: 'Verbe', noun: 'Nom', adjective: 'Adjectif', adverb: 'Adverbe', expression: 'Expression' },
   silentLetter: 'Lettre muette',
+  addMarking: '+ Marquage',
+  newMarking: 'Nouveau marquage',
+  markingName: 'Nom du marquage',
+  markingNamePlaceholder: 'ex. Proposition, Connecteur...',
+  createMarking: 'Créer le marquage',
+  rename: 'Renommer',
+  delete: 'Supprimer',
+  colorAlreadyUsed: 'Couleur déjà utilisée',
+  customColor: 'Couleur personnalisée',
+  hexCode: 'Code #hex',
+  moveUp: 'Monter',
+  moveDown: 'Descendre',
   styleHighlight: 'Surligné', styleUnderline: 'Souligné', styleOverlay: 'Surbrillance',
   markHintWord: 'Clique sur un mot pour le marquer. Re-clique pour retirer.',
   markHintSilent: 'Clique sur une lettre pour la griser. Re-clique pour la rétablir.',
@@ -362,8 +389,10 @@ const frReader: ReaderCopy = {
   wikiOpen: 'Dictionnaire : active puis clique sur un mot',
   focusHint: 'Clique sur un mot pour noter sa traduction, son parent et sa prononciation.',
   focusExit: 'Quitter le plein écran',
+  resetFormatting: 'Réinitialiser le formatage',
+  resetTeacherMode: 'Réinitialiser le Teacher Mode',
+  backToLibrary: 'Revenir à la bibliothèque',
 }
-
 
 const enReader: ReaderCopy = {
   back: '← Library', previous: '←', next: '→', wordsPerPage: 'words / page',
@@ -375,6 +404,18 @@ const enReader: ReaderCopy = {
   marking: 'Marking',
   marks: { verb: 'Verb', noun: 'Noun', adjective: 'Adjective', adverb: 'Adverb', expression: 'Expression' },
   silentLetter: 'Silent letter',
+  addMarking: '+ Marking',
+  newMarking: 'New Marking',
+  markingName: 'Marking name',
+  markingNamePlaceholder: 'e.g. Clause, Connector...',
+  createMarking: 'Create marking',
+  rename: 'Rename',
+  delete: 'Delete',
+  colorAlreadyUsed: 'Color already used',
+  customColor: 'Custom color',
+  hexCode: '#hex code',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
   styleHighlight: 'Highlight', styleUnderline: 'Underline', styleOverlay: 'Overlay',
   markHintWord: 'Click a word to mark it. Click again to remove.',
   markHintSilent: 'Click a letter to grey it out. Click again to restore.',
@@ -390,6 +431,9 @@ const enReader: ReaderCopy = {
   wikiOpen: 'Dictionary: toggle on, then click a word',
   focusHint: 'Click a word to note its translation, parent and pronunciation.',
   focusExit: 'Exit fullscreen',
+  resetFormatting: 'Reset formatting',
+  resetTeacherMode: 'Reset Teacher Mode',
+  backToLibrary: 'Back to library',
 }
 
 const esReader: ReaderCopy = {
@@ -402,6 +446,18 @@ const esReader: ReaderCopy = {
   marking: 'Marcado',
   marks: { verb: 'Verbo', noun: 'Sustantivo', adjective: 'Adjetivo', adverb: 'Adverbio', expression: 'Expresión' },
   silentLetter: 'Letra muda',
+  addMarking: '+ Marcado',
+  newMarking: 'Nuevo marcado',
+  markingName: 'Nombre del marcado',
+  markingNamePlaceholder: 'ej. Proposición, Conector...',
+  createMarking: 'Crear marcado',
+  rename: 'Renombrar',
+  delete: 'Eliminar',
+  colorAlreadyUsed: 'Color ya utilizado',
+  customColor: 'Color personalizado',
+  hexCode: 'Código #hex',
+  moveUp: 'Subir',
+  moveDown: 'Bajar',
   styleHighlight: 'Resaltado', styleUnderline: 'Subrayado', styleOverlay: 'Sobrescrito',
   markHintWord: 'Haz clic en una palabra para marcarla. Haz clic de nuevo para quitarla.',
   markHintSilent: 'Haz clic en una letra para atenuarla. Haz clic de nuevo para restaurarla.',
@@ -417,6 +473,9 @@ const esReader: ReaderCopy = {
   wikiOpen: 'Diccionario: actívalo y haz clic en una palabra',
   focusHint: 'Haz clic en una palabra para anotar su traducción, su padre y su pronunciación.',
   focusExit: 'Salir de pantalla completa',
+  resetFormatting: 'Restablecer formato',
+  resetTeacherMode: 'Restablecer Teacher Mode',
+  backToLibrary: 'Volver a la biblioteca',
 }
 
 const zhReader: ReaderCopy = {
@@ -429,6 +488,18 @@ const zhReader: ReaderCopy = {
   marking: '标记',
   marks: { verb: '动词', noun: '名词', adjective: '形容词', adverb: '副词', expression: '表达' },
   silentLetter: '不发音字母',
+  addMarking: '+ 标记',
+  newMarking: '新建标记',
+  markingName: '标记名称',
+  markingNamePlaceholder: '例如：从句、连接词...',
+  createMarking: '创建标记',
+  rename: '重命名',
+  delete: '删除',
+  colorAlreadyUsed: '颜色已被使用',
+  customColor: '自定义颜色',
+  hexCode: '#hex 代码',
+  moveUp: '上移',
+  moveDown: '下移',
   styleHighlight: '高亮', styleUnderline: '下划线', styleOverlay: '覆盖色',
   markHintWord: '点击单词进行标记，再次点击取消。',
   markHintSilent: '点击字母将其变灰，再次点击恢复。',
@@ -444,6 +515,9 @@ const zhReader: ReaderCopy = {
   wikiOpen: '词典：先启用，再点击单词',
   focusHint: '点击单词，记录它的翻译、主词和发音。',
   focusExit: '退出全屏',
+  resetFormatting: '重置格式',
+  resetTeacherMode: '重置 Teacher Mode',
+  backToLibrary: '返回书库',
 }
 
 const ruReader: ReaderCopy = {
@@ -456,6 +530,18 @@ const ruReader: ReaderCopy = {
   marking: 'Разметка',
   marks: { verb: 'Глагол', noun: 'Существительное', adjective: 'Прилагательное', adverb: 'Наречие', expression: 'Выражение' },
   silentLetter: 'Немая буква',
+  addMarking: '+ Разметка',
+  newMarking: 'Новая разметка',
+  markingName: 'Название разметки',
+  markingNamePlaceholder: 'напр. Придаточное, Союз...',
+  createMarking: 'Создать разметку',
+  rename: 'Переименовать',
+  delete: 'Удалить',
+  colorAlreadyUsed: 'Цвет уже используется',
+  customColor: 'Пользовательский цвет',
+  hexCode: 'Код #hex',
+  moveUp: 'Вверх',
+  moveDown: 'Вниз',
   styleHighlight: 'Выделение', styleUnderline: 'Подчёркивание', styleOverlay: 'Заливка',
   markHintWord: 'Нажми на слово, чтобы отметить. Ещё раз — чтобы убрать.',
   markHintSilent: 'Нажми на букву, чтобы сделать её серой. Ещё раз — вернуть.',
@@ -471,6 +557,9 @@ const ruReader: ReaderCopy = {
   wikiOpen: 'Словарь: включи, затем нажми на слово',
   focusHint: 'Нажми на слово, чтобы записать перевод, родителя и произношение.',
   focusExit: 'Выйти из полноэкранного режима',
+  resetFormatting: 'Сбросить разметку',
+  resetTeacherMode: 'Сбросить Teacher Mode',
+  backToLibrary: 'Вернуться в библиотеку',
 }
 
 const ptReader: ReaderCopy = {
@@ -483,6 +572,18 @@ const ptReader: ReaderCopy = {
   marking: 'Marcação',
   marks: { verb: 'Verbo', noun: 'Nome', adjective: 'Adjetivo', adverb: 'Advérbio', expression: 'Expressão' },
   silentLetter: 'Letra muda',
+  addMarking: '+ Marcação',
+  newMarking: 'Nova marcação',
+  markingName: 'Nome da marcação',
+  markingNamePlaceholder: 'ex. Oração, Conector...',
+  createMarking: 'Criar marcação',
+  rename: 'Renomear',
+  delete: 'Eliminar',
+  colorAlreadyUsed: 'Cor já utilizada',
+  customColor: 'Cor personalizada',
+  hexCode: 'Código #hex',
+  moveUp: 'Subir',
+  moveDown: 'Descer',
   styleHighlight: 'Realçado', styleUnderline: 'Sublinhado', styleOverlay: 'Sobreposição',
   markHintWord: 'Clica numa palavra para a marcar. Clica de novo para remover.',
   markHintSilent: 'Clica numa letra para a esbater. Clica de novo para restaurar.',
@@ -498,6 +599,9 @@ const ptReader: ReaderCopy = {
   wikiOpen: 'Dicionário: ativa e clica numa palavra',
   focusHint: 'Clica numa palavra para anotar a tradução, o pai e a pronúncia.',
   focusExit: 'Sair do ecrã inteiro',
+  resetFormatting: 'Repor formatação',
+  resetTeacherMode: 'Repor Teacher Mode',
+  backToLibrary: 'Voltar à biblioteca',
 }
 
 export const readerCopy: Record<UiLanguage, ReaderCopy> = {

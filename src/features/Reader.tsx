@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, GrammarMarkStyle, GrammarMarkType, Language, Resource, UiLanguage, WordMark } from '../domain'
 import { normalizeWord } from '../domain'
-import { knownParents, knownTags } from '../store'
+import { DEFAULT_MARKINGS, knownParents, knownTags } from '../store'
 import { copy, readerCopy } from '../i18n'
+import { loadOriginals, modifiedCharIndices } from './LearningFocus'
 
 type Entry = {
   chapterId: string
@@ -34,15 +35,11 @@ const KNOWLEDGE_COLORS = ['#dc2626', '#ea580c', '#d97706', '#65a30d', '#16a34a']
 
 const PAGE_SIZE_OPTIONS = [120, 220, 350, 500] as const
 
-const MARK_TYPES: { id: GrammarMarkType; color: string }[] = [
-  { id: 'verb', color: '#16a34a' },
-  { id: 'noun', color: '#2563eb' },
-  { id: 'adjective', color: '#d97706' },
-  { id: 'adverb', color: '#dc2626' },
-  { id: 'expression', color: '#7c3aed' },
+const AVAILABLE_MARK_COLORS = [
+  '#16a34a', '#2563eb', '#d97706', '#dc2626', '#7c3aed', '#0891b2',
+  '#db2777', '#059669', '#4f46e5', '#d946ef', '#ea580c', '#0284c7',
+  '#84cc16', '#6366f1', '#e11d48', '#0d9488', '#ca8a04', '#9333ea',
 ]
-
-const MARK_COLORS = ['#16a34a', '#2563eb', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#20201e']
 
 const cleanRaw = (raw: string) => raw.replace(/[.,!?;:()"“”]/g, '').trim()
 /** Retire les élisions françaises (l', d', j'…) pour la recherche dictionnaire. */
@@ -99,7 +96,7 @@ const sentenceOf = (raw: string, text: string) => {
 const markKey = (language: Language, normalized: string) => `${language}:${normalized}`
 
 /** Default color of a mark type, possibly overridden by the user's saved choice. */
-const defaultMarkColor = (typeId: GrammarMarkType) => MARK_TYPES.find((item) => item.id === typeId)?.color ?? '#20201e'
+const defaultMarkColor = (typeId: string) => DEFAULT_MARKINGS.find((item) => item.id === typeId)?.color ?? '#2563eb'
 
 export function Cover({ cover, coverImage, type, onClick, editHint }: { cover: Resource['cover']; coverImage?: string; type: string; onClick?: () => void; editHint?: string }) {
   const inner = coverImage
@@ -109,7 +106,7 @@ export function Cover({ cover, coverImage, type, onClick, editHint }: { cover: R
   return <button className={`cover ${cover} cover-editable`} onClick={onClick} title={editHint ?? ''}>{inner}<span className="cover-edit-badge">✎</span></button>
 }
 
-export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProgress, onSaveWord, onOpenFocus, onPageSize, onWordMark, onSilentMark, onMarkColor }: {
+export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProgress, onSaveWord, onDeleteWord, onOpenFocus, onPageSize, onWordMark, onSilentMark, onMarkColor, onAddMarking, onRenameMarking, onDeleteMarking, onResetMarks }: {
   state: AppState
   resource: Resource
   ui: UiLanguage
@@ -118,11 +115,16 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   onDelete: (resourceId: string) => void
   onProgress: (resourceId: string, chapterIndex: number, paragraphIndex: number) => void
   onSaveWord: (args: WordDetails) => void
+  onDeleteWord?: (raw: string, language: Language) => void
   onOpenFocus: (resource: Resource) => void
   onPageSize: (size: number) => void
   onWordMark: (key: string, mark: WordMark | null) => void
   onSilentMark: (key: string, letterIndex: number) => void
   onMarkColor: (type: GrammarMarkType, color: string) => void
+  onAddMarking?: (label: string, color: string) => void
+  onRenameMarking?: (markingId: string, newLabel: string) => void
+  onDeleteMarking?: (markingId: string) => void
+  onResetMarks?: (language: Language) => void
 }) {
   const t = readerCopy[ui]
   const settings = state.settings
@@ -136,15 +138,48 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [markMode, setMarkMode] = useState<MarkMode>(null)
   const [markStyle, setMarkStyle] = useState<GrammarMarkStyle>('highlight')
-  const [markColor, setMarkColor] = useState<string>(MARK_TYPES[0].color)
+  const [markColor, setMarkColor] = useState<string>('#16a34a')
   const [wikiWord, setWikiWord] = useState('')
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiArmed, setWikiArmed] = useState(false)
   const [focusOpen, setFocusOpen] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; markingId: string } | null>(null)
+  const [pageContextMenu, setPageContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
+  const [editingMarkValue, setEditingMarkValue] = useState('')
+  const [newMarkModalOpen, setNewMarkModalOpen] = useState(false)
+  const [originals, setOriginals] = useState<Record<string, string>>(() => loadOriginals(resource.id))
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    setOriginals(loadOriginals(resource.id))
+  }, [resource.id, resource.chapters])
+
+  const markings = useMemo(() => state.markings && state.markings.length > 0 ? state.markings : DEFAULT_MARKINGS, [state.markings])
+
+  const getMarkingLabel = (id: string) => {
+    const custom = markings.find((m) => m.id === id)
+    if (custom) return custom.label
+    return t.marks[id] ?? id
+  }
+
   /** Effective color of a mark type: the user's saved choice wins over the default. */
-  const typeColor = (typeId: GrammarMarkType) => settings.markColors[typeId] ?? defaultMarkColor(typeId)
+  const typeColor = (typeId: string) => {
+    return settings.markColors[typeId] ?? markings.find((m) => m.id === typeId)?.color ?? defaultMarkColor(typeId)
+  }
+
+  useEffect(() => {
+    const closeMenu = () => {
+      setContextMenu(null)
+      setPageContextMenu(null)
+    }
+    window.addEventListener('click', closeMenu)
+    window.addEventListener('scroll', closeMenu, true)
+    return () => {
+      window.removeEventListener('click', closeMenu)
+      window.removeEventListener('scroll', closeMenu, true)
+    }
+  }, [])
 
   const entries = useMemo(() => flatten(resource), [resource])
   const pages = useMemo(() => paginate(entries, settings.readerPageSize), [entries, settings.readerPageSize])
@@ -184,57 +219,60 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const saveEditing = () => {
     const chapters = resource.chapters.map((chapter) => ({ ...chapter, paragraphs: [...chapter.paragraphs] }))
     page.forEach((entry, index) => {
-      const draft = draftParagraphs[index]?.trim()
-      if (draft) chapters[entry.chapterIndex].paragraphs[entry.paragraphIndex] = draft
+      const draft = draftParagraphs[index]
+      if (draft !== undefined) {
+        chapters[entry.chapterIndex].paragraphs[entry.paragraphIndex] = draft
+      }
     })
     onUpdate({ ...resource, chapters })
     setEditing(false)
   }
 
   const renameChapter = (chapterIndex: number, title: string) => {
-    if (!title.trim()) return
-    const chapters = resource.chapters.map((chapter, index) => (index === chapterIndex ? { ...chapter, title: title.trim() } : chapter))
+    const chapters = resource.chapters.map((chapter, index) => (index === chapterIndex ? { ...chapter, title } : chapter))
     onUpdate({ ...resource, chapters })
   }
 
-  const clickWord = (raw: string, entry: Entry, target: HTMLElement) => {
-    const normalized = normalizeWord(raw)
-    const key = markKey(resource.language, normalized)
-    if (markMode && markMode !== 'silent') {
-      const existing = state.wordMarks[key]
-      if (existing && existing.type === markMode) onWordMark(key, null)
-      else onWordMark(key, { type: markMode, style: markStyle, color: markColor })
-      return
-    }
-    if (markMode === 'silent') return // letters handle their own clicks
-    // Dictionary armed: the click opens the dictionary popup instead of the word form.
-    if (wikiArmed) {
-      setSelected(null)
-      setWikiWord(wikiLookup(raw))
-      setWikiOpen(true)
-      return
-    }
-    const rect = target.getBoundingClientRect()
-    setSelected({ raw, sentence: sentenceOf(raw, entry.text), x: rect.left, y: rect.bottom + 10 })
-    setWikiWord(wikiLookup(raw))
-  }
-
   const activateMarkType = (type: GrammarMarkType | 'silent') => {
-    setSelected(null)
-    if (markMode === type) { setMarkMode(null); return }
+    if (markMode === type) {
+      setMarkMode(null)
+      return
+    }
     setMarkMode(type)
-    if (type !== 'silent') setMarkColor(typeColor(type))
+    if (type !== 'silent') {
+      setMarkColor(typeColor(type))
+    }
   }
 
   const pickMarkColor = (color: string) => {
     setMarkColor(color)
-    // Persist the choice: it becomes the new default color of this mark type.
     if (markMode && markMode !== 'silent') onMarkColor(markMode, color)
   }
 
+  const clickWord = (raw: string, entry: Entry, target: HTMLElement) => {
+    if (wikiArmed) {
+      setWikiWord(wikiLookup(raw))
+      setWikiOpen(true)
+      return
+    }
+    const normalized = normalizeWord(raw)
+    const key = markKey(resource.language, normalized)
+    if (markMode && markMode !== 'silent') {
+      const current = state.wordMarks[key]
+      if (current && current.type === markMode) onWordMark(key, null)
+      else onWordMark(key, { type: markMode, style: markStyle, color: markColor })
+      return
+    }
+    const rect = target.getBoundingClientRect()
+    setSelected({ raw, sentence: sentenceOf(raw, entry.text), x: rect.left + rect.width / 2, y: rect.bottom + 8 })
+    setWikiWord(wikiLookup(raw))
+  }
+
   const startFocus = () => {
-    // User gesture: force the browser into real fullscreen, then open the overlay.
-    void document.documentElement.requestFullscreen?.().catch(() => { })
+    const root = document.documentElement
+    if (root.requestFullscreen) {
+      root.requestFullscreen().catch(() => {})
+    }
     setFocusOpen(true)
   }
 
@@ -243,11 +281,51 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     setFocusOpen(false)
   }
 
+  const handlePageContextMenu = (event: React.MouseEvent) => {
+    const target = event.target as HTMLElement
+    if (target.closest('.mark-type, .mark-type-add, .mark-context-menu, .mark-inline-input, input, textarea, .word, .paragraph-edit, .chapter-title-input')) {
+      return
+    }
+    event.preventDefault()
+    setContextMenu(null)
+    setPageContextMenu({ x: event.clientX, y: event.clientY })
+  }
+
+  const handleResetFormatting = () => {
+    onResetMarks?.(resource.language)
+    setPageContextMenu(null)
+  }
+
+  const handleResetTeacherMode = () => {
+    const origMap = loadOriginals(resource.id)
+    if (Object.keys(origMap).length > 0) {
+      const chapters = resource.chapters.map((chapter, chapterIndex) => ({
+        ...chapter,
+        paragraphs: chapter.paragraphs.map((paragraph, paragraphIndex) => {
+          const key = `${chapterIndex}:${paragraphIndex}`
+          return origMap[key] !== undefined ? origMap[key] : paragraph
+        }),
+      }))
+      onUpdate({ ...resource, chapters })
+    }
+    localStorage.removeItem(`vivre-focus-${resource.id}`)
+    localStorage.removeItem(`vivre-focus-originals-${resource.id}`)
+    localStorage.removeItem(`vivre-focus-edited-${resource.id}`)
+    setOriginals({})
+    setPageContextMenu(null)
+  }
+
+  const handleBackToLibrary = () => {
+    setPageContextMenu(null)
+    onBack()
+  }
+
   const progress = Math.round(((safePage + 1) / pages.length) * 100)
   const activeType = markMode && markMode !== 'silent' ? markMode : null
 
   return <div className={`reader-page ${markMode === 'silent' ? 'arm-silent' : ''} ${markMode && markMode !== 'silent' ? 'arm-word' : ''}`}
-    onClick={() => { setSelected(null); if (wikiArmed) setWikiArmed(false) }}>
+    onClick={() => { setSelected(null); setContextMenu(null); setPageContextMenu(null); if (wikiArmed) setWikiArmed(false) }}
+    onContextMenu={handlePageContextMenu}>
     <header className="reader-top">
       <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}>{t.back}</button>
       <div className="reader-controls">
@@ -290,44 +368,180 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       </aside>
 
       <article className={`reading-text ${settings.readerWidth}`}>
-        {page.map((entry, entryIndex) => <div key={`${entry.chapterId}-${entry.paragraphIndex}`}>
-          {entry.isChapterStart && <ChapterTitle hint={t.chapterRename} title={entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`} onRename={(title) => renameChapter(entry.chapterIndex, title)} />}
-          {editing
-            ? <textarea className="paragraph-edit" value={draftParagraphs[entryIndex] ?? entry.text} rows={Math.max(3, Math.ceil(entry.text.length / 90))}
-              onClick={(event) => event.stopPropagation()}
-              onChange={(event) => setDraftParagraphs((current) => current.map((value, index) => (index === entryIndex ? event.target.value : value)))} />
-            : <Paragraph text={entry.text} fontSize={fontSize} language={resource.language} state={state} markMode={markMode}
-              onWordClick={(raw, target) => clickWord(raw, entry, target)}
-              onLetterClick={(raw, letterIndex) => onSilentMark(markKey(resource.language, normalizeWord(raw)), letterIndex)} />}
-        </div>)}
+        {page.map((entry, entryIndex) => {
+          const paragraphKey = `${entry.chapterIndex}:${entry.paragraphIndex}`
+          const original = originals[paragraphKey]
+          const greenChars = (original !== undefined && original !== entry.text)
+            ? modifiedCharIndices(original, entry.text)
+            : undefined
+
+          return (
+            <div key={`${entry.chapterId}-${entry.paragraphIndex}`}>
+              {entry.isChapterStart && <ChapterTitle hint={t.chapterRename} title={entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`} onRename={(title) => renameChapter(entry.chapterIndex, title)} />}
+              {editing
+                ? <textarea className="paragraph-edit" value={draftParagraphs[entryIndex] ?? entry.text} rows={Math.max(3, Math.ceil(entry.text.length / 90))}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => setDraftParagraphs((current) => current.map((value, index) => (index === entryIndex ? event.target.value : value)))} />
+                : <Paragraph text={entry.text} fontSize={fontSize} language={resource.language} state={state} markMode={markMode} green={greenChars}
+                  onWordClick={(raw, target) => clickWord(raw, entry, target)}
+                  onLetterClick={(raw, letterIndex) => onSilentMark(markKey(resource.language, normalizeWord(raw)), letterIndex)} />}
+            </div>
+          )
+        })}
         {editing && <button className="primary" onClick={(event) => { event.stopPropagation(); saveEditing() }}>{t.saveText} <span>→</span></button>}
       </article>
 
       <aside className="reader-right">
         <div className="mark-panel" onClick={(event) => event.stopPropagation()}>
           <span className="eyebrow">{t.marking.toUpperCase()}</span>
-          {MARK_TYPES.map((type) => <button key={type.id}
-            className={markMode === type.id ? 'mark-type active' : 'mark-type'}
-            style={{ ['--type-color' as string]: typeColor(type.id) }}
-            onClick={() => activateMarkType(type.id)}>
-            <i />{t.marks[type.id]}
-          </button>)}
-          <button className={markMode === 'silent' ? 'mark-type active' : 'mark-type'}
+          {markings.map((type) => {
+            const isEditing = editingMarkId === type.id
+            return (
+              <button
+                key={type.id}
+                className={markMode === type.id ? 'mark-type active' : 'mark-type'}
+                style={{ ['--type-color' as string]: typeColor(type.id) }}
+                onClick={() => {
+                  if (!isEditing) activateMarkType(type.id)
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setContextMenu({ x: event.clientX, y: event.clientY, markingId: type.id })
+                }}
+              >
+                <i />
+                {isEditing ? (
+                  <input
+                    className="mark-inline-input"
+                    autoFocus
+                    value={editingMarkValue}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setEditingMarkValue(e.target.value)}
+                    onBlur={() => {
+                      if (editingMarkValue.trim() && editingMarkValue.trim() !== getMarkingLabel(type.id)) {
+                        onRenameMarking?.(type.id, editingMarkValue.trim())
+                      }
+                      setEditingMarkId(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (editingMarkValue.trim() && editingMarkValue.trim() !== getMarkingLabel(type.id)) {
+                          onRenameMarking?.(type.id, editingMarkValue.trim())
+                        }
+                        setEditingMarkId(null)
+                      }
+                      if (e.key === 'Escape') {
+                        setEditingMarkId(null)
+                      }
+                    }}
+                  />
+                ) : (
+                  <span>{getMarkingLabel(type.id)}</span>
+                )}
+              </button>
+            )
+          })}
+          <button
+            className={markMode === 'silent' ? 'mark-type active' : 'mark-type'}
             style={{ ['--type-color' as string]: '#8a877f' }}
-            onClick={() => activateMarkType('silent')}>
-            <i />{t.silentLetter}
+            onClick={() => activateMarkType('silent')}
+          >
+            <i />
+            <span>{t.silentLetter}</span>
+          </button>
+          <button
+            className="mark-type-add"
+            onClick={(e) => {
+              e.stopPropagation()
+              setNewMarkModalOpen(true)
+            }}
+          >
+            {t.addMarking}
           </button>
         </div>
       </aside>
     </section>
 
+    {contextMenu && (
+      <div
+        className="mark-context-menu"
+        style={{ left: Math.min(window.innerWidth - 150, contextMenu.x), top: Math.min(window.innerHeight - 100, contextMenu.y) }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          className="mark-context-item"
+          onClick={() => {
+            setEditingMarkId(contextMenu.markingId)
+            setEditingMarkValue(getMarkingLabel(contextMenu.markingId))
+            setContextMenu(null)
+          }}
+        >
+          ✎ {t.rename}
+        </button>
+        <button
+          className="mark-context-item danger"
+          onClick={() => {
+            if (markMode === contextMenu.markingId) setMarkMode(null)
+            onDeleteMarking?.(contextMenu.markingId)
+            setContextMenu(null)
+          }}
+        >
+          🗑 {t.delete}
+        </button>
+      </div>
+    )}
+
+    {pageContextMenu && (
+      <div
+        className="page-context-menu"
+        style={{ left: Math.min(window.innerWidth - 240, pageContextMenu.x), top: Math.min(window.innerHeight - 150, pageContextMenu.y) }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="page-context-item"
+          onClick={handleResetFormatting}
+        >
+          <i>↺</i> {t.resetFormatting}
+        </button>
+        <button
+          type="button"
+          className="page-context-item"
+          onClick={handleResetTeacherMode}
+        >
+          <i>✎</i> {t.resetTeacherMode}
+        </button>
+        <div className="page-context-sep" />
+        <button
+          type="button"
+          className="page-context-item"
+          onClick={handleBackToLibrary}
+        >
+          <i>←</i> {t.backToLibrary}
+        </button>
+      </div>
+    )}
+
+    {newMarkModalOpen && (
+      <NewMarkingModal
+        ui={ui}
+        existingColors={markings.map((m) => typeColor(m.id))}
+        onClose={() => setNewMarkModalOpen(false)}
+        onCreate={(name, color) => {
+          onAddMarking?.(name, color)
+        }}
+      />
+    )}
+
     {selected && <WordPanel ui={ui} selected={selected} state={state} language={resource.language}
       onClose={() => setSelected(null)}
       onOpenWord={(raw) => setSelected((current) => ({ raw, sentence: current?.sentence ?? '', x: current?.x ?? 80, y: current?.y ?? 120 }))}
-      onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })} />}
+      onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })}
+      onDeleteWord={(raw) => onDeleteWord?.(raw, resource.language)} />}
 
-    {markMode && markMode !== 'silent' && activeType && <MarkMenu ui={ui} type={activeType} name={t.marks[activeType]} color={typeColor(activeType)}
-      style={markStyle} markColor={markColor}
+    {markMode && markMode !== 'silent' && activeType && <MarkMenu ui={ui} type={activeType} name={getMarkingLabel(activeType)} color={typeColor(activeType)}
+      style={markStyle} markColor={markColor} toolbarStyle={settings.readerToolbarStyle}
       onStyle={setMarkStyle} onColor={pickMarkColor} onClose={() => setMarkMode(null)} />}
 
     {markMode === 'silent' && <div className="mark-silent-exit" onClick={(event) => event.stopPropagation()}>
@@ -340,7 +554,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={() => setWikiArmed(!wikiArmed)} />
     {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} onClose={() => setWikiOpen(false)} />}
 
-    {focusOpen && <FocusReader state={state} resource={resource} ui={ui} onClose={closeFocus} onSaveWord={onSaveWord} />}
+    {focusOpen && <FocusReader state={state} resource={resource} ui={ui} onClose={closeFocus} onSaveWord={onSaveWord} onDeleteWord={onDeleteWord} />}
   </div>
 }
 
@@ -374,7 +588,7 @@ function WikiPanel({ word, language, onClose }: { word: string; language: Langua
  * next to × switches to the editable form. New words open the form directly.
  * `docked` = fixed inside the Learning Focus side panel instead of floating.
  */
-function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onOpenWord }: {
+function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onDeleteWord, onOpenWord }: {
   ui: UiLanguage
   selected: { raw: string; sentence: string; x?: number; y?: number }
   state: AppState
@@ -382,6 +596,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
   docked?: boolean
   onClose: () => void
   onSave: (details: { raw: string; translation: string; parent: string; pronunciation: string; knowledge?: number; tags?: string[] }) => void
+  onDeleteWord?: (raw: string) => void
   onOpenWord: (raw: string) => void
 }) {
   const t = readerCopy[ui]
@@ -446,8 +661,16 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
     setSaved(true)
   }
 
+  const existing = findExisting()
+
+  const handleDelete = () => {
+    onDeleteWord?.(word)
+    onClose()
+  }
+
   const actions = <div className="wp-actions">
-    {viewing && <button className="wp-icon" title={t.editWord} aria-label={t.editWord} onClick={() => setViewing(false)}>✎</button>}
+    {existing && <button className="wp-icon wp-icon-delete" title="Supprimer le mot enregistré" aria-label="Supprimer le mot enregistré" onClick={handleDelete}>🗑</button>}
+    {viewing && <button className="wp-icon wp-icon-edit" title={t.editWord} aria-label={t.editWord} onClick={() => setViewing(false)}>✎</button>}
     <button className="wp-icon" aria-label="×" onClick={onClose}>×</button>
   </div>
 
@@ -484,18 +707,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
 
   const form = <>
     <div className="wp-field">
-      <div className="wp-tags tag-container">
-        {tags.map((item) => (
-          <span key={item} className="wp-tag-chip active">
-            {item}
-            <button type="button" aria-label="×" onClick={() => removeTag(item)}>×</button>
-          </span>
-        ))}
-        <TagInput allTags={allTags} existingTags={tags} onAdd={addTag} label={t.tagLabel} />
-      </div>
-    </div>
-
-    <div className="wp-field">
       <div className="wp-knowledge">
         {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button"
           className={knowledge === n ? 'kl-btn active' : 'kl-btn'}
@@ -529,6 +740,10 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
       <textarea rows={3} value={translation} placeholder={t.translationLabel} onChange={(event) => { setTranslation(event.target.value); setSaved(false) }} />
     </div>
 
+    <div className="wp-field">
+      <TagInput allTags={allTags} existingTags={tags} onAdd={addTag} onRemove={removeTag} label={t.tagLabel} />
+    </div>
+
     <div className="wp-footer">
       <button className={saved ? 'saved-deck' : 'primary'} disabled={!word.trim()} onClick={submit}>{saved ? t.savedWord : `＋ ${t.saveWord}`}</button>
       {word && <span className="wp-footer-word"><em>{word}</em></span>}
@@ -553,11 +768,12 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
   </aside>
 }
 
-/** Input de tag avec autocomplétion inline (style Google). Pas de dropdown, bordure inférieure uniquement. */
-function TagInput({ allTags, existingTags, onAdd, label }: {
+/** Input de tag avec autocomplétion inline (style Google) et liste des tags en texte brut à droite. */
+function TagInput({ allTags, existingTags, onAdd, onRemove, label }: {
   allTags: string[]
   existingTags: string[]
   onAdd: (tag: string) => void
+  onRemove: (tag: string) => void
   label: string
 }) {
   const [input, setInput] = useState('')
@@ -593,24 +809,42 @@ function TagInput({ allTags, existingTags, onAdd, label }: {
   }
 
   return (
-    <div className="wp-tag-inline-wrapper">
-      <div className="wp-tag-ghost-container" aria-hidden="true">
-        <span className="wp-tag-ghost-typed">{input}</span>
-        <span className="wp-tag-ghost-suffix">{ghostSuffix}</span>
+    <div className="wp-tag-line-row">
+      <div className="wp-tag-input-box">
+        <div className="wp-tag-ghost-text" aria-hidden="true">
+          <span className="wp-tag-ghost-typed">{input}</span>
+          <span className="wp-tag-ghost-suffix">{ghostSuffix}</span>
+        </div>
+        <input
+          ref={inputRef}
+          className="wp-tag-input-field"
+          value={input}
+          placeholder={existingTags.length === 0 ? label : '+ Tag'}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => {
+            if (input.trim()) {
+              handleCommit()
+            }
+          }}
+        />
       </div>
-      <input
-        ref={inputRef}
-        className="wp-tag-input-inline"
-        value={input}
-        placeholder={existingTags.length === 0 ? label : '+'}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={() => {
-          if (input.trim()) {
-            handleCommit()
-          }
-        }}
-      />
+      {existingTags.length > 0 && (
+        <div className="wp-tag-text-list">
+          {existingTags.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="wp-tag-text-item"
+              title="Cliquer pour supprimer"
+              aria-label={`Supprimer ${item}`}
+              onClick={() => onRemove(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -620,12 +854,13 @@ function TagInput({ allTags, existingTags, onAdd, label }: {
  * the Wiktionary embed on the right. The browser is forced into fullscreen by
  * the button that opens this overlay (user gesture).
  */
-function FocusReader({ state, resource, ui, onClose, onSaveWord }: {
+function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }: {
   state: AppState
   resource: Resource
   ui: UiLanguage
   onClose: () => void
   onSaveWord: (args: WordDetails) => void
+  onDeleteWord?: (raw: string, language: Language) => void
 }) {
   const t = readerCopy[ui]
   const settings = state.settings
@@ -669,12 +904,23 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord }: {
 
     <div className="focus-body">
       <article className="focus-text">
-        {page.map((entry) => <div key={`${entry.chapterId}-${entry.paragraphIndex}`}>
-          {entry.isChapterStart && <h3 className="focus-chapter">{entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`}</h3>}
-          <Paragraph text={entry.text} fontSize={settings.readerFontSize + 1} language={resource.language} state={state} markMode={null}
-            onWordClick={(raw) => clickWord(raw, entry.text)}
-            onLetterClick={() => { }} />
-        </div>)}
+        {page.map((entry) => {
+          const origMap = loadOriginals(resource.id)
+          const paragraphKey = `${entry.chapterIndex}:${entry.paragraphIndex}`
+          const original = origMap[paragraphKey]
+          const greenChars = (original !== undefined && original !== entry.text)
+            ? modifiedCharIndices(original, entry.text)
+            : undefined
+
+          return (
+            <div key={`${entry.chapterId}-${entry.paragraphIndex}`}>
+              {entry.isChapterStart && <h3 className="focus-chapter">{entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`}</h3>}
+              <Paragraph text={entry.text} fontSize={settings.readerFontSize + 1} language={resource.language} state={state} markMode={null} green={greenChars}
+                onWordClick={(raw) => clickWord(raw, entry.text)}
+                onLetterClick={() => { }} />
+            </div>
+          )
+        })}
       </article>
 
       <aside className="focus-side">
@@ -682,7 +928,8 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord }: {
           ? <WordPanel ui={ui} selected={selected} state={state} language={resource.language} docked
             onClose={() => setSelected(null)}
             onOpenWord={(raw) => setSelected({ raw, sentence: '' })}
-            onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })} />
+            onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })}
+            onDeleteWord={(raw) => onDeleteWord?.(raw, resource.language)} />
           : <p className="focus-hint">{t.focusHint}</p>}
       </aside>
     </div>
@@ -692,26 +939,45 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord }: {
   </div>
 }
 
-function MarkMenu({ ui, type, name, color, style, markColor, onStyle, onColor, onClose }: {
+function MarkMenu({ ui, type, name, color, style, markColor, toolbarStyle, onStyle, onColor, onClose }: {
   ui: UiLanguage
   type: GrammarMarkType
   name: string
   color: string
   style: GrammarMarkStyle
   markColor: string
+  toolbarStyle?: string
   onStyle: (style: GrammarMarkStyle) => void
   onColor: (color: string) => void
   onClose: () => void
 }) {
   const t = readerCopy[ui]
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [hexOpen, setHexOpen] = useState(false)
+  const [hexInput, setHexInput] = useState(markColor)
+  const nativeColorRef = useRef<HTMLInputElement>(null)
+
+  const PRESET_COLORS = ['#16a34a', '#2563eb', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777']
+
   const styles: { id: GrammarMarkStyle; label: string; icon: React.ReactNode }[] = [
     { id: 'highlight', label: t.styleHighlight, icon: <span className="mo-demo mo-highlight" style={{ ['--type-color' as string]: markColor }}>abc</span> },
     { id: 'underline', label: t.styleUnderline, icon: <span className="mo-demo mo-underline" style={{ ['--type-color' as string]: markColor }}>abc</span> },
     { id: 'overlay', label: t.styleOverlay, icon: <span className="mo-demo mo-overlay" style={{ ['--type-color' as string]: markColor }}>abc</span> },
   ]
+
+  const handleApplyHex = (val: string) => {
+    let clean = val.trim()
+    if (!clean.startsWith('#')) clean = '#' + clean
+    setHexInput(clean)
+    if (/^#[0-9A-Fa-f]{6}$/.test(clean)) {
+      onColor(clean)
+    }
+  }
+
+  const glassClass = toolbarStyle === 'opaque' ? 'glass toolbar-opaque' : toolbarStyle === 'solid' ? 'glass toolbar-solid' : 'glass'
+
   return <div className="mark-menu-wrap" onClick={(event) => event.stopPropagation()}>
-    <div className="mark-menu glass">
+    <div className={`mark-menu ${glassClass}`}>
       <span className="mark-menu-type" style={{ ['--type-color' as string]: color }}><i />{name}</span>
       <span className="mark-menu-sep" />
       {styles.map((item) => <button key={item.id} className={style === item.id ? 'mark-option active' : 'mark-option'} onClick={() => onStyle(item.id)}>
@@ -719,15 +985,160 @@ function MarkMenu({ ui, type, name, color, style, markColor, onStyle, onColor, o
       </button>)}
       <span className="mark-menu-sep" />
       <div className="mark-color-wrap">
-        <button className="mark-color" style={{ background: markColor }} onClick={() => setPaletteOpen(!paletteOpen)} aria-label={name} />
-        {paletteOpen && <div className="mark-palette glass">
-          {MARK_COLORS.map((item) => <button key={item} style={{ background: item }} className={item === markColor ? 'active' : ''}
-            onClick={() => { onColor(item); setPaletteOpen(false) }} />)}
+        <button className="mark-color" style={{ background: markColor }} onClick={() => { setPaletteOpen(!paletteOpen); setHexOpen(false) }} aria-label={name} />
+        {paletteOpen && !hexOpen && <div className={`mark-palette ${glassClass}`}>
+          {PRESET_COLORS.map((item) => (
+            <button
+              key={item}
+              style={{ background: item }}
+              className={`mark-palette-color ${item.toLowerCase() === markColor.toLowerCase() ? 'active' : ''}`}
+              onClick={() => { onColor(item); setPaletteOpen(false) }}
+            />
+          ))}
+          <button
+            type="button"
+            className="mark-palette-custom-btn"
+            title={t.customColor}
+            onClick={() => { setHexOpen(true); setHexInput(markColor) }}
+          >
+            +
+          </button>
+        </div>}
+
+        {paletteOpen && hexOpen && <div className={`mark-hex-panel ${glassClass}`}>
+          <div className="mark-hex-input-row">
+            <button
+              type="button"
+              className="mark-hex-preview"
+              style={{ background: markColor }}
+              title={t.customColor}
+              onClick={() => nativeColorRef.current?.click()}
+            />
+            <input
+              ref={nativeColorRef}
+              type="color"
+              className="mark-hex-native-input"
+              value={markColor.startsWith('#') && markColor.length === 7 ? markColor : '#2563eb'}
+              onChange={(e) => {
+                onColor(e.target.value)
+                setHexInput(e.target.value)
+              }}
+            />
+            <input
+              type="text"
+              className="mark-hex-input"
+              placeholder="#HEX"
+              maxLength={7}
+              value={hexInput}
+              onChange={(e) => handleApplyHex(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') setPaletteOpen(false)
+              }}
+            />
+          </div>
+          <button type="button" className="mark-hex-back-btn" onClick={() => setHexOpen(false)}>
+            ← {t.back.replace('←', '').trim()}
+          </button>
         </div>}
       </div>
     </div>
     <button className="mark-menu-close" onClick={onClose}>✕</button>
   </div>
+}
+
+function NewMarkingModal({
+  ui,
+  existingColors,
+  onClose,
+  onCreate,
+}: {
+  ui: UiLanguage
+  existingColors: string[]
+  onClose: () => void
+  onCreate: (label: string, color: string) => void
+}) {
+  const t = readerCopy[ui]
+  const normalizedExisting = useMemo(() => new Set(existingColors.map((c) => c.toLowerCase())), [existingColors])
+  const initialColor = AVAILABLE_MARK_COLORS.find((c) => !normalizedExisting.has(c.toLowerCase())) ?? AVAILABLE_MARK_COLORS[0]
+  const [label, setLabel] = useState('')
+  const [selectedColor, setSelectedColor] = useState(initialColor)
+  const nativeColorRef = useRef<HTMLInputElement>(null)
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (!label.trim()) return
+    onCreate(label.trim(), selectedColor)
+    onClose()
+  }
+
+  return (
+    <div className="mark-modal-overlay" onClick={onClose}>
+      <div className="mark-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="mark-modal-head">
+          <h3>{t.newMarking}</h3>
+          <button onClick={onClose} aria-label={t.cancel}>×</button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="mark-modal-field">
+            <label>{t.markingName}</label>
+            <input
+              type="text"
+              autoFocus
+              placeholder={t.markingNamePlaceholder}
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </div>
+
+          <div className="mark-modal-field">
+            <label>{t.marks.verb ? `${t.marks.verb} / ${t.marking}` : 'Couleur'}</label>
+            <div className="mark-color-palette-grid">
+              {AVAILABLE_MARK_COLORS.map((color) => {
+                const isUsed = normalizedExisting.has(color.toLowerCase())
+                const isSelected = selectedColor.toLowerCase() === color.toLowerCase()
+                return (
+                  <button
+                    type="button"
+                    key={color}
+                    disabled={isUsed}
+                    title={isUsed ? t.colorAlreadyUsed : color}
+                    className={`mark-color-choice-btn ${isSelected ? 'selected' : ''}`}
+                    style={{ background: color }}
+                    onClick={() => {
+                      if (!isUsed) setSelectedColor(color)
+                    }}
+                  />
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <button
+                type="button"
+                className="text-button"
+                style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px' }}
+                onClick={() => nativeColorRef.current?.click()}
+              >
+                <span style={{ width: 14, height: 14, borderRadius: '50%', background: selectedColor, display: 'inline-block', border: '1px solid var(--line)' }} />
+                <span>{t.customColor}</span>
+              </button>
+              <input
+                ref={nativeColorRef}
+                type="color"
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+                value={selectedColor.startsWith('#') && selectedColor.length === 7 ? selectedColor : '#2563eb'}
+                onChange={(e) => setSelectedColor(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="mark-modal-actions">
+            <button type="button" className="outline" onClick={onClose}>{t.cancel}</button>
+            <button type="submit" className="primary" disabled={!label.trim()}>{t.createMarking} <span>→</span></button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
 }
 
 function ChapterTitle({ title, hint, onRename }: { title: string; hint: string; onRename: (title: string) => void }) {
@@ -740,27 +1151,39 @@ function ChapterTitle({ title, hint, onRename }: { title: string; hint: string; 
     : <button className="chapter-title" title={hint} onClick={(event) => { event.stopPropagation(); setEditing(true) }}>{title}</button>
 }
 
-function Paragraph({ text, fontSize, language, state, markMode, onWordClick, onLetterClick }: {
+function Paragraph({ text, fontSize, language, state, markMode, green, onWordClick, onLetterClick }: {
   text: string
   fontSize: number
   language: Language
   state: AppState
   markMode: MarkMode
+  green?: Set<number>
   onWordClick: (raw: string, target: HTMLElement) => void
   onLetterClick: (raw: string, letterIndex: number) => void
 }) {
+  let offset = 0
   return <p className="paragraph" style={{ fontSize }}>
-    {text.split(/(\s+)/).map((part, index) => /\s+/.test(part) ? <span key={index}>{part}</span> : (
-      <Word key={`${part}-${index}`} raw={part} language={language} state={state} markMode={markMode} onClick={onWordClick} onLetterClick={onLetterClick} />
-    ))}
+    {text.split(/(\s+)/).map((part, index) => {
+      if (/\s+/.test(part)) {
+        offset += part.length
+        return <span key={index}>{part}</span>
+      }
+      const wordOffset = offset
+      offset += part.length
+      return (
+        <Word key={`${part}-${index}`} raw={part} language={language} state={state} markMode={markMode} green={green} offset={wordOffset} onClick={onWordClick} onLetterClick={onLetterClick} />
+      )
+    })}
   </p>
 }
 
-function Word({ raw, language, state, markMode, onClick, onLetterClick }: {
+function Word({ raw, language, state, markMode, green, offset = 0, onClick, onLetterClick }: {
   raw: string
   language: Language
   state: AppState
   markMode: MarkMode
+  green?: Set<number>
+  offset?: number
   onClick: (raw: string, target: HTMLElement) => void
   onLetterClick: (raw: string, letterIndex: number) => void
 }) {
@@ -777,11 +1200,13 @@ function Word({ raw, language, state, markMode, onClick, onLetterClick }: {
     if (isAlpha) alphaIndex += 1
     const myAlpha = alphaIndex
     const isGrayed = isAlpha && grayed.includes(myAlpha)
+    const isGreen = green?.has(offset + index) ?? false
+    const cls = `${isGreen ? 'edited-char' : ''} ${isGrayed ? 'user-gray' : ''}`.trim()
     if (markMode === 'silent') {
-      return <span key={index} className={`letter-cell ${isGrayed ? 'user-gray' : ''}`}
+      return <span key={index} className={`letter-cell ${cls}`}
         onClick={(event) => { event.stopPropagation(); if (isAlpha) onLetterClick(raw, myAlpha) }}>{letter}</span>
     }
-    return <span key={index} className={isGrayed ? 'user-gray' : ''}>{letter}</span>
+    return <span key={index} className={cls || undefined}>{letter}</span>
   })
 
   const markClass = mark ? `marked-${mark.style}` : ''

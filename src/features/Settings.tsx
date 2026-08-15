@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { UI_LANGUAGES } from '../i18n'
 import { listVoices } from '../ai'
-import { addCustomTag, deleteCustomTag, knownTags, renameCustomTag } from '../store'
+import { addCustomTag, addMarking, DEFAULT_MARKINGS, deleteCustomTag, deleteMarking, knownTags, renameCustomTag, renameMarking, reorderMarkings, setMarkingColor } from '../store'
 
 type SettingsProps = {
   settings: UserSettings
@@ -12,7 +12,7 @@ type SettingsProps = {
   onResetData: () => void
 }
 
-type Tab = 'profile' | 'reading' | 'tags' | 'connections' | 'data'
+type Tab = 'profile' | 'reading' | 'markings' | 'tags' | 'connections' | 'data'
 
 const TTS_PROVIDERS: { id: UserSettings['api']['ttsProvider']; name: string; detail: string }[] = [
   { id: 'google', name: 'Voix naturelle (gratuit)', detail: 'Voix Google de bonne qualité, sans clé ni compte. Recommandé pour démarrer.' },
@@ -32,7 +32,13 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
   const [editingTag, setEditingTag] = useState<string | null>(null)
   const [editingTagValue, setEditingTagValue] = useState('')
 
+  const [newMarkingLabel, setNewMarkingLabel] = useState('')
+  const [newMarkingColor, setNewMarkingColor] = useState('#2563eb')
+  const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
+  const [editingMarkValue, setEditingMarkValue] = useState('')
+
   const allTags = knownTags(state, draft.learningLanguage)
+  const allMarkings = state.markings && state.markings.length > 0 ? state.markings : DEFAULT_MARKINGS
 
   const handleAddTag = () => {
     const cleaned = newTag.trim()
@@ -63,6 +69,22 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
     }
   }
 
+  const handleAddMarking = () => {
+    const cleaned = newMarkingLabel.trim()
+    if (!cleaned) return
+    onChangeState(addMarking(state, cleaned, newMarkingColor))
+    setNewMarkingLabel('')
+  }
+
+  const handleSaveRenameMarking = (markingId: string) => {
+    const cleaned = editingMarkValue.trim()
+    if (cleaned) {
+      onChangeState(renameMarking(state, markingId, cleaned))
+    }
+    setEditingMarkId(null)
+    setEditingMarkValue('')
+  }
+
   const update = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => setDraft((current) => ({ ...current, [key]: value }))
   const updateApi = <K extends keyof UserSettings['api']>(key: K, value: UserSettings['api'][K]) => setDraft((current) => ({ ...current, api: { ...current.api, [key]: value } }))
   const save = () => { onSave(draft); setSaved(true); window.setTimeout(() => setSaved(false), 2200) }
@@ -77,6 +99,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
   const tabs: { id: Tab; icon: string; label: string }[] = [
     { id: 'profile', icon: '◌', label: 'Profil' },
     { id: 'reading', icon: '◫', label: 'Lecture' },
+    { id: 'markings', icon: '🎨', label: 'Marquages' },
     { id: 'tags', icon: '🏷', label: 'Tags' },
     { id: 'connections', icon: '⌁', label: 'Connexions' },
     { id: 'data', icon: '◐', label: 'Données' },
@@ -109,7 +132,135 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
             <label>Taille du texte <div className="range-row"><input type="range" min="16" max="26" value={draft.readerFontSize} onChange={(event) => update('readerFontSize', Number(event.target.value))} /><output>{draft.readerFontSize}px</output></div></label>
             <label>Longueur des pages <div className="range-row"><input type="range" min="120" max="500" step="10" value={draft.readerPageSize} onChange={(event) => update('readerPageSize', Number(event.target.value))} /><output>{draft.readerPageSize} mots</output></div></label>
             <label>Largeur du texte<select value={draft.readerWidth} onChange={(event) => update('readerWidth', event.target.value as UserSettings['readerWidth'])}><option value="comfortable">Confortable</option><option value="wide">Large</option></select></label>
+            <label>Style de la barre d’outils
+              <select value={draft.readerToolbarStyle ?? 'liquid'} onChange={(event) => update('readerToolbarStyle', event.target.value as UserSettings['readerToolbarStyle'])}>
+                <option value="liquid">Liquid Glass (iOS 27) — Flou profond et reflets</option>
+                <option value="opaque">Haute opacité — Arrière-plan presque opaque</option>
+                <option value="solid">Opaque classique — 100% plein</option>
+              </select>
+            </label>
             <label className="toggle-field"><span><strong>Grammaire visuelle</strong><small>Surligne doucement les verbes dans le lecteur.</small></span><input type="checkbox" checked={draft.showGrammar} onChange={(event) => update('showGrammar', event.target.checked)} /></label>
+          </div>
+        </>}
+
+        {tab === 'markings' && <>
+          <SettingHeading title="Gestion et ordre des marquages" detail="Personnalise tes marquages, modifie leurs couleurs, renomme-les et change leur ordre d’affichage dans le lecteur." />
+          <div className="settings-markings-section">
+            <div className="markings-add-bar">
+              <input
+                type="text"
+                placeholder="Nouveau marquage (ex. Proposition, Connecteur, Idiome...)"
+                value={newMarkingLabel}
+                onChange={(event) => setNewMarkingLabel(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter') handleAddMarking() }}
+              />
+              <input
+                type="color"
+                value={newMarkingColor}
+                onChange={(event) => setNewMarkingColor(event.target.value)}
+                style={{ width: 40, height: 38, borderRadius: 8, border: '1px solid var(--line)', cursor: 'pointer', padding: 2, background: 'var(--white)' }}
+                title="Choisir la couleur"
+              />
+              <button className="primary" disabled={!newMarkingLabel.trim()} onClick={handleAddMarking}>
+                ＋ Ajouter
+              </button>
+            </div>
+
+            <div className="tags-grid-list">
+              {allMarkings.map((marking, index) => {
+                const isEditing = editingMarkId === marking.id
+                const color = draft.markColors[marking.id] ?? marking.color
+                return (
+                  <div key={marking.id} className="marking-mgmt-card">
+                    <div className="marking-card-left">
+                      <div className="marking-reorder-btns">
+                        <button
+                          type="button"
+                          className="marking-reorder-btn"
+                          title="Monter"
+                          disabled={index === 0}
+                          onClick={() => onChangeState(reorderMarkings(state, index, index - 1))}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          className="marking-reorder-btn"
+                          title="Descendre"
+                          disabled={index === allMarkings.length - 1}
+                          onClick={() => onChangeState(reorderMarkings(state, index, index + 1))}
+                        >
+                          ▼
+                        </button>
+                      </div>
+
+                      <div className="marking-color-picker-wrap">
+                        <input
+                          type="color"
+                          value={color.startsWith('#') && color.length === 7 ? color : '#2563eb'}
+                          id={`color-${marking.id}`}
+                          style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+                          onChange={(e) => {
+                            const newColor = e.target.value
+                            update('markColors', { ...draft.markColors, [marking.id]: newColor })
+                            onChangeState(setMarkingColor(state, marking.id, newColor))
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="marking-color-swatch-btn"
+                          style={{ background: color }}
+                          title="Changer la couleur"
+                          onClick={() => document.getElementById(`color-${marking.id}`)?.click()}
+                        />
+                      </div>
+
+                      {isEditing ? (
+                        <div className="tag-rename-box">
+                          <input
+                            autoFocus
+                            value={editingMarkValue}
+                            onChange={(e) => setEditingMarkValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveRenameMarking(marking.id)
+                              if (e.key === 'Escape') setEditingMarkId(null)
+                            }}
+                          />
+                          <button className="tag-save-btn" title="Valider" onClick={() => handleSaveRenameMarking(marking.id)}>✓</button>
+                          <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingMarkId(null)}>×</button>
+                        </div>
+                      ) : (
+                        <span className="marking-card-label">{marking.label}</span>
+                      )}
+                    </div>
+
+                    {!isEditing && (
+                      <div className="tag-mgmt-actions">
+                        <button
+                          className="tag-icon-btn"
+                          title="Renommer le marquage"
+                          aria-label="Renommer le marquage"
+                          onClick={() => {
+                            setEditingMarkId(marking.id)
+                            setEditingMarkValue(marking.label)
+                          }}
+                        >
+                          ✎
+                        </button>
+                        <button
+                          className="tag-icon-btn delete"
+                          title="Supprimer le marquage"
+                          aria-label="Supprimer le marquage"
+                          onClick={() => onChangeState(deleteMarking(state, marking.id))}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </>}
 
