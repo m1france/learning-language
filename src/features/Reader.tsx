@@ -234,12 +234,12 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
   const startFocus = () => {
     // User gesture: force the browser into real fullscreen, then open the overlay.
-    void document.documentElement.requestFullscreen?.().catch(() => {})
+    void document.documentElement.requestFullscreen?.().catch(() => { })
     setFocusOpen(true)
   }
 
   const closeFocus = () => {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => { })
     setFocusOpen(false)
   }
 
@@ -270,9 +270,9 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           <span className="tag">{categoryLabel(resource.type)}</span>
           {editingTitle
             ? <input className="title-inline" autoFocus defaultValue={resource.title}
-                onClick={(event) => event.stopPropagation()}
-                onBlur={(event) => saveTitle(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter') saveTitle((event.target as HTMLInputElement).value); if (event.key === 'Escape') setEditingTitle(false) }} />
+              onClick={(event) => event.stopPropagation()}
+              onBlur={(event) => saveTitle(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter') saveTitle((event.target as HTMLInputElement).value); if (event.key === 'Escape') setEditingTitle(false) }} />
             : <h2 className="title-clickable" title={t.renameHint} onClick={(event) => { event.stopPropagation(); setEditingTitle(true) }}>{resource.title}</h2>}
           {resource.author && <p>{resource.author}</p>}
         </div>
@@ -294,11 +294,11 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           {entry.isChapterStart && <ChapterTitle hint={t.chapterRename} title={entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`} onRename={(title) => renameChapter(entry.chapterIndex, title)} />}
           {editing
             ? <textarea className="paragraph-edit" value={draftParagraphs[entryIndex] ?? entry.text} rows={Math.max(3, Math.ceil(entry.text.length / 90))}
-                onClick={(event) => event.stopPropagation()}
-                onChange={(event) => setDraftParagraphs((current) => current.map((value, index) => (index === entryIndex ? event.target.value : value)))} />
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => setDraftParagraphs((current) => current.map((value, index) => (index === entryIndex ? event.target.value : value)))} />
             : <Paragraph text={entry.text} fontSize={fontSize} language={resource.language} state={state} markMode={markMode}
-                onWordClick={(raw, target) => clickWord(raw, entry, target)}
-                onLetterClick={(raw, letterIndex) => onSilentMark(markKey(resource.language, normalizeWord(raw)), letterIndex)} />}
+              onWordClick={(raw, target) => clickWord(raw, entry, target)}
+              onLetterClick={(raw, letterIndex) => onSilentMark(markKey(resource.language, normalizeWord(raw)), letterIndex)} />}
         </div>)}
         {editing && <button className="primary" onClick={(event) => { event.stopPropagation(); saveEditing() }}>{t.saveText} <span>→</span></button>}
       </article>
@@ -402,7 +402,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
     return [] as string[]
   }
   const [tags, setTags] = useState<string[]>(initialTags)
-  const [tagInput, setTagInput] = useState('')
   const [knowledge, setKnowledge] = useState<number | undefined>(() => findExisting()?.knowledge)
   const [saved, setSaved] = useState(false)
   const [parentTyping, setParentTyping] = useState(false)
@@ -418,7 +417,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
     setTags(existing
       ? (existing.tags?.length ? existing.tags : (existing.partOfSpeech ? [(readerCopy[ui].tags as Record<string, string>)[existing.partOfSpeech] ?? existing.partOfSpeech] : []))
       : [])
-    setTagInput('')
     setKnowledge(existing?.knowledge)
     setSaved(false)
     setParentTyping(false)
@@ -434,15 +432,10 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
 
   // Tags personnalisés : création libre + suggestions des tags déjà utilisés.
   const allTags = knownTags(state, language)
-  const tagQuery = tagInput.trim().toLowerCase()
-  const tagSuggestions = tagQuery
-    ? allTags.filter((item) => item.toLowerCase().includes(tagQuery) && !tags.includes(item)).slice(0, 6)
-    : allTags.filter((item) => !tags.includes(item)).slice(0, 6)
 
   const addTag = (value: string) => {
     const cleaned = value.trim().replace(/,+$/, '')
     if (cleaned && !tags.includes(cleaned)) { setTags([...tags, cleaned]); setSaved(false) }
-    setTagInput('')
   }
 
   const removeTag = (value: string) => { setTags(tags.filter((item) => item !== value)); setSaved(false) }
@@ -472,7 +465,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
       {knowledge === 6
         ? <span className="wp-known-check">✓ {t.knownByHeart}</span>
         : <span className="wp-dots" title={`${knowledge} / 5`}>{[1, 2, 3, 4, 5].map((n) => <i key={n}
-            style={n <= knowledge ? { background: KNOWLEDGE_COLORS[knowledge - 1] } : undefined} />)}</span>}
+          style={n <= knowledge ? { background: KNOWLEDGE_COLORS[knowledge - 1] } : undefined} />)}</span>}
     </div>}
     {parent && <div className="wp-view-field"><span>{t.parentLabel}</span>
       <div className="wp-parent-line">
@@ -497,26 +490,15 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
 
     <div className="wp-field">
       <span>{t.tagLabel}</span>
-      <div className="wp-tags">
-        {tags.map((item) => <span key={item} className="wp-tag-chip active">{item}
-          <button type="button" aria-label="×" onClick={() => removeTag(item)}>×</button>
-        </span>)}
-        <input className="wp-tag-input" value={tagInput} placeholder={tags.length ? '' : t.tagLabel}
-          onChange={(event) => {
-            const value = event.target.value
-            if (value.endsWith(',')) addTag(value)
-            else { setTagInput(value); setSaved(false) }
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') { event.preventDefault(); addTag(tagInput) }
-            if (event.key === 'Backspace' && !tagInput && tags.length) removeTag(tags[tags.length - 1])
-          }}
-          onBlur={() => { if (tagInput.trim()) addTag(tagInput) }} />
+      <div className="wp-tags tag-container">
+        {tags.map((item) => (
+          <span key={item} className="wp-tag-chip active">
+            {item}
+            <button type="button" aria-label="×" onClick={() => removeTag(item)}>×</button>
+          </span>
+        ))}
+        <TagInput allTags={allTags} existingTags={tags} onAdd={addTag} label={t.tagLabel} />
       </div>
-      {tagSuggestions.length > 0 && <div className="wp-tags">
-        {tagSuggestions.map((item) => <button key={item} type="button" className="wp-tag-chip"
-          onClick={() => addTag(item)}>{item}</button>)}
-      </div>}
     </div>
 
     <div className="wp-field">
@@ -536,15 +518,15 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
       {parent && !parentTyping
         ? <span className="wp-tag">{parent}<button aria-label="×" onClick={() => { setParent(''); setParentTyping(true); setSaved(false) }}>×</button></span>
         : <>
-            <input value={parent} placeholder={t.parentLabel} autoFocus={parentTyping && !parent}
-              onChange={(event) => { setParent(event.target.value); setParentTyping(true); setSaved(false) }}
-              onFocus={() => setParentTyping(true)}
-              onBlur={() => { if (parent.trim()) setParent(parent.trim()); setParentTyping(false) }}
-              onKeyDown={(event) => { if (event.key === 'Enter') { setParent(parent.trim()); setParentTyping(false) } }} />
-            {suggestions.length > 0 && <div className="wp-suggest">
-              {suggestions.map((item) => <button key={item} onMouseDown={(event) => { event.preventDefault(); setParent(item); setParentTyping(false); setSaved(false) }}>{item}</button>)}
-            </div>}
-          </>}
+          <input value={parent} placeholder={t.parentLabel} autoFocus={parentTyping && !parent}
+            onChange={(event) => { setParent(event.target.value); setParentTyping(true); setSaved(false) }}
+            onFocus={() => setParentTyping(true)}
+            onBlur={() => { if (parent.trim()) setParent(parent.trim()); setParentTyping(false) }}
+            onKeyDown={(event) => { if (event.key === 'Enter') { setParent(parent.trim()); setParentTyping(false) } }} />
+          {suggestions.length > 0 && <div className="wp-suggest">
+            {suggestions.map((item) => <button key={item} onMouseDown={(event) => { event.preventDefault(); setParent(item); setParentTyping(false); setSaved(false) }}>{item}</button>)}
+          </div>}
+        </>}
     </div>
 
     <label className="wp-field">
@@ -576,6 +558,71 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
     {actions}
     {viewing ? view : form}
   </aside>
+}
+
+/** Input de tag compact : pilule "+" qui s'ouvre en champ avec dropdown de suggestions. */
+function TagInput({ allTags, existingTags, onAdd, label }: {
+  allTags: string[]
+  existingTags: string[]
+  onAdd: (tag: string) => void
+  label: string
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [input, setInput] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) inputRef.current.focus()
+  }, [isOpen])
+
+  const query = input.trim().toLowerCase()
+  const suggestions = query
+    ? allTags.filter((t) => t.toLowerCase().includes(query) && !existingTags.includes(t)).slice(0, 6)
+    : allTags.filter((t) => !existingTags.includes(t)).slice(0, 6)
+
+  const handleAdd = (tag: string) => {
+    onAdd(tag)
+    setInput('')
+    setIsOpen(false)
+  }
+
+  if (!isOpen) {
+    return (
+      <button type="button" className="wp-tag-chip add-tag" onClick={() => setIsOpen(true)} aria-label={label}>
+        +
+      </button>
+    )
+  }
+
+  return (
+    <div className="tag-creator">
+      <input
+        ref={inputRef}
+        className="wp-tag-input"
+        value={input}
+        placeholder={label}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); if (input.trim()) handleAdd(input.trim()) }
+          if (e.key === 'Escape') { setIsOpen(false); setInput('') }
+          if (e.key === 'Backspace' && !input) setIsOpen(false)
+        }}
+        onBlur={() => {
+          if (input.trim()) handleAdd(input.trim())
+          else { setIsOpen(false); setInput('') }
+        }}
+      />
+      {suggestions.length > 0 && (
+        <div className="tag-dropdown">
+          {suggestions.map((s) => (
+            <button key={s} type="button" onMouseDown={(e) => { e.preventDefault(); handleAdd(s) }}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /**
@@ -636,16 +683,16 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord }: {
           {entry.isChapterStart && <h3 className="focus-chapter">{entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`}</h3>}
           <Paragraph text={entry.text} fontSize={settings.readerFontSize + 1} language={resource.language} state={state} markMode={null}
             onWordClick={(raw) => clickWord(raw, entry.text)}
-            onLetterClick={() => {}} />
+            onLetterClick={() => { }} />
         </div>)}
       </article>
 
       <aside className="focus-side">
         {selected
           ? <WordPanel ui={ui} selected={selected} state={state} language={resource.language} docked
-              onClose={() => setSelected(null)}
-              onOpenWord={(raw) => setSelected({ raw, sentence: '' })}
-              onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })} />
+            onClose={() => setSelected(null)}
+            onOpenWord={(raw) => setSelected({ raw, sentence: '' })}
+            onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })} />
           : <p className="focus-hint">{t.focusHint}</p>}
       </aside>
     </div>
@@ -697,9 +744,9 @@ function ChapterTitle({ title, hint, onRename }: { title: string; hint: string; 
   const [editing, setEditing] = useState(false)
   return editing
     ? <input className="chapter-title chapter-title-input" autoFocus defaultValue={title}
-        onClick={(event) => event.stopPropagation()}
-        onBlur={(event) => { onRename(event.target.value); setEditing(false) }}
-        onKeyDown={(event) => { if (event.key === 'Enter') { onRename((event.target as HTMLInputElement).value); setEditing(false) } if (event.key === 'Escape') setEditing(false) }} />
+      onClick={(event) => event.stopPropagation()}
+      onBlur={(event) => { onRename(event.target.value); setEditing(false) }}
+      onKeyDown={(event) => { if (event.key === 'Enter') { onRename((event.target as HTMLInputElement).value); setEditing(false) } if (event.key === 'Escape') setEditing(false) }} />
     : <button className="chapter-title" title={hint} onClick={(event) => { event.stopPropagation(); setEditing(true) }}>{title}</button>
 }
 
