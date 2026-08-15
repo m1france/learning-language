@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { resolve, extname } from 'path';
 const app = new Hono();
 const DIST_DIR = '/app/dist';
@@ -27,7 +27,7 @@ app.get('*', (c) => {
     if (!filePath.startsWith(DIST_DIR)) {
         filePath = resolve(DIST_DIR, 'index.html');
     }
-    if (!existsSync(filePath)) {
+    if (!existsSync(filePath) || statSync(filePath).isDirectory()) {
         filePath = resolve(DIST_DIR, 'index.html');
     }
     const ext = extname(filePath);
