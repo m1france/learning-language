@@ -483,13 +483,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
   </>
 
   const form = <>
-    <label className="wp-field">
-      <span>{t.wordLabel}</span>
-      <input value={word} onChange={(event) => { setWord(event.target.value); setSaved(false) }} />
-    </label>
-
     <div className="wp-field">
-      <span>{t.tagLabel}</span>
       <div className="wp-tags tag-container">
         {tags.map((item) => (
           <span key={item} className="wp-tag-chip active">
@@ -502,7 +496,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
     </div>
 
     <div className="wp-field">
-      <span>{t.knowledgeLabel}</span>
       <div className="wp-knowledge">
         {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button"
           className={knowledge === n ? 'kl-btn active' : 'kl-btn'}
@@ -514,7 +507,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
     </div>
 
     <div className="wp-field">
-      <span>{t.parentLabel}</span>
       {parent && !parentTyping
         ? <span className="wp-tag">{parent}<button aria-label="×" onClick={() => { setParent(''); setParentTyping(true); setSaved(false) }}>×</button></span>
         : <>
@@ -529,17 +521,18 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
         </>}
     </div>
 
-    <label className="wp-field">
-      <span>{t.pronunciationLabel}</span>
+    <div className="wp-field">
       <input value={pronunciation} placeholder={t.pronunciationLabel} onChange={(event) => { setPronunciation(event.target.value); setSaved(false) }} />
-    </label>
+    </div>
 
-    <label className="wp-field">
-      <span>{t.translationLabel}</span>
+    <div className="wp-field">
       <textarea rows={3} value={translation} placeholder={t.translationLabel} onChange={(event) => { setTranslation(event.target.value); setSaved(false) }} />
-    </label>
+    </div>
 
-    <button className={saved ? 'saved-deck' : 'primary'} disabled={!word.trim()} onClick={submit}>{saved ? t.savedWord : `＋ ${t.saveWord}`}</button>
+    <div className="wp-footer">
+      <button className={saved ? 'saved-deck' : 'primary'} disabled={!word.trim()} onClick={submit}>{saved ? t.savedWord : `＋ ${t.saveWord}`}</button>
+      {word && <span className="wp-footer-word"><em>{word}</em></span>}
+    </div>
   </>
 
   if (docked) return <div className="word-panel docked" onClick={(event) => event.stopPropagation()}>
@@ -560,67 +553,64 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onO
   </aside>
 }
 
-/** Input de tag compact : pilule "+" qui s'ouvre en champ avec dropdown de suggestions. */
+/** Input de tag avec autocomplétion inline (style Google). Pas de dropdown, bordure inférieure uniquement. */
 function TagInput({ allTags, existingTags, onAdd, label }: {
   allTags: string[]
   existingTags: string[]
   onAdd: (tag: string) => void
   label: string
 }) {
-  const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    if (isOpen && inputRef.current) inputRef.current.focus()
-  }, [isOpen])
-
   const query = input.trim().toLowerCase()
-  const suggestions = query
-    ? allTags.filter((t) => t.toLowerCase().includes(query) && !existingTags.includes(t)).slice(0, 6)
-    : allTags.filter((t) => !existingTags.includes(t)).slice(0, 6)
+  const match = query
+    ? allTags.find((t) => t.toLowerCase().startsWith(query) && !existingTags.some((ex) => ex.toLowerCase() === t.toLowerCase()))
+    : undefined
 
-  const handleAdd = (tag: string) => {
-    onAdd(tag)
-    setInput('')
-    setIsOpen(false)
+  const ghostSuffix = match && input ? match.slice(input.length) : ''
+
+  const handleCommit = (tagToCommit?: string) => {
+    const finalTag = tagToCommit || match || input.trim()
+    if (finalTag) {
+      onAdd(finalTag)
+      setInput('')
+    }
   }
 
-  if (!isOpen) {
-    return (
-      <button type="button" className="wp-tag-chip add-tag" onClick={() => setIsOpen(true)} aria-label={label}>
-        +
-      </button>
-    )
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleCommit()
+    } else if (e.key === 'ArrowRight' || e.key === 'Tab') {
+      if (match) {
+        e.preventDefault()
+        setInput(match)
+      }
+    } else if (e.key === 'Escape') {
+      setInput('')
+    }
   }
 
   return (
-    <div className="tag-creator">
+    <div className="wp-tag-inline-wrapper">
+      <div className="wp-tag-ghost-container" aria-hidden="true">
+        <span className="wp-tag-ghost-typed">{input}</span>
+        <span className="wp-tag-ghost-suffix">{ghostSuffix}</span>
+      </div>
       <input
         ref={inputRef}
-        className="wp-tag-input"
+        className="wp-tag-input-inline"
         value={input}
-        placeholder={label}
+        placeholder={existingTags.length === 0 ? label : '+'}
         onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') { e.preventDefault(); if (input.trim()) handleAdd(input.trim()) }
-          if (e.key === 'Escape') { setIsOpen(false); setInput('') }
-          if (e.key === 'Backspace' && !input) setIsOpen(false)
-        }}
+        onKeyDown={handleKeyDown}
         onBlur={() => {
-          if (input.trim()) handleAdd(input.trim())
-          else { setIsOpen(false); setInput('') }
+          if (input.trim()) {
+            handleCommit()
+          }
         }}
       />
-      {suggestions.length > 0 && (
-        <div className="tag-dropdown">
-          {suggestions.map((s) => (
-            <button key={s} type="button" onMouseDown={(e) => { e.preventDefault(); handleAdd(s) }}>
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }

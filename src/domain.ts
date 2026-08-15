@@ -170,6 +170,8 @@ export type AppState = {
   removedTools: string[]
   /** User-created resource categories. */
   customCategories: CustomCategory[]
+  /** User-defined or global custom tags. */
+  customTags?: string[]
 }
 
 export const todayKey = () => new Date().toISOString().slice(0, 10)

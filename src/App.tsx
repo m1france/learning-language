@@ -78,8 +78,9 @@ export default function App() {
           {page === 'speaking' && <SpeakingPage ui={baseUi(ui)} language={state.settings.learningLanguage} api={state.settings.api} />}
           {page === 'writing' && <Writing t={t} />}
           {page === 'life' && <LifePage ui={baseUi(ui)} state={state} onChange={change} />}
-          {page === 'settings' && <Settings settings={state.settings}
+          {page === 'settings' && <Settings settings={state.settings} state={state}
             onSave={(settings) => change({ ...state, settings })}
+            onChangeState={change}
             onResetData={() => { resetState(); setState(null); setPage('home') }} />}
         </>
       )}

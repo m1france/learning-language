@@ -4850,64 +4850,252 @@ h2 {
   }
 }
 
-/* Tag creator : pilule + qui s'ouvre en input */
+/* Tag Input inline transparent avec autocomplétion (style Google) */
 .wp-tags.tag-container {
-  position: relative;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 6px;
+  min-height: 32px;
 }
 
-.tag-creator {
+.wp-tag-inline-wrapper {
   position: relative;
   display: inline-flex;
   align-items: center;
+  border-bottom: 1px solid var(--line);
+  min-width: 75px;
+  flex: 1;
+  max-width: 160px;
+  background: transparent;
+  transition: border-color .15s ease;
 }
 
-.wp-tag-chip.add-tag {
+.wp-tag-inline-wrapper:focus-within {
+  border-bottom-color: var(--ink);
+}
+
+.wp-tag-ghost-container {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 2px;
+  white-space: pre;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.wp-tag-ghost-typed {
+  visibility: hidden;
+}
+
+.wp-tag-ghost-suffix {
+  color: var(--muted);
+  opacity: 0.55;
+  font-style: normal;
+}
+
+.wp-tag-input-inline {
+  width: 100%;
+  border: none !important;
+  background: transparent !important;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  padding: 4px 2px !important;
+  outline: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  box-sizing: border-box;
+}
+
+.wp-tag-input-inline::placeholder {
+  color: color-mix(in srgb, var(--muted) 65%, transparent);
+}
+
+/* Footer de la popup mot : bouton enregistrer + mot sélectionné */
+.wp-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.wp-footer .primary,
+.wp-footer .saved-deck {
+  flex-shrink: 0;
+  width: auto;
+  min-width: 150px;
+}
+
+.wp-footer-word {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+  max-width: 120px;
+  text-align: right;
+}
+
+/* ===== Paramètres : Gestion des Tags ===== */
+.settings-tags-section {
+  display: grid;
+  gap: 20px;
+  max-width: 600px;
+}
+
+.tags-add-bar {
+  display: flex;
+  gap: 10px;
+}
+
+.tags-add-bar input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
   background: var(--white);
   color: var(--ink);
-  border: 1.5px dashed var(--border);
-  font-weight: 600;
-  font-size: 16px;
-  width: 32px;
-  height: 28px;
-  padding: 0;
-  justify-content: center;
-  align-items: center;
-  flex-shrink: 0;
+  font-size: 13px;
 }
 
-.wp-tag-chip.add-tag:hover {
+.tags-add-bar input:focus {
+  outline: none;
   border-color: var(--ink);
-  background: var(--bg);
 }
 
-/* Dropdown de suggestions en temps réel */
-.tag-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 100;
+.tags-grid-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-mgmt-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
   background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 4px;
-  min-width: 140px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
 
-.tag-dropdown button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 6px 10px;
+.tag-mgmt-card:hover {
+  border-color: color-mix(in srgb, var(--ink) 25%, var(--line));
+}
+
+.tag-card-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tag-word-count {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+
+.tag-mgmt-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tag-icon-btn {
   border: none;
   background: none;
-  border-radius: 4px;
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
+  transition: .15s ease;
+}
+
+.tag-icon-btn:hover {
+  background: var(--paper);
   color: var(--ink);
 }
 
-.tag-dropdown button:hover {
-  background: var(--bg);
+.tag-icon-btn.delete:hover {
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  color: #dc2626;
+}
+
+.tag-rename-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.tag-rename-box input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.tag-rename-box input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.tag-save-btn,
+.tag-cancel-btn {
+  border: none;
+  background: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tag-save-btn {
+  color: #16a34a;
+  background: color-mix(in srgb, #16a34a 12%, transparent);
+}
+
+.tag-cancel-btn {
+  color: var(--muted);
+}
+
+.tag-save-btn:hover {
+  background: color-mix(in srgb, #16a34a 22%, transparent);
+}
+
+.tag-cancel-btn:hover {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.tags-empty-state {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--paper);
 }

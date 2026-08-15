@@ -44,6 +44,7 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   customTools: [],
   removedTools: [],
   customCategories: [],
+  customTags: [],
 })
 
 export const loadState = (): AppState | null => {
@@ -80,6 +81,7 @@ export const loadState = (): AppState | null => {
       customTools: parsed.customTools ?? [],
       removedTools: parsed.removedTools ?? [],
       customCategories: parsed.customCategories ?? [],
+      customTags: parsed.customTags ?? [],
     }
   } catch { return null }
 }
@@ -150,10 +152,51 @@ export const upsertWordDetails = (state: AppState, args: {
 }
 
 /** All distinct custom tags already used, for the tag suggestions. */
-export const knownTags = (state: AppState, language: 'en' | 'fr'): string[] => {
-  const set = new Set<string>()
-  state.words.forEach((word) => { if (word.language === language) word.tags.forEach((tag) => set.add(tag)) })
+export const knownTags = (state: AppState, language?: 'en' | 'fr'): string[] => {
+  const set = new Set<string>(state.customTags ?? [])
+  state.words.forEach((word) => {
+    if (!language || word.language === language) {
+      word.tags?.forEach((tag) => {
+        if (tag && tag.trim()) set.add(tag.trim())
+      })
+    }
+  })
   return [...set].sort((a, b) => a.localeCompare(b))
+}
+
+export const addCustomTag = (state: AppState, tag: string): AppState => {
+  const cleaned = tag.trim()
+  if (!cleaned) return state
+  const customTags = state.customTags ?? []
+  if (customTags.includes(cleaned)) return state
+  return { ...state, customTags: [...customTags, cleaned] }
+}
+
+export const renameCustomTag = (state: AppState, oldTag: string, newTag: string): AppState => {
+  const cleanOld = oldTag.trim()
+  const cleanNew = newTag.trim()
+  if (!cleanOld || !cleanNew || cleanOld === cleanNew) return state
+  const currentCustom = state.customTags ?? []
+  const customTags = currentCustom.map((t) => (t === cleanOld ? cleanNew : t))
+  if (!customTags.includes(cleanNew) && currentCustom.includes(cleanOld)) {
+    customTags.push(cleanNew)
+  }
+  const words = state.words.map((word) => {
+    if (!word.tags?.includes(cleanOld)) return word
+    const updatedTags = [...new Set(word.tags.map((t) => (t === cleanOld ? cleanNew : t)))]
+    return { ...word, tags: updatedTags }
+  })
+  return { ...state, customTags: [...new Set(customTags)], words }
+}
+
+export const deleteCustomTag = (state: AppState, tagToDelete: string): AppState => {
+  const cleaned = tagToDelete.trim()
+  const customTags = (state.customTags ?? []).filter((t) => t !== cleaned)
+  const words = state.words.map((word) => {
+    if (!word.tags?.includes(cleaned)) return word
+    return { ...word, tags: word.tags.filter((t) => t !== cleaned) }
+  })
+  return { ...state, customTags, words }
 }
 
 /** All distinct parent words already used, for the autocomplete suggestions. */

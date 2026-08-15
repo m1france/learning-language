@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
-import type { Language, UiLanguage, UserSettings } from '../domain'
+import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { UI_LANGUAGES } from '../i18n'
 import { listVoices } from '../ai'
+import { addCustomTag, deleteCustomTag, knownTags, renameCustomTag } from '../store'
 
 type SettingsProps = {
   settings: UserSettings
+  state: AppState
   onSave: (settings: UserSettings) => void
+  onChangeState: (state: AppState) => void
   onResetData: () => void
 }
 
-type Tab = 'profile' | 'reading' | 'connections' | 'data'
+type Tab = 'profile' | 'reading' | 'tags' | 'connections' | 'data'
 
 const TTS_PROVIDERS: { id: UserSettings['api']['ttsProvider']; name: string; detail: string }[] = [
   { id: 'google', name: 'Voix naturelle (gratuit)', detail: 'Voix Google de bonne qualité, sans clé ni compte. Recommandé pour démarrer.' },
@@ -19,12 +22,47 @@ const TTS_PROVIDERS: { id: UserSettings['api']['ttsProvider']; name: string; det
   { id: 'browser', name: 'Voix du navigateur', detail: 'Fonctionne hors ligne, qualité variable selon l’appareil.' },
 ]
 
-export function Settings({ settings, onSave, onResetData }: SettingsProps) {
+export function Settings({ settings, state, onSave, onChangeState, onResetData }: SettingsProps) {
   const [draft, setDraft] = useState<UserSettings>(settings)
   const [tab, setTab] = useState<Tab>('profile')
   const [saved, setSaved] = useState(false)
   const [confirmingReset, setConfirmingReset] = useState(false)
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  const [newTag, setNewTag] = useState('')
+  const [editingTag, setEditingTag] = useState<string | null>(null)
+  const [editingTagValue, setEditingTagValue] = useState('')
+
+  const allTags = knownTags(state, draft.learningLanguage)
+
+  const handleAddTag = () => {
+    const cleaned = newTag.trim()
+    if (!cleaned) return
+    onChangeState(addCustomTag(state, cleaned))
+    setNewTag('')
+  }
+
+  const handleStartRename = (tag: string) => {
+    setEditingTag(tag)
+    setEditingTagValue(tag)
+  }
+
+  const handleSaveRename = (oldTag: string) => {
+    const cleaned = editingTagValue.trim()
+    if (cleaned && cleaned !== oldTag) {
+      onChangeState(renameCustomTag(state, oldTag, cleaned))
+    }
+    setEditingTag(null)
+    setEditingTagValue('')
+  }
+
+  const handleDeleteTag = (tag: string) => {
+    onChangeState(deleteCustomTag(state, tag))
+    if (editingTag === tag) {
+      setEditingTag(null)
+      setEditingTagValue('')
+    }
+  }
+
   const update = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => setDraft((current) => ({ ...current, [key]: value }))
   const updateApi = <K extends keyof UserSettings['api']>(key: K, value: UserSettings['api'][K]) => setDraft((current) => ({ ...current, api: { ...current.api, [key]: value } }))
   const save = () => { onSave(draft); setSaved(true); window.setTimeout(() => setSaved(false), 2200) }
@@ -39,6 +77,7 @@ export function Settings({ settings, onSave, onResetData }: SettingsProps) {
   const tabs: { id: Tab; icon: string; label: string }[] = [
     { id: 'profile', icon: '◌', label: 'Profil' },
     { id: 'reading', icon: '◫', label: 'Lecture' },
+    { id: 'tags', icon: '🏷', label: 'Tags' },
     { id: 'connections', icon: '⌁', label: 'Connexions' },
     { id: 'data', icon: '◐', label: 'Données' },
   ]
@@ -71,6 +110,82 @@ export function Settings({ settings, onSave, onResetData }: SettingsProps) {
             <label>Longueur des pages <div className="range-row"><input type="range" min="120" max="500" step="10" value={draft.readerPageSize} onChange={(event) => update('readerPageSize', Number(event.target.value))} /><output>{draft.readerPageSize} mots</output></div></label>
             <label>Largeur du texte<select value={draft.readerWidth} onChange={(event) => update('readerWidth', event.target.value as UserSettings['readerWidth'])}><option value="comfortable">Confortable</option><option value="wide">Large</option></select></label>
             <label className="toggle-field"><span><strong>Grammaire visuelle</strong><small>Surligne doucement les verbes dans le lecteur.</small></span><input type="checkbox" checked={draft.showGrammar} onChange={(event) => update('showGrammar', event.target.checked)} /></label>
+          </div>
+        </>}
+
+        {tab === 'tags' && <>
+          <SettingHeading title="Gestion des tags" detail="Organise tes mots avec des tags personnalisés. Tu peux ajouter, renommer ou supprimer des tags existants." />
+          <div className="settings-tags-section">
+            <div className="tags-add-bar">
+              <input
+                type="text"
+                placeholder="Nouveau tag (ex. nom, verbe, familier, voyage...)"
+                value={newTag}
+                onChange={(event) => setNewTag(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter') handleAddTag() }}
+              />
+              <button className="primary" disabled={!newTag.trim()} onClick={handleAddTag}>
+                ＋ Ajouter
+              </button>
+            </div>
+
+            <div className="tags-grid-list">
+              {allTags.length === 0 ? (
+                <div className="tags-empty-state">
+                  <p>Aucun tag enregistré pour le moment. Ajoute ton premier tag ci-dessus ou lors de la lecture.</p>
+                </div>
+              ) : (
+                allTags.map((tag) => {
+                  const count = state.words.filter((w) => w.tags?.includes(tag) && w.language === draft.learningLanguage).length
+                  const isEditing = editingTag === tag
+
+                  return (
+                    <div key={tag} className="tag-mgmt-card">
+                      {isEditing ? (
+                        <div className="tag-rename-box">
+                          <input
+                            autoFocus
+                            value={editingTagValue}
+                            onChange={(event) => setEditingTagValue(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') handleSaveRename(tag)
+                              if (event.key === 'Escape') setEditingTag(null)
+                            }}
+                          />
+                          <button className="tag-save-btn" title="Valider" onClick={() => handleSaveRename(tag)}>✓</button>
+                          <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingTag(null)}>×</button>
+                        </div>
+                      ) : (
+                        <div className="tag-card-content">
+                          <span className="wp-tag-chip active">{tag}</span>
+                          <span className="tag-word-count">{count} {count > 1 ? 'mots' : 'mot'}</span>
+                        </div>
+                      )}
+                      {!isEditing && (
+                        <div className="tag-mgmt-actions">
+                          <button
+                            className="tag-icon-btn"
+                            title="Renommer le tag"
+                            aria-label="Renommer le tag"
+                            onClick={() => handleStartRename(tag)}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            className="tag-icon-btn delete"
+                            title="Supprimer le tag"
+                            aria-label="Supprimer le tag"
+                            onClick={() => handleDeleteTag(tag)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
         </>}
 
