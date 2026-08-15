@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: ll-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: changeme_root
+      MYSQL_DATABASE: learning_language
+      MYSQL_USER: ll_user
+      MYSQL_PASSWORD: changeme_user
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./server/db-init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ll-net
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+
+  app:
+    build: .
+    container_name: ll-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: mysql://ll_user:changeme_user@db:3306/learning_language
+      NODE_ENV: production
+      PORT: 3001
+    depends_on:
+      - db
+    networks:
+      - ll-net
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+
+volumes:
+  db_data:
+
+networks:
+  ll-net:
+    driver: bridge
