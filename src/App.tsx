@@ -43,7 +43,7 @@ import {
 type Page = 'home' | 'reading' | 'speaking' | 'writing' | 'life' | 'settings'
 
 type UI = (typeof copy)[keyof typeof copy]
-type NavLabel = 'home' | 'reading' | 'speaking' | 'writing' | 'life' | 'settings'
+type NavLabel = 'home' | 'reading' | 'speaking' | 'writing' | 'life'
 
 const navItems: { id: Page; icon: React.ReactNode; label: NavLabel }[] = [
   { id: 'home', icon: <Home size={18} />, label: 'home' },
@@ -51,7 +51,6 @@ const navItems: { id: Page; icon: React.ReactNode; label: NavLabel }[] = [
   { id: 'speaking', icon: <Mic size={18} />, label: 'speaking' },
   { id: 'writing', icon: <PenLine size={18} />, label: 'writing' },
   { id: 'life', icon: <Sparkles size={18} />, label: 'life' },
-  { id: 'settings', icon: <SettingsIcon size={18} />, label: 'settings' },
 ]
 
 export const isGenericImportedAuthor = (author?: string) => {
@@ -125,7 +124,7 @@ export default function App() {
       )}
     </section>
     <nav className="mobile-nav">{navItems.slice(1).map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => go(item.id)} key={item.id}><b>{item.icon}</b><span>{t[item.label]}</span></button>)}</nav>
-    {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} onUpdateResource={(updated) => change(upsertResource(state, updated))} onClose={() => setFocusId(null)} />}
+    {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} shortcuts={state.settings.teacherShortcuts} onUpdateResource={(updated) => change(upsertResource(state, updated))} onClose={() => setFocusId(null)} />}
   </main>
 }
 
@@ -158,14 +157,35 @@ function Onboarding({ onComplete }: { onComplete: (name: string, uiLanguage: UiL
 
 function Sidebar({ page, setPage, t, theme, toggleTheme, name, collapsed, onToggleCollapse }: { page: Page; setPage: (p: Page) => void; t: UI; theme: string; toggleTheme: () => void; name: string; collapsed: boolean; onToggleCollapse: () => void }) {
   return <aside className="sidebar">
-    <button className="side-collapse" onClick={onToggleCollapse} title={collapsed ? t.expandSidebar : t.collapseSidebar} aria-label={collapsed ? t.expandSidebar : t.collapseSidebar}>{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</button>
     <Brand />
     <nav>{navItems.map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)} key={item.id} title={collapsed ? t[item.label] : undefined}><b>{item.icon}</b><span className="side-label">{t[item.label]}</span></button>)}</nav>
     <div className="side-bottom">
-      <button className="theme-toggle" onClick={toggleTheme}>
-        {theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
-        <span className="side-label">{theme === 'light' ? t.darkMode : t.lightMode}</span>
-      </button>
+      <div className="side-bottom-actions">
+        <button
+          className={`side-action-btn ${page === 'settings' ? 'active' : ''}`}
+          onClick={() => setPage('settings')}
+          title={t.settings}
+          aria-label={t.settings}
+        >
+          <SettingsIcon size={17} />
+        </button>
+        <button
+          className="side-action-btn"
+          onClick={toggleTheme}
+          title={theme === 'light' ? t.darkMode : t.lightMode}
+          aria-label={theme === 'light' ? t.darkMode : t.lightMode}
+        >
+          {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
+        </button>
+        <button
+          className="side-action-btn"
+          onClick={onToggleCollapse}
+          title={collapsed ? t.expandSidebar : t.collapseSidebar}
+          aria-label={collapsed ? t.expandSidebar : t.collapseSidebar}
+        >
+          {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+        </button>
+      </div>
       <div className="profile-mini">
         <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
         <div className="side-label"><strong>{name}</strong><small>{t.roleLabel}</small></div>

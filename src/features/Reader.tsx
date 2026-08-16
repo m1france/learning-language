@@ -19,6 +19,9 @@ import {
   X,
   Check,
   Minimize2,
+  Globe,
+  BookOpen,
+  BookmarkPlus,
 } from 'lucide-react'
 import {
   ResourceContextMenu,
@@ -187,9 +190,12 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [wikiWord, setWikiWord] = useState('')
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiArmed, setWikiArmed] = useState(false)
+  const [wikiDefaultTab, setWikiDefaultTab] = useState<'wiktionary' | 'linguee'>('wiktionary')
   const [focusOpen, setFocusOpen] = useState(false)
+  const [leftCollapsed, setLeftCollapsed] = useState(() => localStorage.getItem('vivre-reader-left-collapsed') === '1')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; markingId: string } | null>(null)
   const [pageContextMenu, setPageContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [wordContextMenu, setWordContextMenu] = useState<{ x: number; y: number; raw: string; sentence: string; isSaved: boolean } | null>(null)
   const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
   const [editingMarkValue, setEditingMarkValue] = useState('')
   const [newMarkModalOpen, setNewMarkModalOpen] = useState(false)
@@ -201,6 +207,12 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [editingContent, setEditingContent] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  const toggleLeftPanel = () => {
+    const next = !leftCollapsed
+    setLeftCollapsed(next)
+    localStorage.setItem('vivre-reader-left-collapsed', next ? '1' : '0')
+  }
 
   useEffect(() => {
     setOriginals(loadOriginals(resource.id))
@@ -224,6 +236,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       setContextMenu(null)
       setPageContextMenu(null)
       setResourceMenuTarget(null)
+      setWordContextMenu(null)
     }
     window.addEventListener('click', closeMenu)
     window.addEventListener('scroll', closeMenu, true)
@@ -232,6 +245,35 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       window.removeEventListener('scroll', closeMenu, true)
     }
   }, [])
+
+  // Raccourci clavier 'W' pour activer / désactiver Wiktionary & Linguee
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const typing = Boolean(target?.closest('input, textarea, [contenteditable="true"]'))
+      if (typing || event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.key.toLowerCase() === 'w') {
+        event.preventDefault()
+        if (wikiOpen || wikiArmed) {
+          setWikiOpen(false)
+          setWikiArmed(false)
+        } else {
+          if (selected?.raw) {
+            setWikiWord(wikiLookup(selected.raw))
+            setWikiDefaultTab('wiktionary')
+            setWikiOpen(true)
+          } else if (wikiWord) {
+            setWikiDefaultTab('wiktionary')
+            setWikiOpen(true)
+          } else {
+            setWikiArmed(true)
+          }
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [wikiOpen, wikiArmed, selected, wikiWord])
 
   const entries = useMemo(() => flatten(resource), [resource])
   const pages = useMemo(() => paginate(entries, settings.readerPageSize), [entries, settings.readerPageSize])
@@ -373,8 +415,25 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const progress = Math.round(((safePage + 1) / pages.length) * 100)
   const activeType = markMode && markMode !== 'silent' ? markMode : null
 
+  const handleWordContextMenu = (raw: string, entry: Entry, event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu(null)
+    setPageContextMenu(null)
+    setResourceMenuTarget(null)
+    const normalized = normalizeWord(raw)
+    const isSaved = Boolean(state.words.find((w) => w.normalized === normalized && w.language === resource.language))
+    setWordContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      raw,
+      sentence: sentenceOf(raw, entry.text),
+      isSaved,
+    })
+  }
+
   return <div className={`reader-page ${markMode === 'silent' ? 'arm-silent' : ''} ${markMode && markMode !== 'silent' ? 'arm-word' : ''}`}
-    onClick={() => { setSelected(null); setContextMenu(null); setPageContextMenu(null); setResourceMenuTarget(null); if (wikiArmed) setWikiArmed(false) }}
+    onClick={() => { setSelected(null); setContextMenu(null); setPageContextMenu(null); setResourceMenuTarget(null); setWordContextMenu(null); if (wikiArmed) setWikiArmed(false) }}
     onContextMenu={handlePageContextMenu}>
     <header className="reader-top">
       <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}><ArrowLeft size={16} /> {t.back.replace('←', '').trim()}</button>
@@ -389,34 +448,45 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       </div>
     </header>
 
-    <section className="reader-layout">
-      <aside className="reader-aside">
-        <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => pickCover(event.target.files?.[0])} />
-        <Cover
-          cover={resource.cover}
-          coverImage={resource.coverImage}
-          type={categoryLabel(resource.type)}
-          onClick={() => fileInputRef.current?.click()}
-          onContextMenu={handleCoverContextMenu}
-          editHint={t.coverChange}
-        />
-        <div className="reader-aside-meta">
-          <span className="tag">{categoryLabel(resource.type)}</span>
-          {editingTitle
-            ? <input className="title-inline" autoFocus defaultValue={resource.title}
-              onClick={(event) => event.stopPropagation()}
-              onBlur={(event) => saveTitle(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter') saveTitle((event.target as HTMLInputElement).value); if (event.key === 'Escape') setEditingTitle(false) }} />
-            : <h2 className="title-clickable" title={t.renameHint} onClick={(event) => { event.stopPropagation(); setEditingTitle(true) }}>{resource.title}</h2>}
-          {resource.author && !isGenericImportedAuthor(resource.author) && <p>{resource.author}</p>}
-        </div>
-        <div className="reader-progress"><div><span>{t.progress}</span><strong>{progress}%</strong></div><i><b style={{ width: `${progress}%` }} /></i></div>
-        <div className="reader-page-nav">
-          <button aria-label={t.previous} disabled={safePage === 0} onClick={(event) => { event.stopPropagation(); gotoPage(safePage - 1) }}><ChevronLeft size={18} /></button>
-          <span>{safePage + 1} / {pages.length}</span>
-          <button aria-label={t.next} disabled={safePage >= pages.length - 1} onClick={(event) => { event.stopPropagation(); gotoPage(safePage + 1) }}><ChevronRight size={18} /></button>
+    <section className={`reader-layout ${leftCollapsed ? 'left-collapsed' : ''}`}>
+      <aside className={`reader-aside ${leftCollapsed ? 'collapsed' : ''}`}>
+        <div className="reader-aside-inner">
+          <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => pickCover(event.target.files?.[0])} />
+          <Cover
+            cover={resource.cover}
+            coverImage={resource.coverImage}
+            type={categoryLabel(resource.type)}
+            onClick={() => fileInputRef.current?.click()}
+            onContextMenu={handleCoverContextMenu}
+            editHint={t.coverChange}
+          />
+          <div className="reader-aside-meta">
+            <span className="tag">{categoryLabel(resource.type)}</span>
+            {editingTitle
+              ? <input className="title-inline" autoFocus defaultValue={resource.title}
+                onClick={(event) => event.stopPropagation()}
+                onBlur={(event) => saveTitle(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter') saveTitle((event.target as HTMLInputElement).value); if (event.key === 'Escape') setEditingTitle(false) }} />
+              : <h2 className="title-clickable" title={t.renameHint} onClick={(event) => { event.stopPropagation(); setEditingTitle(true) }}>{resource.title}</h2>}
+            {resource.author && !isGenericImportedAuthor(resource.author) && <p>{resource.author}</p>}
+          </div>
+          <div className="reader-progress"><div><span>{t.progress}</span><strong>{progress}%</strong></div><i><b style={{ width: `${progress}%` }} /></i></div>
+          <div className="reader-page-nav">
+            <button aria-label={t.previous} disabled={safePage === 0} onClick={(event) => { event.stopPropagation(); gotoPage(safePage - 1) }}><ChevronLeft size={18} /></button>
+            <span>{safePage + 1} / {pages.length}</span>
+            <button aria-label={t.next} disabled={safePage >= pages.length - 1} onClick={(event) => { event.stopPropagation(); gotoPage(safePage + 1) }}><ChevronRight size={18} /></button>
+          </div>
         </div>
       </aside>
+
+      <button
+        className={`reader-toggle-left-btn ${leftCollapsed ? 'collapsed' : ''}`}
+        onClick={(event) => { event.stopPropagation(); toggleLeftPanel() }}
+        title={leftCollapsed ? 'Afficher les informations de la ressource' : 'Masquer les informations de la ressource'}
+        aria-label={leftCollapsed ? 'Afficher les informations de la ressource' : 'Masquer les informations de la ressource'}
+      >
+        {leftCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+      </button>
 
       <article className={`reading-text ${settings.readerWidth}`}>
         {page.map((entry) => {
@@ -431,6 +501,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               {entry.isChapterStart && <ChapterTitle hint={t.chapterRename} title={entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`} onRename={(title) => renameChapter(entry.chapterIndex, title)} />}
               <Paragraph text={entry.text} fontSize={fontSize} language={resource.language} state={state} markMode={markMode} green={greenChars}
                 onWordClick={(raw, target) => clickWord(raw, entry, target)}
+                onWordContextMenu={(raw, event) => handleWordContextMenu(raw, entry, event)}
                 onLetterClick={(raw, letterIndex) => onSilentMark(markKey(resource.language, normalizeWord(raw)), letterIndex)} />
             </div>
           )
@@ -632,8 +703,75 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
     {markMode && markMode !== 'silent' && <p className="mark-hint">{t.markHintWord}</p>}
 
+    {wordContextMenu && (
+      <div
+        className="word-context-menu"
+        style={{ left: Math.min(window.innerWidth - 240, wordContextMenu.x), top: Math.min(window.innerHeight - 170, wordContextMenu.y) }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="word-context-head">
+          <strong>{cleanRaw(wordContextMenu.raw)}</strong>
+        </div>
+        <div className="word-context-sep" />
+        <button
+          type="button"
+          className="word-context-item"
+          onClick={() => {
+            setWikiWord(wikiLookup(wordContextMenu.raw))
+            setWikiDefaultTab('wiktionary')
+            setWikiOpen(true)
+            setWordContextMenu(null)
+          }}
+        >
+          <i><BookOpen size={14} /></i> Voir sur Wiktionary
+        </button>
+        <button
+          type="button"
+          className="word-context-item"
+          onClick={() => {
+            setWikiWord(wikiLookup(wordContextMenu.raw))
+            setWikiDefaultTab('linguee')
+            setWikiOpen(true)
+            setWordContextMenu(null)
+          }}
+        >
+          <i><Globe size={14} /></i> Voir sur Linguee
+        </button>
+        <div className="word-context-sep" />
+        {!wordContextMenu.isSaved ? (
+          <button
+            type="button"
+            className="word-context-item save-item"
+            onClick={() => {
+              setSelected({
+                raw: wordContextMenu.raw,
+                sentence: wordContextMenu.sentence,
+                x: wordContextMenu.x,
+                y: wordContextMenu.y,
+              })
+              setWikiWord(wikiLookup(wordContextMenu.raw))
+              setWordContextMenu(null)
+            }}
+          >
+            <i><BookmarkPlus size={14} /></i> Enregistrer le mot
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="word-context-item danger"
+            onClick={() => {
+              onDeleteWord?.(cleanRaw(wordContextMenu.raw), resource.language)
+              setWordContextMenu(null)
+            }}
+          >
+            <i><Trash2 size={14} /></i> Supprimer le mot enregistré
+          </button>
+        )}
+      </div>
+    )}
+
     <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={() => setWikiArmed(!wikiArmed)} />
-    {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} onClose={() => setWikiOpen(false)} />}
+    {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} initialTab={wikiDefaultTab} onClose={() => setWikiOpen(false)} />}
 
     {focusOpen && <FocusReader state={state} resource={resource} ui={ui} onClose={closeFocus} onSaveWord={onSaveWord} onDeleteWord={onDeleteWord} />}
   </div>
@@ -648,8 +786,11 @@ function WikiFab({ label, armed, onToggle }: { label: string; armed: boolean; on
 }
 
 /** Moderate bottom-right window embedding the dictionary page of the selected word. */
-function WikiPanel({ word, language, onClose }: { word: string; language: Language; onClose: () => void }) {
-  const [tab, setTab] = useState<'wiktionary' | 'linguee'>('wiktionary')
+function WikiPanel({ word, language, initialTab = 'wiktionary', onClose }: { word: string; language: Language; initialTab?: 'wiktionary' | 'linguee'; onClose: () => void }) {
+  const [tab, setTab] = useState<'wiktionary' | 'linguee'>(initialTab)
+  useEffect(() => {
+    setTab(initialTab)
+  }, [initialTab, word])
   const src = tab === 'wiktionary' ? wikiUrl(language, word) : lingueeUrl(language, word)
   return <div className="wiki-panel" onClick={(event) => event.stopPropagation()}>
     <div className="wiki-head">
@@ -823,8 +964,17 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     </div>
 
     <div className="wp-footer">
-      <button className={saved ? 'saved-deck' : 'primary'} disabled={!word.trim()} onClick={submit}>{saved ? <><Check size={14} /> {t.savedWord.replace('✓', '').trim()}</> : <><Plus size={14} /> {t.saveWord}</>}</button>
-      {word && <span className="wp-footer-word"><em>{word}</em></span>}
+      <button
+        type="button"
+        className={`wp-save-btn-full ${saved ? 'saved-deck' : 'primary'}`}
+        disabled={!word.trim()}
+        onClick={submit}
+      >
+        <span className="wp-save-btn-label">
+          {saved ? <><Check size={14} /> {t.savedWord.replace('✓', '').trim()}</> : <><Plus size={14} /> {t.saveWord}</>}
+        </span>
+        {word && <em className="wp-save-btn-word">{word}</em>}
+      </button>
     </div>
   </>
 
@@ -857,11 +1007,13 @@ function TagInput({ allTags, existingTags, onAdd, onRemove, label }: {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const query = input.trim().toLowerCase()
-  const match = query
+  const match = (query && allTags.length > 0)
     ? allTags.find((t) => t.toLowerCase().startsWith(query) && !existingTags.some((ex) => ex.toLowerCase() === t.toLowerCase()))
     : undefined
 
-  const ghostSuffix = match && input ? match.slice(input.length) : ''
+  const ghostSuffix = (match && input && match.toLowerCase().startsWith(input.toLowerCase()))
+    ? match.slice(input.length)
+    : ''
 
   const handleCommit = (tagToCommit?: string) => {
     const finalTag = tagToCommit || match || input.trim()
@@ -1227,7 +1379,7 @@ function ChapterTitle({ title, hint, onRename }: { title: string; hint: string; 
     : <button className="chapter-title" title={hint} onClick={(event) => { event.stopPropagation(); setEditing(true) }}>{title}</button>
 }
 
-function Paragraph({ text, fontSize, language, state, markMode, green, onWordClick, onLetterClick }: {
+function Paragraph({ text, fontSize, language, state, markMode, green, onWordClick, onWordContextMenu, onLetterClick }: {
   text: string
   fontSize: number
   language: Language
@@ -1235,6 +1387,7 @@ function Paragraph({ text, fontSize, language, state, markMode, green, onWordCli
   markMode: MarkMode
   green?: Set<number>
   onWordClick: (raw: string, target: HTMLElement) => void
+  onWordContextMenu?: (raw: string, event: React.MouseEvent) => void
   onLetterClick: (raw: string, letterIndex: number) => void
 }) {
   let offset = 0
@@ -1247,13 +1400,13 @@ function Paragraph({ text, fontSize, language, state, markMode, green, onWordCli
       const wordOffset = offset
       offset += part.length
       return (
-        <Word key={`${part}-${index}`} raw={part} language={language} state={state} markMode={markMode} green={green} offset={wordOffset} onClick={onWordClick} onLetterClick={onLetterClick} />
+        <Word key={`${part}-${index}`} raw={part} language={language} state={state} markMode={markMode} green={green} offset={wordOffset} onClick={onWordClick} onContextMenu={onWordContextMenu} onLetterClick={onLetterClick} />
       )
     })}
   </p>
 }
 
-function Word({ raw, language, state, markMode, green, offset = 0, onClick, onLetterClick }: {
+function Word({ raw, language, state, markMode, green, offset = 0, onClick, onContextMenu, onLetterClick }: {
   raw: string
   language: Language
   state: AppState
@@ -1261,6 +1414,7 @@ function Word({ raw, language, state, markMode, green, offset = 0, onClick, onLe
   green?: Set<number>
   offset?: number
   onClick: (raw: string, target: HTMLElement) => void
+  onContextMenu?: (raw: string, event: React.MouseEvent) => void
   onLetterClick: (raw: string, letterIndex: number) => void
 }) {
   const normalized = normalizeWord(raw)
@@ -1291,7 +1445,11 @@ function Word({ raw, language, state, markMode, green, offset = 0, onClick, onLe
     ? ''
     : savedWord.knowledge ? `word-known kl-${savedWord.knowledge}` : 'word-known'
 
-  if (markMode === 'silent') return <span className={`word as-span ${markClass} ${deckClass}`} style={style}>{spans}</span>
+  if (markMode === 'silent') {
+    return <span className={`word as-span ${markClass} ${deckClass}`} style={style}
+      onContextMenu={(event) => { if (onContextMenu) { onContextMenu(raw, event) } }}>{spans}</span>
+  }
   return <button className={`word ${markClass} ${deckClass}`} style={style}
-    onClick={(event) => { event.stopPropagation(); onClick(raw, event.currentTarget) }}>{spans}</button>
+    onClick={(event) => { event.stopPropagation(); onClick(raw, event.currentTarget) }}
+    onContextMenu={(event) => { if (onContextMenu) { onContextMenu(raw, event) } }}>{spans}</button>
 }

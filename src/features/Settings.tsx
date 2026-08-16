@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { UI_LANGUAGES } from '../i18n'
 import { listVoices } from '../ai'
-import { addCustomTag, addMarking, DEFAULT_MARKINGS, deleteCustomTag, deleteMarking, knownTags, renameCustomTag, renameMarking, reorderMarkings, setMarkingColor } from '../store'
+import { addCustomTag, addMarking, DEFAULT_MARKINGS, DEFAULT_TEACHER_SHORTCUTS, deleteCustomTag, deleteMarking, knownTags, renameCustomTag, renameMarking, reorderMarkings, setMarkingColor } from '../store'
 import {
   User,
   BookOpen,
@@ -19,6 +19,8 @@ import {
   Trash2,
   X,
   Sparkles,
+  Keyboard,
+  RotateCcw,
 } from 'lucide-react'
 
 type SettingsProps = {
@@ -29,7 +31,22 @@ type SettingsProps = {
   onResetData: () => void
 }
 
-type Tab = 'profile' | 'reading' | 'markings' | 'tags' | 'connections' | 'data'
+type Tab = 'profile' | 'reading' | 'markings' | 'shortcuts' | 'tags' | 'connections' | 'data'
+
+const TEACHER_TOOLS_INFO = [
+  { id: 'select', label: 'Sélection', desc: 'Sélectionner et déplacer des formes ou des notes' },
+  { id: 'pen', label: 'Stylo', desc: 'Dessin libre et écriture manuscrite' },
+  { id: 'highlighter', label: 'Surligneur', desc: 'Surlignage de mots et passages' },
+  { id: 'text', label: 'Texte', desc: 'Ajout et édition de notes textuelles' },
+  { id: 'edit', label: 'Édition', desc: 'Modification directe du texte d\'origine' },
+  { id: 'rect', label: 'Rectangle', desc: 'Tracé de cadres et rectangles' },
+  { id: 'ellipse', label: 'Ellipse / Cercle', desc: 'Tracé de cercles et ovales' },
+  { id: 'line', label: 'Ligne', desc: 'Tracé de lignes droites' },
+  { id: 'arrow', label: 'Flèche', desc: 'Flèche directionnelle' },
+  { id: 'liaison', label: 'Liaison', desc: 'Courbe de liaison entre lettres' },
+  { id: 'gray', label: 'Griser lettre', desc: 'Marquage discret des lettres muettes' },
+  { id: 'eraser', label: 'Gomme', desc: 'Suppression continue par contact' },
+]
 
 const TTS_PROVIDERS: { id: UserSettings['api']['ttsProvider']; name: string; detail: string }[] = [
   { id: 'google', name: 'Voix naturelle (gratuit)', detail: 'Voix Google de bonne qualité, sans clé ni compte. Recommandé pour démarrer.' },
@@ -54,8 +71,36 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
   const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
   const [editingMarkValue, setEditingMarkValue] = useState('')
 
+  const [recordingTool, setRecordingTool] = useState<string | null>(null)
+
   const allTags = knownTags(state, draft.learningLanguage)
   const allMarkings = state.markings && state.markings.length > 0 ? state.markings : DEFAULT_MARKINGS
+  const currentShortcuts = draft.teacherShortcuts ?? DEFAULT_TEACHER_SHORTCUTS
+
+  useEffect(() => {
+    if (!recordingTool) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.key === 'Escape') {
+        setRecordingTool(null)
+        return
+      }
+      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const key = e.key.toLowerCase()
+        const updated = { ...currentShortcuts, [recordingTool]: key }
+        update('teacherShortcuts', updated)
+        setRecordingTool(null)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [recordingTool, currentShortcuts])
+
+  const handleResetShortcuts = () => {
+    update('teacherShortcuts', DEFAULT_TEACHER_SHORTCUTS)
+    setRecordingTool(null)
+  }
 
   const handleAddTag = () => {
     const cleaned = newTag.trim()
@@ -117,6 +162,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
     { id: 'profile', icon: <User size={16} />, label: 'Profil' },
     { id: 'reading', icon: <BookOpen size={16} />, label: 'Lecture' },
     { id: 'markings', icon: <Palette size={16} />, label: 'Marquages' },
+    { id: 'shortcuts', icon: <Keyboard size={16} />, label: 'Raccourcis' },
     { id: 'tags', icon: <Tag size={16} />, label: 'Tags' },
     { id: 'connections', icon: <KeyRound size={16} />, label: 'Connexions' },
     { id: 'data', icon: <Database size={16} />, label: 'Données' },
@@ -277,6 +323,51 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                   </div>
                 )
               })}
+            </div>
+          </div>
+        </>}
+
+        {tab === 'shortcuts' && <>
+          <SettingHeading title="Raccourcis clavier" detail="Personnalise les raccourcis des outils du Teacher Mode pour annoter vos textes encore plus rapidement." />
+          <div className="shortcuts-mgmt-section">
+            <div className="shortcuts-top-bar">
+              <p className="shortcuts-hint">Clique sur la touche d’un outil pour lui attribuer une nouvelle lettre de raccourci.</p>
+              <button type="button" className="outline" onClick={handleResetShortcuts} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <RotateCcw size={13} /> Réinitialiser par défaut
+              </button>
+            </div>
+
+            <div className="shortcuts-grid">
+              {TEACHER_TOOLS_INFO.map((toolInfo) => {
+                const isRecording = recordingTool === toolInfo.id
+                const key = (currentShortcuts[toolInfo.id] ?? DEFAULT_TEACHER_SHORTCUTS[toolInfo.id] ?? '').toUpperCase()
+                return (
+                  <div key={toolInfo.id} className={`shortcut-card ${isRecording ? 'recording' : ''}`}>
+                    <div className="shortcut-card-info">
+                      <strong>{toolInfo.label}</strong>
+                      <small>{toolInfo.desc}</small>
+                    </div>
+                    <button
+                      type="button"
+                      className={`shortcut-key-btn ${isRecording ? 'pulse' : ''}`}
+                      onClick={() => setRecordingTool(isRecording ? null : toolInfo.id)}
+                      title={isRecording ? 'Appuie sur une touche du clavier (Échap pour annuler)' : 'Modifier le raccourci'}
+                    >
+                      {isRecording ? <span className="recording-prompt">Touche...</span> : <kbd>{key || '—'}</kbd>}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="shortcuts-docs-card">
+              <h3>Raccourcis globaux de lecture</h3>
+              <div className="docs-shortcuts-list">
+                <div className="docs-shortcut-row"><kbd>W</kbd><span>Activer / Désactiver le dictionnaire Wiktionary & Linguee</span></div>
+                <div className="docs-shortcut-row"><kbd>Suppr</kbd> / <kbd>Backspace</kbd><span>Supprimer l’annotation ou la note sélectionnée (Teacher Mode)</span></div>
+                <div className="docs-shortcut-row"><kbd>⌘ Z</kbd> / <kbd>Ctrl Z</kbd><span>Annuler la dernière annotation</span></div>
+                <div className="docs-shortcut-row"><kbd>Échap</kbd><span>Quitter le Teacher Mode / Fermer la saisie en cours</span></div>
+              </div>
             </div>
           </div>
         </>}

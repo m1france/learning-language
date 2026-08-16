@@ -10,6 +10,21 @@ export const DEFAULT_MARKINGS: MarkingDefinition[] = [
   { id: 'expression', label: 'Expression', color: '#7c3aed' },
 ]
 
+export const DEFAULT_TEACHER_SHORTCUTS: Record<string, string> = {
+  select: 'v',
+  pen: 'p',
+  highlighter: 'h',
+  text: 't',
+  edit: 'e',
+  rect: 'r',
+  ellipse: 'c',
+  line: 'l',
+  arrow: 'a',
+  liaison: 'b',
+  gray: 'g',
+  eraser: 'x',
+}
+
 export const defaultSettings: UserSettings = {
   name: '',
   learningLanguage: 'en',
@@ -21,6 +36,7 @@ export const defaultSettings: UserSettings = {
   showGrammar: true,
   readerToolbarStyle: 'liquid',
   markColors: {},
+  teacherShortcuts: DEFAULT_TEACHER_SHORTCUTS,
   api: {
     openRouterKey: '',
     openRouterModel: 'meta-llama/llama-3.3-70b-instruct:free',
@@ -80,6 +96,7 @@ export const loadState = (): AppState | null => {
         uiLanguage: parsed.settings.uiLanguage ?? (parsed.settings.learningLanguage === 'en' ? 'fr' : 'en'),
         readerToolbarStyle: parsed.settings.readerToolbarStyle ?? 'liquid',
         markColors: parsed.settings.markColors ?? {},
+        teacherShortcuts: { ...DEFAULT_TEACHER_SHORTCUTS, ...(parsed.settings.teacherShortcuts ?? {}) },
         api: { ...defaultSettings.api, ...api },
       },
       progress: parsed.progress ?? {},

@@ -157,6 +157,8 @@ export type UserSettings = {
   readerToolbarStyle?: ReaderToolbarStyle
   /** Default color per grammar mark type, overridden when the user picks one. */
   markColors: Partial<Record<string, string>>
+  /** Custom keyboard shortcuts for Teacher Mode tools (tool id -> key). */
+  teacherShortcuts?: Record<string, string>
   api: ApiSettings
 }
 

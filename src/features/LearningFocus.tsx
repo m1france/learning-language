@@ -237,9 +237,79 @@ function serializeEditor(root: HTMLElement, baseColor: string): TextRun[] {
   return runs
 }
 
-export function LearningFocus({ resources, initialResourceId, onUpdateResource, onClose }: {
+const DEFAULT_SHORTCUTS: Record<Tool, string> = {
+  select: 'v',
+  pen: 'p',
+  highlighter: 'h',
+  text: 't',
+  edit: 'e',
+  rect: 'r',
+  ellipse: 'c',
+  line: 'l',
+  arrow: 'a',
+  liaison: 'b',
+  gray: 'g',
+  eraser: 'x',
+}
+
+const distToSegment = (p: Point, v: Point, w: Point) => {
+  const l2 = (v.x - w.x) ** 2 + (v.y - w.y) ** 2
+  if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y)
+  const t = Math.max(0, Math.min(1, ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2))
+  return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)))
+}
+
+const distToStroke = (p: Point, stroke: Stroke) => {
+  if (!stroke.points || stroke.points.length === 0) return Infinity
+  if (stroke.points.length === 1) return Math.hypot(p.x - stroke.points[0].x, p.y - stroke.points[0].y)
+  if (stroke.kind === 'pen' || stroke.kind === 'highlighter') {
+    let minD = Infinity
+    for (let i = 0; i < stroke.points.length - 1; i++) {
+      const d = distToSegment(p, stroke.points[i], stroke.points[i + 1])
+      if (d < minD) minD = d
+      if (minD <= 24) return minD
+    }
+    return minD
+  }
+  if (stroke.kind === 'line' || stroke.kind === 'arrow') {
+    const [a, b] = stroke.points
+    return distToSegment(p, a, b ?? a)
+  }
+  if (stroke.kind === 'rect') {
+    const [a, b] = stroke.points
+    const p2 = b ?? a
+    const x1 = Math.min(a.x, p2.x), x2 = Math.max(a.x, p2.x)
+    const y1 = Math.min(a.y, p2.y), y2 = Math.max(a.y, p2.y)
+    const d1 = distToSegment(p, { x: x1, y: y1 }, { x: x2, y: y1 })
+    const d2 = distToSegment(p, { x: x2, y: y1 }, { x: x2, y: y2 })
+    const d3 = distToSegment(p, { x: x2, y: y2 }, { x: x1, y: y2 })
+    const d4 = distToSegment(p, { x: x1, y: y2 }, { x: x1, y: y1 })
+    return Math.min(d1, d2, d3, d4)
+  }
+  if (stroke.kind === 'ellipse') {
+    const [a, b] = stroke.points
+    const p2 = b ?? a
+    const cx = (a.x + p2.x) / 2, cy = (a.y + p2.y) / 2
+    const rx = Math.abs(p2.x - a.x) / 2, ry = Math.abs(p2.y - a.y) / 2
+    if (rx === 0 || ry === 0) return Math.hypot(p.x - cx, p.y - cy)
+    let minD = Infinity
+    for (let i = 0; i < 16; i++) {
+      const ang = (i * Math.PI * 2) / 16
+      const px = cx + rx * Math.cos(ang)
+      const py = cy + ry * Math.sin(ang)
+      const d = Math.hypot(p.x - px, p.y - py)
+      if (d < minD) minD = d
+      if (minD <= 24) return minD
+    }
+    return minD
+  }
+  return Infinity
+}
+
+export function LearningFocus({ resources, initialResourceId, shortcuts, onUpdateResource, onClose }: {
   resources: Resource[]
   initialResourceId: string
+  shortcuts?: Record<string, string>
   onUpdateResource: (resource: Resource) => void
   onClose: () => void
 }) {
@@ -259,9 +329,11 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
   const [selectedNote, setSelectedNote] = useState<string | null>(null)
   const [selectedStroke, setSelectedStroke] = useState<string | null>(null)
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [eraserPos, setEraserPos] = useState<Point | null>(null)
 
   const boardRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef<Stroke | null>(null)
+  const isErasingRef = useRef(false)
   const dragNoteRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null)
   const noteResizeRef = useRef<{ id: string; opposite: Point; startDist: number; origSize: number } | null>(null)
   const strokeResizeRef = useRef<{ id: string; opposite: Point } | null>(null)
@@ -276,6 +348,26 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
   const pageKey = `${resource.id}#${safePage}`
   const current = annotations[pageKey] ?? emptyPage()
   const zoom = Math.round((fontSize / BASE_FONT) * 100)
+
+  const effectiveShortcuts = useMemo<Record<Tool, string>>(() => {
+    const res = { ...DEFAULT_SHORTCUTS }
+    if (shortcuts) {
+      Object.entries(shortcuts).forEach(([tId, k]) => {
+        if (k && tId in res) {
+          res[tId as Tool] = k.toLowerCase()
+        }
+      })
+    }
+    return res
+  }, [shortcuts])
+
+  const keyToTool = useMemo(() => {
+    const map: Record<string, Tool> = {}
+    Object.entries(effectiveShortcuts).forEach(([tId, k]) => {
+      if (k) map[k.toLowerCase()] = tId as Tool
+    })
+    return map
+  }, [effectiveShortcuts])
 
   // caractères modifiés (vert) par paragraphe, calculés contre le texte d'origine
   const modifiedChars = useMemo(() => {
@@ -404,7 +496,7 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
     setPageIndex(Math.max(0, Math.min(pages.length - 1, next)))
   }
 
-  // Échap : termine la saisie en cours, sinon quitte. Cmd/Ctrl+Z = annuler.
+  // Échap : termine la saisie en cours, sinon quitte. Delete/Backspace : supprime l'élément sélectionné. Cmd/Ctrl+Z = annuler. Raccourcis outils.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -413,16 +505,58 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
         return
       }
       const target = event.target as HTMLElement | null
-      const typing = target?.closest('input, textarea, [contenteditable="true"]')
+      const typing = Boolean(target?.closest('input, textarea, [contenteditable="true"]'))
+
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && !typing) {
         event.preventDefault()
         undo()
+        return
+      }
+
+      // Touche Delete / Backspace sur élément sélectionné
+      if ((event.key === 'Delete' || event.key === 'Backspace') && !typing) {
+        if (selectedNote) {
+          event.preventDefault()
+          const idToDelete = selectedNote
+          setSelectedNote(null)
+          updatePage((p) => ({
+            ...p,
+            texts: p.texts.filter((t) => t.id !== idToDelete),
+            order: p.order.filter((a) => a.id !== idToDelete),
+          }))
+          return
+        }
+        if (selectedStroke) {
+          event.preventDefault()
+          const idToDelete = selectedStroke
+          setSelectedStroke(null)
+          updatePage((p) => ({
+            ...p,
+            strokes: p.strokes.filter((s) => s.id !== idToDelete),
+            order: p.order.filter((a) => a.id !== idToDelete),
+          }))
+          return
+        }
+      }
+
+      // Raccourcis clavier pour changer d'outil
+      if (!typing && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        const k = event.key.toLowerCase()
+        const targetTool = keyToTool[k]
+        if (targetTool) {
+          event.preventDefault()
+          commitNote()
+          setTool(targetTool)
+          setPendingLiaison(null)
+          setSelectedNote(null)
+          setSelectedStroke(null)
+        }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose, pageKey, annotations, draftNote])
+  }, [onClose, pageKey, annotations, draftNote, selectedNote, selectedStroke, keyToTool])
 
   const boardPoint = (event: { clientX: number; clientY: number }): Point => {
     const rect = boardRef.current?.getBoundingClientRect()
@@ -432,16 +566,60 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
   const isDrawTool = tool === 'pen' || tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'arrow'
   const isInteractive = isDrawTool || tool === 'eraser'
 
-  // --- dessin libre et formes -------------------------------------------------
+  const eraseAtPoint = (point: Point) => {
+    const ERASER_RADIUS = 26
+    updatePage((p) => {
+      const removedStrokes = p.strokes.filter((s) => distToStroke(point, s) <= ERASER_RADIUS).map((s) => s.id)
+      const removedLiaisons = p.liaisons.filter((l) => {
+        const d1 = Math.hypot(l.x1 - point.x, l.y - point.y)
+        const d2 = Math.hypot(l.x2 - point.x, l.y - point.y)
+        const dMid = Math.hypot((l.x1 + l.x2) / 2 - point.x, l.y + 11 - point.y)
+        return Math.min(d1, d2, dMid) <= ERASER_RADIUS
+      }).map((l) => l.id)
+      const removedTexts = p.texts.filter((t) => Math.hypot(t.x - point.x, t.y - point.y) <= 55).map((t) => t.id)
+      if (!removedStrokes.length && !removedLiaisons.length && !removedTexts.length) return p
+      const removed = new Set([...removedStrokes, ...removedLiaisons, ...removedTexts])
+      return {
+        ...p,
+        strokes: p.strokes.filter((s) => !removed.has(s.id)),
+        liaisons: p.liaisons.filter((l) => !removed.has(l.id)),
+        texts: p.texts.filter((t) => !removed.has(t.id)),
+        order: p.order.filter((action) => !removed.has(action.id)),
+      }
+    })
+  }
+
+  // --- dessin libre, formes et gomme continue ----------------------------------
   const onPointerDown = (event: React.PointerEvent) => {
-    if (!isDrawTool) return
     const point = boardPoint(event)
+    if (tool === 'eraser') {
+      isErasingRef.current = true
+      setEraserPos(point)
+      eraseAtPoint(point)
+      ;(event.target as Element).setPointerCapture?.(event.pointerId)
+      return
+    }
+    if (!isDrawTool) return
     drawingRef.current = { id: uid(), kind: tool, color, width, points: [point] }
     ;(event.target as Element).setPointerCapture?.(event.pointerId)
     forceRedraw((n) => n + 1)
   }
 
   const onPointerMove = (event: React.PointerEvent) => {
+    const point = boardPoint(event)
+    if (tool === 'eraser') {
+      setEraserPos(point)
+      if (isErasingRef.current) {
+        const native = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] }
+        const samples = native.getCoalescedEvents?.() ?? []
+        if (samples.length) {
+          samples.forEach((s) => eraseAtPoint(boardPoint(s)))
+        } else {
+          eraseAtPoint(point)
+        }
+      }
+      return
+    }
     const draft = drawingRef.current
     if (!draft) return
     // échantillonnage fin (trackpad) : récupère tous les points coalescés
@@ -452,23 +630,27 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
       if (samples.length) samples.forEach((sample) => draft.points.push(boardPoint(sample)))
       else draft.points.push(boardPoint(event))
     } else {
-      let point = boardPoint(last ?? event)
+      let p = boardPoint(last ?? event)
       if (draft.kind === 'line' && event.shiftKey) {
         // Shift : aimantation par pas de 15°
         const start = draft.points[0]
-        const dx = point.x - start.x
-        const dy = point.y - start.y
+        const dx = p.x - start.x
+        const dy = p.y - start.y
         const length = Math.hypot(dx, dy)
         const snap = Math.PI / 12
         const angle = Math.round(Math.atan2(dy, dx) / snap) * snap
-        point = { x: start.x + length * Math.cos(angle), y: start.y + length * Math.sin(angle) }
+        p = { x: start.x + length * Math.cos(angle), y: start.y + length * Math.sin(angle) }
       }
-      draft.points = [draft.points[0], point]
+      draft.points = [draft.points[0], p]
     }
     forceRedraw((n) => n + 1)
   }
 
   const onPointerUp = () => {
+    if (tool === 'eraser') {
+      isErasingRef.current = false
+      return
+    }
     const draft = drawingRef.current
     drawingRef.current = null
     if (!draft) { forceRedraw((n) => n + 1); return }
@@ -481,22 +663,9 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
     updatePage((p) => ({ ...p, strokes: [...p.strokes, draft], order: [...p.order, { kind: 'stroke', id: draft.id }] }))
   }
 
-  const eraseAt = (event: React.MouseEvent) => {
-    const point = boardPoint(event)
-    const near = (a: Point) => Math.hypot(a.x - point.x, a.y - point.y) < 24
-    updatePage((p) => {
-      const removedStrokes = p.strokes.filter((s) => s.points.some(near)).map((s) => s.id)
-      const removedLiaisons = p.liaisons.filter((l) => Math.hypot((l.x1 + l.x2) / 2 - point.x, l.y - 8 - point.y) <= 30).map((l) => l.id)
-      const removedTexts = p.texts.filter((t) => Math.hypot(t.x - point.x, t.y - point.y) < 60).map((t) => t.id)
-      const removed = new Set([...removedStrokes, ...removedLiaisons, ...removedTexts])
-      return {
-        ...p,
-        strokes: p.strokes.filter((s) => !removed.has(s.id)),
-        liaisons: p.liaisons.filter((l) => !removed.has(l.id)),
-        texts: p.texts.filter((t) => !removed.has(t.id)),
-        order: p.order.filter((action) => !removed.has(action.id)),
-      }
-    })
+  const onPointerLeave = () => {
+    isErasingRef.current = false
+    setEraserPos(null)
   }
 
   // --- surligneur : clic sur un mot, Shift+clic = plage de mots ----------------
@@ -818,10 +987,13 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
     </g>
   })()
 
+  const eraserShortcut = (effectiveShortcuts.eraser || '').toUpperCase()
+  const eraserTitle = eraserShortcut ? `Gomme (${eraserShortcut})` : 'Gomme'
+
   return <div className="focus-overlay">
-    <div className="focus-stage">
-      <div className="focus-board" ref={boardRef} onClick={onBoardClick}>
-        <div className="focus-text-col">
+    <div className={`focus-stage ${tool !== 'edit' ? 'no-text-select' : ''}`}>
+      <div className={`focus-board ${tool !== 'edit' ? 'no-text-select' : ''}`} ref={boardRef} onClick={onBoardClick}>
+        <div className={`focus-text-col ${tool !== 'edit' ? 'no-text-select' : ''}`}>
           {page.map((paragraph) => <div key={paragraph.key}>
             {paragraph.isChapterStart && <h3 className="focus-chapter">{paragraph.chapterTitle}</h3>}
             {tool === 'edit' ? (
@@ -877,11 +1049,11 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
           initialRuns={draftNote.id ? (current.texts.find((note) => note.id === draftNote.id)?.runs ?? []) : []}
           editorRef={editorRef} onCancel={commitNote} />}
 
-        <svg className={`focus-ink ${isInteractive ? 'drawing' : ''}`}
-          onPointerDown={isDrawTool ? onPointerDown : undefined}
-          onPointerMove={isDrawTool ? onPointerMove : undefined}
-          onPointerUp={isDrawTool ? onPointerUp : undefined}
-          onClick={tool === 'eraser' ? eraseAt : undefined}>
+        <svg className={`focus-ink ${isInteractive ? 'drawing' : ''} ${tool === 'eraser' ? 'eraser-active' : ''}`}
+          onPointerDown={isInteractive ? onPointerDown : undefined}
+          onPointerMove={isInteractive ? onPointerMove : undefined}
+          onPointerUp={isInteractive ? onPointerUp : undefined}
+          onPointerLeave={isInteractive ? onPointerLeave : undefined}>
           {current.strokes.map((stroke) => <StrokeShape stroke={stroke} key={stroke.id} />)}
           {draft && <StrokeShape stroke={draft} draft />}
           {current.liaisons.map((liaison) => {
@@ -891,6 +1063,12 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
           })}
           {pendingLiaison && <circle cx={pendingLiaison.x} cy={pendingLiaison.y} r="5" fill={color} />}
           {selectionOverlay}
+          {tool === 'eraser' && eraserPos && (
+            <g className="focus-eraser-indicator" pointerEvents="none">
+              <circle cx={eraserPos.x} cy={eraserPos.y} r={26} fill="rgba(239, 68, 68, 0.14)" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4 3" />
+              <circle cx={eraserPos.x} cy={eraserPos.y} r={3} fill="#ef4444" />
+            </g>
+          )}
         </svg>
       </div>
     </div>
@@ -913,7 +1091,7 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
     {/* annuler / gomme / effacer — bord gauche, centré verticalement */}
     <div className="focus-side-pill left glass">
       <button title="Annuler (⌘Z)" onClick={undo} aria-label="Annuler"><Undo2 size={16} /></button>
-      <button title="Gomme" className={tool === 'eraser' ? 'active' : ''}
+      <button title={eraserTitle} className={tool === 'eraser' ? 'active' : ''}
         onClick={() => { commitNote(); setTool(tool === 'eraser' ? 'select' : 'eraser'); setPendingLiaison(null); setSelectedNote(null); setSelectedStroke(null) }} aria-label="Gomme"><Eraser size={16} /></button>
       <button title="Nettoyer la page" onClick={clearPage} aria-label="Nettoyer la page"><Trash2 size={16} /></button>
     </div>
@@ -938,13 +1116,19 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
       </div>
       : <button className="focus-tools-toggle glass" title="Couleurs et épaisseur" onClick={() => setToolsOpen(true)} aria-label="Ouvrir les outils"><ChevronUp size={14} /></button>)}
 
-    {/* barre d'outils — icônes seules */}
+    {/* barre d'outils — icônes seules avec raccourcis dans les infobulles */}
     <footer className="focus-toolbar glass">
-      {TOOLS.map((item) => <button key={item.id} title={item.label}
-        className={tool === item.id ? 'ftool active' : 'ftool'}
-        onClick={() => { commitNote(); setTool(item.id); setPendingLiaison(null); setSelectedNote(null); setSelectedStroke(null) }}>
-        <b>{item.icon}</b>
-      </button>)}
+      {TOOLS.map((item) => {
+        const shortcutKey = (effectiveShortcuts[item.id] || '').toUpperCase()
+        const titleWithShortcut = shortcutKey ? `${item.label} (${shortcutKey})` : item.label
+        return (
+          <button key={item.id} title={titleWithShortcut}
+            className={tool === item.id ? 'ftool active' : 'ftool'}
+            onClick={() => { commitNote(); setTool(item.id); setPendingLiaison(null); setSelectedNote(null); setSelectedStroke(null) }}>
+            <b>{item.icon}</b>
+          </button>
+        )
+      })}
     </footer>
   </div>
 }
