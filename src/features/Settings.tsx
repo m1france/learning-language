@@ -1,8 +1,25 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { UI_LANGUAGES } from '../i18n'
 import { listVoices } from '../ai'
 import { addCustomTag, addMarking, DEFAULT_MARKINGS, deleteCustomTag, deleteMarking, knownTags, renameCustomTag, renameMarking, reorderMarkings, setMarkingColor } from '../store'
+import {
+  User,
+  BookOpen,
+  Palette,
+  Tag,
+  KeyRound,
+  Database,
+  Check,
+  ArrowRight,
+  Plus,
+  ChevronUp,
+  ChevronDown,
+  Pencil,
+  Trash2,
+  X,
+  Sparkles,
+} from 'lucide-react'
 
 type SettingsProps = {
   settings: UserSettings
@@ -96,19 +113,19 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
     return () => { if (typeof speechSynthesis !== 'undefined') speechSynthesis.onvoiceschanged = null }
   }, [draft.learningLanguage])
 
-  const tabs: { id: Tab; icon: string; label: string }[] = [
-    { id: 'profile', icon: '◌', label: 'Profil' },
-    { id: 'reading', icon: '◫', label: 'Lecture' },
-    { id: 'markings', icon: '🎨', label: 'Marquages' },
-    { id: 'tags', icon: '🏷', label: 'Tags' },
-    { id: 'connections', icon: '⌁', label: 'Connexions' },
-    { id: 'data', icon: '◐', label: 'Données' },
+  const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
+    { id: 'profile', icon: <User size={16} />, label: 'Profil' },
+    { id: 'reading', icon: <BookOpen size={16} />, label: 'Lecture' },
+    { id: 'markings', icon: <Palette size={16} />, label: 'Marquages' },
+    { id: 'tags', icon: <Tag size={16} />, label: 'Tags' },
+    { id: 'connections', icon: <KeyRound size={16} />, label: 'Connexions' },
+    { id: 'data', icon: <Database size={16} />, label: 'Données' },
   ]
 
   return <div className="page settings-page">
     <header className="page-header settings-header">
       <div><p className="eyebrow">TON ESPACE</p><h1>Paramètres</h1><p className="subhead">Tout ce qui est privé reste sur cet appareil tant que tu ne connectes pas de service.</p></div>
-      <button className="primary" onClick={save}>{saved ? '✓ Enregistré' : 'Enregistrer'} <span>→</span></button>
+      <button className="primary" onClick={save}>{saved ? <><Check size={15} /> Enregistré</> : 'Enregistrer'} <ArrowRight size={15} /></button>
     </header>
     <div className="settings-layout">
       <nav className="settings-tabs" aria-label="Sections">
@@ -123,7 +140,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
             <label>Langue apprise<select value={draft.learningLanguage} onChange={(event) => update('learningLanguage', event.target.value as Language)}><option value="en">English (américain)</option><option value="fr">Français</option></select></label>
             <label>Apparence<select value={draft.theme} onChange={(event) => update('theme', event.target.value as UserSettings['theme'])}><option value="light">Clair chaleureux</option><option value="dark">Sombre calme</option></select></label>
           </div>
-          <aside className="settings-tip"><span>🕊</span><p>La langue de l’interface traduit les menus, boutons et instructions — jamais le contenu de tes ressources importées.</p></aside>
+          <aside className="settings-tip"><span><Sparkles size={16} /></span><p>La langue de l’interface traduit les menus, boutons et instructions — jamais le contenu de tes ressources importées.</p></aside>
         </>}
 
         {tab === 'reading' && <>
@@ -162,7 +179,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                 title="Choisir la couleur"
               />
               <button className="primary" disabled={!newMarkingLabel.trim()} onClick={handleAddMarking}>
-                ＋ Ajouter
+                <Plus size={14} /> Ajouter
               </button>
             </div>
 
@@ -181,7 +198,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                           disabled={index === 0}
                           onClick={() => onChangeState(reorderMarkings(state, index, index - 1))}
                         >
-                          ▲
+                          <ChevronUp size={13} />
                         </button>
                         <button
                           type="button"
@@ -190,7 +207,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                           disabled={index === allMarkings.length - 1}
                           onClick={() => onChangeState(reorderMarkings(state, index, index + 1))}
                         >
-                          ▼
+                          <ChevronDown size={13} />
                         </button>
                       </div>
 
@@ -226,8 +243,8 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                               if (e.key === 'Escape') setEditingMarkId(null)
                             }}
                           />
-                          <button className="tag-save-btn" title="Valider" onClick={() => handleSaveRenameMarking(marking.id)}>✓</button>
-                          <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingMarkId(null)}>×</button>
+                          <button className="tag-save-btn" title="Valider" onClick={() => handleSaveRenameMarking(marking.id)}><Check size={13} /></button>
+                          <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingMarkId(null)}><X size={13} /></button>
                         </div>
                       ) : (
                         <span className="marking-card-label">{marking.label}</span>
@@ -245,7 +262,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                             setEditingMarkValue(marking.label)
                           }}
                         >
-                          ✎
+                          <Pencil size={13} />
                         </button>
                         <button
                           className="tag-icon-btn delete"
@@ -253,7 +270,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                           aria-label="Supprimer le marquage"
                           onClick={() => onChangeState(deleteMarking(state, marking.id))}
                         >
-                          ×
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     )}
@@ -276,7 +293,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                 onKeyDown={(event) => { if (event.key === 'Enter') handleAddTag() }}
               />
               <button className="primary" disabled={!newTag.trim()} onClick={handleAddTag}>
-                ＋ Ajouter
+                <Plus size={14} /> Ajouter
               </button>
             </div>
 
@@ -303,8 +320,8 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                               if (event.key === 'Escape') setEditingTag(null)
                             }}
                           />
-                          <button className="tag-save-btn" title="Valider" onClick={() => handleSaveRename(tag)}>✓</button>
-                          <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingTag(null)}>×</button>
+                          <button className="tag-save-btn" title="Valider" onClick={() => handleSaveRename(tag)}><Check size={13} /></button>
+                          <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingTag(null)}><X size={13} /></button>
                         </div>
                       ) : (
                         <div className="tag-card-content">
@@ -320,7 +337,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                             aria-label="Renommer le tag"
                             onClick={() => handleStartRename(tag)}
                           >
-                            ✎
+                            <Pencil size={13} />
                           </button>
                           <button
                             className="tag-icon-btn delete"
@@ -328,7 +345,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                             aria-label="Supprimer le tag"
                             onClick={() => handleDeleteTag(tag)}
                           >
-                            ×
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       )}

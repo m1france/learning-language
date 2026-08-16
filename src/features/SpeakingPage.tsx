@@ -1,8 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { Language } from '../domain'
 import { guidedTexts, tongueTwisters } from '../seed'
 import { speak, stopSpeaking } from '../ai'
 import type { ApiSettings } from '../domain'
+import {
+  Sparkles,
+  BookOpen,
+  Activity,
+  Zap,
+  Play,
+  Pause,
+  Camera,
+  CameraOff,
+  Trash2,
+  Mic,
+  MicOff,
+  ArrowRight,
+  RotateCcw,
+  X,
+  Check,
+} from 'lucide-react'
 
 /**
  * Parler — studio vocal.
@@ -33,7 +50,7 @@ const L = {
     guided: 'Texte guidé', guidedHint: 'Un prompteur défile en bas de l’écran.',
     twister: 'Virelangues', twisterHint: 'Un classique, mais avec le chronomètre.',
     challenge: 'Défi impro', challengeHint: 'Une carte au hasard, 30 secondes chrono.',
-    record: '● Enregistrer', stop: '■ Arrêter', camera: 'Caméra', cameraOff: 'Couper la caméra',
+    record: 'Enregistrer', stop: 'Arrêter', camera: 'Caméra', cameraOff: 'Couper la caméra',
     sessions: 'Tes prises', noSessions: 'Aucune prise pour l’instant.',
     pickText: 'Choisis un texte', minutes: 'min', startPrompt: 'Lancer le prompteur',
     pause: 'Pause', play: 'Défiler', speed: 'vitesse', follow: 'Suivi vocal',
@@ -46,7 +63,7 @@ const L = {
     guided: 'Guided text', guidedHint: 'A teleprompter scrolls at the bottom.',
     twister: 'Tongue twisters', twisterHint: 'A classic, but timed.',
     challenge: 'Improv challenge', challengeHint: 'A random card, 30 seconds on the clock.',
-    record: '● Record', stop: '■ Stop', camera: 'Camera', cameraOff: 'Turn camera off',
+    record: 'Record', stop: 'Stop', camera: 'Camera', cameraOff: 'Turn camera off',
     sessions: 'Your takes', noSessions: 'No takes yet.',
     pickText: 'Pick a text', minutes: 'min', startPrompt: 'Start the prompter',
     pause: 'Pause', play: 'Scroll', speed: 'speed', follow: 'Voice follow',
@@ -171,11 +188,11 @@ export function SpeakingPage({ ui, language, api }: { ui: 'fr' | 'en'; language:
     return () => window.clearTimeout(timer)
   }, [mode, challenge, challengeLeft])
 
-  const modeCards: { id: Mode; title: string; hint: string; icon: string }[] = [
-    { id: 'free', title: t.free, hint: t.freeHint, icon: '✦' },
-    { id: 'guided', title: t.guided, hint: t.guidedHint, icon: '▤' },
-    { id: 'twister', title: t.twister, hint: t.twisterHint, icon: '〰' },
-    { id: 'challenge', title: t.challenge, hint: t.challengeHint, icon: '⚡' },
+  const modeCards: { id: Mode; title: string; hint: string; icon: React.ReactNode }[] = [
+    { id: 'free', title: t.free, hint: t.freeHint, icon: <Sparkles size={20} /> },
+    { id: 'guided', title: t.guided, hint: t.guidedHint, icon: <BookOpen size={20} /> },
+    { id: 'twister', title: t.twister, hint: t.twisterHint, icon: <Activity size={20} /> },
+    { id: 'challenge', title: t.challenge, hint: t.challengeHint, icon: <Zap size={20} /> },
   ]
 
   return <div className="page speaking-page">
@@ -200,8 +217,8 @@ export function SpeakingPage({ ui, language, api }: { ui: 'fr' | 'en'; language:
             </button>)}
           </div>
           <div className="guided-actions">
-            <button className="outline" onClick={() => void speak(guided.text, language, api)}>▶ {t.listenModel}</button>
-            <button className="primary" onClick={() => setPrompting(true)}>{t.startPrompt} <span>→</span></button>
+            <button className="outline" onClick={() => void speak(guided.text, language, api)}><Play size={13} /> {t.listenModel}</button>
+            <button className="primary" onClick={() => setPrompting(true)}>{t.startPrompt} <ArrowRight size={15} /></button>
           </div>
         </div>}
         {mode === 'twister' && <div className="speak-copy">
@@ -209,24 +226,26 @@ export function SpeakingPage({ ui, language, api }: { ui: 'fr' | 'en'; language:
           <h2 className="twister-text">“{twister.text}”</h2>
           <p>{ui === 'fr' ? `Travail ciblé : ${twister.focus}.` : `Focus: ${twister.focus}.`}</p>
           <div className="guided-actions">
-            <button className="outline" onClick={() => void speak(twister.text, language, api)}>▶ {t.listenModel}</button>
-            <button className="outline" onClick={() => setTwisterId(tongueTwisters[(tongueTwisters.findIndex((i) => i.id === twisterId) + 1) % tongueTwisters.length].id)}>{t.again}</button>
+            <button className="outline" onClick={() => void speak(twister.text, language, api)}><Play size={13} /> {t.listenModel}</button>
+            <button className="outline" onClick={() => setTwisterId(tongueTwisters[(tongueTwisters.findIndex((i) => i.id === twisterId) + 1) % tongueTwisters.length].id)}><RotateCcw size={13} /> {t.again}</button>
           </div>
         </div>}
         {mode === 'challenge' && <div className="speak-copy">
           <p className="eyebrow">{t.challenge.toUpperCase()}</p>
           {challenge === null
-            ? <><h2>{ui === 'fr' ? 'Prêt·e ? 30 secondes.' : 'Ready? 30 seconds.'}</h2><button className="primary" onClick={() => { setChallenge(challenges[Math.floor(Math.random() * challenges.length)]); setChallengeLeft(30) }}>{t.go} <span>→</span></button></>
+            ? <><h2>{ui === 'fr' ? 'Prêt·e ? 30 secondes.' : 'Ready? 30 seconds.'}</h2><button className="primary" onClick={() => { setChallenge(challenges[Math.floor(Math.random() * challenges.length)]); setChallengeLeft(30) }}>{t.go} <ArrowRight size={15} /></button></>
             : <><h2 className="challenge-text">{challenge}</h2>
                 <div className="challenge-timer"><i style={{ width: `${(challengeLeft / 30) * 100}%` }} /><strong>{challengeLeft > 0 ? `${challengeLeft}s` : t.timesup}</strong></div>
-                {challengeLeft <= 0 && <button className="outline" onClick={() => { setChallenge(challenges[Math.floor(Math.random() * challenges.length)]); setChallengeLeft(30) }}>{t.again}</button>}</>}
+                {challengeLeft <= 0 && <button className="outline" onClick={() => { setChallenge(challenges[Math.floor(Math.random() * challenges.length)]); setChallengeLeft(30) }}><RotateCcw size={13} /> {t.again}</button>}</>}
         </div>}
         <div className="speak-controls">
           {recording && <span className="rec-timer"><i />{format(elapsed)}</span>}
           <button className={recording ? 'record-btn recording' : 'record-btn'} onClick={() => void toggleRecording(mode === 'guided' ? guided.title : mode === 'twister' ? 'Virelangue' : mode === 'challenge' ? 'Défi impro' : 'Texte libre')}>
-            {recording ? t.stop : t.record}
+            {recording ? <><span style={{ width: 10, height: 10, background: '#fff', borderRadius: 2, display: 'inline-block' }} /> {t.stop}</> : <><span style={{ width: 10, height: 10, background: '#dc2626', borderRadius: '50%', display: 'inline-block' }} /> {t.record}</>}
           </button>
-          <button className="camera-toggle" onClick={() => void (cameraOn ? Promise.resolve(stopAll()) : ensureMic(true))}>{cameraOn ? t.cameraOff : `📷 ${t.camera}`}</button>
+          <button className="camera-toggle" onClick={() => void (cameraOn ? Promise.resolve(stopAll()) : ensureMic(true))}>
+            {cameraOn ? <><CameraOff size={14} /> {t.cameraOff}</> : <><Camera size={14} /> {t.camera}</>}
+          </button>
         </div>
         {error && <p className="speak-error">{error}</p>}
       </div>
@@ -242,7 +261,7 @@ export function SpeakingPage({ ui, language, api }: { ui: 'fr' | 'en'; language:
           <span>{String(recordings.length - index).padStart(2, '0')}</span>
           <div><strong>{take.label}</strong><small>{format(take.duration)}</small></div>
           {take.kind === 'video' ? <video controls playsInline preload="metadata" src={take.url} /> : <audio controls src={take.url} />}
-          <button className="text-button" onClick={() => setRecordings((list) => list.filter((item) => item.id !== take.id))}>🗑</button>
+          <button className="text-button" onClick={() => setRecordings((list) => list.filter((item) => item.id !== take.id))} aria-label="Supprimer"><Trash2 size={14} /></button>
         </article>)}
       </div>
     </section>
@@ -307,12 +326,12 @@ function Teleprompter({ ui, text, language, active, onClose }: { ui: 'fr' | 'en'
       <span className="eyebrow">{ui === 'fr' ? 'PROMPTEUR' : 'TELEPROMPTER'}{active ? ' · REC' : ''}</span>
       <div className="prompter-progress"><i style={{ width: `${pct}%` }} /></div>
       <div className="prompter-actions">
-        {hasRecognition && <button className={follow ? 'pchip active' : 'pchip'} onClick={() => setFollow(!follow)}>{follow ? `🎙 ${t.follow}` : `⏱ ${t.followOff}`}</button>}
-        <button className="pchip" onClick={() => setPlaying(!playing)}>{playing ? `⏸ ${t.pause}` : `▶ ${t.play}`}</button>
+        {hasRecognition && <button className={follow ? 'pchip active' : 'pchip'} onClick={() => setFollow(!follow)}>{follow ? <><Mic size={13} /> {t.follow}</> : <><MicOff size={13} /> {t.followOff}</>}</button>}
+        <button className="pchip" onClick={() => setPlaying(!playing)}>{playing ? <><Pause size={13} /> {t.pause}</> : <><Play size={13} /> {t.play}</>}</button>
         <label className="pspeed">{t.speed}<input type="range" min="0.5" max="2" step="0.25" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /></label>
         <button className="pchip" onClick={() => setIndex(Math.max(0, index - 8))}>−</button>
         <button className="pchip" onClick={() => setIndex(Math.min(words.length, index + 8))}>＋</button>
-        <button className="pchip pclose" onClick={onClose}>✕</button>
+        <button className="pchip pclose" onClick={onClose} aria-label="Fermer"><X size={15} /></button>
       </div>
     </div>
     <div className="prompter-window" ref={scrollRef}>
@@ -320,6 +339,6 @@ function Teleprompter({ ui, text, language, active, onClose }: { ui: 'fr' | 'en'
         {words.map((word, i) => <span key={i} data-current={i === index} className={i < index ? 'said' : i === index ? 'current' : ''}>{word} </span>)}
       </p>
     </div>
-    {done && <div className="prompter-done">✓ {ui === 'fr' ? 'Texte terminé — belle lecture !' : 'Text finished — great reading!'}</div>}
+    {done && <div className="prompter-done"><Check size={14} /> {ui === 'fr' ? 'Texte terminé — belle lecture !' : 'Text finished — great reading!'}</div>}
   </div>
 }

@@ -71,7 +71,7 @@ function extractReadable(html: string, pageUrl: string): ImportedText | null {
   return { title: title.slice(0, 90), author, paragraphs }
 }
 
-function toChapters(paragraphs: string[]): Chapter[] {
+export function toChapters(paragraphs: string[]): Chapter[] {
   const perChapter = 12
   const chapters: Chapter[] = []
   for (let start = 0; start < paragraphs.length; start += perChapter) {

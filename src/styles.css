@@ -5683,3 +5683,195 @@ h2 {
   color: #16a34a !important;
   font-weight: 600;
 }
+
+/* ===== Edit Content Modal ===== */
+.edit-content-modal {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  width: 90vw;
+  max-width: 860px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22), 0 8px 24px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  animation: modalPop 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.edit-content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.edit-content-header h2 {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-family: var(--serif);
+  color: var(--ink);
+}
+
+.edit-content-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 24px;
+  background: var(--accent-light);
+  color: var(--muted);
+  font-size: 12px;
+  font-family: var(--mono);
+  border-bottom: 1px solid var(--line);
+}
+
+.edit-content-body {
+  flex: 1;
+  padding: 16px 24px;
+  min-height: 320px;
+  max-height: 58vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.edit-content-textarea {
+  width: 100%;
+  flex: 1;
+  min-height: 280px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  background: var(--white);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 16px;
+  line-height: 1.7;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.edit-content-textarea:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(32, 32, 30, 0.08);
+}
+
+.edit-content-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+
+/* ===== Rename Modal Card ===== */
+.rename-modal-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  width: 90vw;
+  max-width: 440px;
+  padding: 22px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  animation: modalPop 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rename-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.rename-modal-head h3 {
+  margin: 0;
+  font-size: 17px;
+  font-family: var(--serif);
+  color: var(--ink);
+}
+
+.rename-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.rename-modal-field label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.rename-modal-field input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 14px;
+  outline: none;
+}
+
+.rename-modal-field input:focus {
+  border-color: var(--ink);
+}
+
+.rename-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ===== Delete Modal Card ===== */
+.delete-modal-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  width: 90vw;
+  max-width: 420px;
+  padding: 22px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  animation: modalPop 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.delete-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.delete-modal-head h3 {
+  margin: 0;
+  font-size: 17px;
+  font-family: var(--serif);
+  color: var(--ink);
+}
+
+.delete-modal-msg {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin-bottom: 20px;
+}
+
+.delete-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ===== Common Button and Icon Flex Fixes ===== */
+.primary, .outline, .text-button, .control, .wp-icon, .tag-icon-btn, .page-context-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}

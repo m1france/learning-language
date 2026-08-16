@@ -1,6 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Resource } from '../domain'
+import {
+  MousePointer2,
+  Pen,
+  Highlighter,
+  Type,
+  Pencil,
+  Square,
+  Circle,
+  Slash,
+  ArrowRight,
+  Spline,
+  Eraser,
+  Undo2,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  X,
+} from 'lucide-react'
 
 /**
  * Teacher Mode — plein écran pour projeter un texte en classe.
@@ -47,18 +67,18 @@ const normalizePage = (raw: Partial<PageAnnotations> | undefined): PageAnnotatio
   order: raw?.order ?? [],
 })
 
-const TOOLS: { id: Tool; icon: string; label: string; color?: boolean; width?: boolean }[] = [
-  { id: 'select', icon: '➤', label: 'Sélection' },
-  { id: 'pen', icon: '✏', label: 'Stylo', color: true, width: true },
-  { id: 'highlighter', icon: '🖊', label: 'Surligneur (clique sur un mot)', color: true },
-  { id: 'text', icon: 'T', label: 'Texte', color: true },
-  { id: 'edit', icon: '✎', label: 'Édition' },
-  { id: 'rect', icon: '▭', label: 'Rectangle', color: true, width: true },
-  { id: 'ellipse', icon: '◯', label: 'Ellipse', color: true, width: true },
-  { id: 'line', icon: '╱', label: 'Ligne', color: true, width: true },
-  { id: 'arrow', icon: '→', label: 'Flèche', color: true, width: true },
-  { id: 'liaison', icon: '‿', label: 'Liaison (lettre à lettre)', color: true },
-  { id: 'gray', icon: 'Aa', label: 'Griser une lettre' },
+const TOOLS: { id: Tool; icon: React.ReactNode; label: string; color?: boolean; width?: boolean }[] = [
+  { id: 'select', icon: <MousePointer2 size={16} />, label: 'Sélection' },
+  { id: 'pen', icon: <Pen size={16} />, label: 'Stylo', color: true, width: true },
+  { id: 'highlighter', icon: <Highlighter size={16} />, label: 'Surligneur (clique sur un mot)', color: true },
+  { id: 'text', icon: <Type size={16} />, label: 'Texte', color: true },
+  { id: 'edit', icon: <Pencil size={16} />, label: 'Édition' },
+  { id: 'rect', icon: <Square size={16} />, label: 'Rectangle', color: true, width: true },
+  { id: 'ellipse', icon: <Circle size={16} />, label: 'Ellipse', color: true, width: true },
+  { id: 'line', icon: <Slash size={16} />, label: 'Ligne', color: true, width: true },
+  { id: 'arrow', icon: <ArrowRight size={16} />, label: 'Flèche', color: true, width: true },
+  { id: 'liaison', icon: <Spline size={16} />, label: 'Liaison (lettre à lettre)', color: true },
+  { id: 'gray', icon: <span style={{ fontSize: 13, fontWeight: 700 }}>Aa</span>, label: 'Griser une lettre' },
 ]
 
 const COLORS = ['#d64545', '#2563eb', '#16a34a', '#f59e0b', '#20201e', '#7c3aed']
@@ -877,9 +897,9 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
 
     {/* navigation pages — haut centre */}
     <div className="focus-nav-pill glass">
-      <button title="Page précédente" disabled={safePage === 0} onClick={() => goto(safePage - 1)}>←</button>
+      <button title="Page précédente" disabled={safePage === 0} onClick={() => goto(safePage - 1)} aria-label="Page précédente"><ChevronLeft size={16} /></button>
       <span>{safePage + 1} / {pages.length}</span>
-      <button title="Page suivante" disabled={safePage >= pages.length - 1} onClick={() => goto(safePage + 1)}>→</button>
+      <button title="Page suivante" disabled={safePage >= pages.length - 1} onClick={() => goto(safePage + 1)} aria-label="Page suivante"><ChevronRight size={16} /></button>
     </div>
 
     {/* zoom + quitter — haut droite */}
@@ -887,15 +907,15 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
       <button title="Agrandir le texte" onClick={() => setFontSize(Math.min(46, fontSize + 2))}>A+</button>
       <button title="Réduire le texte" onClick={() => setFontSize(Math.max(20, fontSize - 2))}>A−</button>
       <button className="focus-zoom" title="Revenir à 100 %" onClick={() => setFontSize(BASE_FONT)}>{zoom} %</button>
-      <button className="focus-quit-btn" onClick={quitAll}>✕ Quitter</button>
+      <button className="focus-quit-btn" onClick={quitAll}><X size={14} /> Quitter</button>
     </div>
 
     {/* annuler / gomme / effacer — bord gauche, centré verticalement */}
     <div className="focus-side-pill left glass">
-      <button title="Annuler (⌘Z)" onClick={undo}>↩</button>
+      <button title="Annuler (⌘Z)" onClick={undo} aria-label="Annuler"><Undo2 size={16} /></button>
       <button title="Gomme" className={tool === 'eraser' ? 'active' : ''}
-        onClick={() => { commitNote(); setTool(tool === 'eraser' ? 'select' : 'eraser'); setPendingLiaison(null); setSelectedNote(null); setSelectedStroke(null) }}>⌫</button>
-      <button title="Nettoyer la page" onClick={clearPage}>🗑</button>
+        onClick={() => { commitNote(); setTool(tool === 'eraser' ? 'select' : 'eraser'); setPendingLiaison(null); setSelectedNote(null); setSelectedStroke(null) }} aria-label="Gomme"><Eraser size={16} /></button>
+      <button title="Nettoyer la page" onClick={clearPage} aria-label="Nettoyer la page"><Trash2 size={16} /></button>
     </div>
 
     {/* couleurs + épaisseur : repliées derrière une flèche discrète à droite */}
@@ -914,9 +934,9 @@ export function LearningFocus({ resources, initialResourceId, onUpdateResource, 
           <button className="panel-size" title="Réduire le texte" onMouseDown={(event) => event.preventDefault()} onClick={() => bumpTextSize(-2)}>A−</button>
           <button className="panel-size" title="Agrandir le texte" onMouseDown={(event) => event.preventDefault()} onClick={() => bumpTextSize(2)}>A+</button>
         </>}
-        <button className="panel-collapse" title="Replier" onClick={() => setToolsOpen(false)}>⌄</button>
+        <button className="panel-collapse" title="Replier" onClick={() => setToolsOpen(false)} aria-label="Replier"><ChevronDown size={14} /></button>
       </div>
-      : <button className="focus-tools-toggle glass" title="Couleurs et épaisseur" onClick={() => setToolsOpen(true)}><b>⌃</b></button>)}
+      : <button className="focus-tools-toggle glass" title="Couleurs et épaisseur" onClick={() => setToolsOpen(true)} aria-label="Ouvrir les outils"><ChevronUp size={14} /></button>)}
 
     {/* barre d'outils — icônes seules */}
     <footer className="focus-toolbar glass">

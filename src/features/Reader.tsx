@@ -1,9 +1,33 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, GrammarMarkStyle, GrammarMarkType, Language, Resource, UiLanguage, WordMark } from '../domain'
 import { normalizeWord } from '../domain'
 import { DEFAULT_MARKINGS, knownParents, knownTags } from '../store'
 import { copy, readerCopy } from '../i18n'
 import { loadOriginals, modifiedCharIndices } from './LearningFocus'
+import { isGenericImportedAuthor } from '../App'
+import {
+  ArrowLeft,
+  Maximize2,
+  GraduationCap,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Trash2,
+  RotateCcw,
+  Undo2,
+  Plus,
+  X,
+  Check,
+  Minimize2,
+} from 'lucide-react'
+import {
+  ResourceContextMenu,
+  EditContentModal,
+  RenameModal,
+  DeleteModal,
+  type ResourceAction,
+  type ResourceContextTarget,
+} from '../components/ResourceModals'
 
 type Entry = {
   chapterId: string
@@ -98,12 +122,36 @@ const markKey = (language: Language, normalized: string) => `${language}:${norma
 /** Default color of a mark type, possibly overridden by the user's saved choice. */
 const defaultMarkColor = (typeId: string) => DEFAULT_MARKINGS.find((item) => item.id === typeId)?.color ?? '#2563eb'
 
-export function Cover({ cover, coverImage, type, onClick, editHint }: { cover: Resource['cover']; coverImage?: string; type: string; onClick?: () => void; editHint?: string }) {
+export function Cover({
+  cover,
+  coverImage,
+  type,
+  onClick,
+  onContextMenu,
+  editHint,
+}: {
+  cover: Resource['cover']
+  coverImage?: string
+  type: string
+  onClick?: (e: React.MouseEvent) => void
+  onContextMenu?: (e: React.MouseEvent) => void
+  editHint?: string
+}) {
   const inner = coverImage
     ? <img className="cover-img" src={coverImage} alt="" />
     : <><span className="cover-type">{type}</span><div className="cover-shape one" /><div className="cover-shape two" /><div className="cover-line" /></>
-  if (!onClick) return <div className={`cover ${cover}`}>{inner}</div>
-  return <button className={`cover ${cover} cover-editable`} onClick={onClick} title={editHint ?? ''}>{inner}<span className="cover-edit-badge">✎</span></button>
+  if (!onClick && !onContextMenu) return <div className={`cover ${cover}`}>{inner}</div>
+  return (
+    <button
+      className={`cover ${cover} cover-editable`}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      title={editHint ?? ''}
+    >
+      {inner}
+      <span className="cover-edit-badge"><Pencil size={11} /></span>
+    </button>
+  )
 }
 
 export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProgress, onSaveWord, onDeleteWord, onOpenFocus, onPageSize, onWordMark, onSilentMark, onMarkColor, onAddMarking, onRenameMarking, onDeleteMarking, onResetMarks }: {
@@ -133,9 +181,6 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [fontSize, setFontSize] = useState(settings.readerFontSize)
   const [selected, setSelected] = useState<SelectedWord | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
-  const [editing, setEditing] = useState(false)
-  const [draftParagraphs, setDraftParagraphs] = useState<string[]>([])
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [markMode, setMarkMode] = useState<MarkMode>(null)
   const [markStyle, setMarkStyle] = useState<GrammarMarkStyle>('highlight')
   const [markColor, setMarkColor] = useState<string>('#16a34a')
@@ -150,6 +195,12 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [newMarkModalOpen, setNewMarkModalOpen] = useState(false)
   const [originals, setOriginals] = useState<Record<string, string>>(() => loadOriginals(resource.id))
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Resource context menu & actions state (for right-clicking cover)
+  const [resourceMenuTarget, setResourceMenuTarget] = useState<ResourceContextTarget | null>(null)
+  const [editingContent, setEditingContent] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     setOriginals(loadOriginals(resource.id))
@@ -172,6 +223,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     const closeMenu = () => {
       setContextMenu(null)
       setPageContextMenu(null)
+      setResourceMenuTarget(null)
     }
     window.addEventListener('click', closeMenu)
     window.addEventListener('scroll', closeMenu, true)
@@ -195,7 +247,6 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
   const gotoPage = (next: number) => {
     setSelected(null)
-    setEditing(false)
     setPageIndex(Math.max(0, Math.min(pages.length - 1, next)))
   }
 
@@ -209,23 +260,6 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     const reader = new FileReader()
     reader.onload = () => onUpdate({ ...resource, coverImage: String(reader.result) })
     reader.readAsDataURL(file)
-  }
-
-  const startEditing = () => {
-    setDraftParagraphs(page.map((entry) => entry.text))
-    setEditing(true)
-  }
-
-  const saveEditing = () => {
-    const chapters = resource.chapters.map((chapter) => ({ ...chapter, paragraphs: [...chapter.paragraphs] }))
-    page.forEach((entry, index) => {
-      const draft = draftParagraphs[index]
-      if (draft !== undefined) {
-        chapters[entry.chapterIndex].paragraphs[entry.paragraphIndex] = draft
-      }
-    })
-    onUpdate({ ...resource, chapters })
-    setEditing(false)
   }
 
   const renameChapter = (chapterIndex: number, title: string) => {
@@ -283,12 +317,28 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
   const handlePageContextMenu = (event: React.MouseEvent) => {
     const target = event.target as HTMLElement
-    if (target.closest('.mark-type, .mark-type-add, .mark-context-menu, .mark-inline-input, input, textarea, .word, .paragraph-edit, .chapter-title-input')) {
+    if (target.closest('.mark-type, .mark-type-add, .mark-context-menu, .mark-inline-input, input, textarea, .word, .paragraph-edit, .chapter-title-input, .cover')) {
       return
     }
     event.preventDefault()
     setContextMenu(null)
+    setResourceMenuTarget(null)
     setPageContextMenu({ x: event.clientX, y: event.clientY })
+  }
+
+  const handleCoverContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setContextMenu(null)
+    setPageContextMenu(null)
+    setResourceMenuTarget({ resource, x: event.clientX, y: event.clientY })
+  }
+
+  const handleResourceAction = (action: ResourceAction) => {
+    if (action === 'editContent') setEditingContent(true)
+    else if (action === 'rename') setRenaming(true)
+    else if (action === 'changeCover') fileInputRef.current?.click()
+    else if (action === 'delete') setDeleting(true)
   }
 
   const handleResetFormatting = () => {
@@ -324,13 +374,13 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const activeType = markMode && markMode !== 'silent' ? markMode : null
 
   return <div className={`reader-page ${markMode === 'silent' ? 'arm-silent' : ''} ${markMode && markMode !== 'silent' ? 'arm-word' : ''}`}
-    onClick={() => { setSelected(null); setContextMenu(null); setPageContextMenu(null); if (wikiArmed) setWikiArmed(false) }}
+    onClick={() => { setSelected(null); setContextMenu(null); setPageContextMenu(null); setResourceMenuTarget(null); if (wikiArmed) setWikiArmed(false) }}
     onContextMenu={handlePageContextMenu}>
     <header className="reader-top">
-      <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}>{t.back}</button>
+      <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}><ArrowLeft size={16} /> {t.back.replace('←', '').trim()}</button>
       <div className="reader-controls">
-        <button className="control control-learning-focus" onClick={(event) => { event.stopPropagation(); startFocus() }}>◉ {t.focus}</button>
-        <button className="control control-focus" onClick={(event) => { event.stopPropagation(); onOpenFocus(resource) }}>✎ {t.teacherMode}</button>
+        <button className="control control-learning-focus" onClick={(event) => { event.stopPropagation(); startFocus() }}><Maximize2 size={14} /> {t.focus}</button>
+        <button className="control control-focus" onClick={(event) => { event.stopPropagation(); onOpenFocus(resource) }}><GraduationCap size={14} /> {t.teacherMode}</button>
         <button className="control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.min(26, fontSize + 1)) }}>A+</button>
         <button className="control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.max(15, fontSize - 1)) }}>A−</button>
         <select className="control page-size" value={settings.readerPageSize} onClick={(event) => event.stopPropagation()} onChange={(event) => { onPageSize(Number(event.target.value)); setPageIndex(0) }}>
@@ -342,8 +392,14 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     <section className="reader-layout">
       <aside className="reader-aside">
         <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => pickCover(event.target.files?.[0])} />
-        <Cover cover={resource.cover} coverImage={resource.coverImage} type={categoryLabel(resource.type)} onClick={() => fileInputRef.current?.click()} editHint={t.coverChange} />
-        {resource.coverImage && <button className="text-button cover-reset" onClick={(event) => { event.stopPropagation(); onUpdate({ ...resource, coverImage: undefined }) }}>↺ {t.coverReset}</button>}
+        <Cover
+          cover={resource.cover}
+          coverImage={resource.coverImage}
+          type={categoryLabel(resource.type)}
+          onClick={() => fileInputRef.current?.click()}
+          onContextMenu={handleCoverContextMenu}
+          editHint={t.coverChange}
+        />
         <div className="reader-aside-meta">
           <span className="tag">{categoryLabel(resource.type)}</span>
           {editingTitle
@@ -352,23 +408,18 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               onBlur={(event) => saveTitle(event.target.value)}
               onKeyDown={(event) => { if (event.key === 'Enter') saveTitle((event.target as HTMLInputElement).value); if (event.key === 'Escape') setEditingTitle(false) }} />
             : <h2 className="title-clickable" title={t.renameHint} onClick={(event) => { event.stopPropagation(); setEditingTitle(true) }}>{resource.title}</h2>}
-          {resource.author && <p>{resource.author}</p>}
+          {resource.author && !isGenericImportedAuthor(resource.author) && <p>{resource.author}</p>}
         </div>
         <div className="reader-progress"><div><span>{t.progress}</span><strong>{progress}%</strong></div><i><b style={{ width: `${progress}%` }} /></i></div>
         <div className="reader-page-nav">
-          <button aria-label={t.previous} disabled={safePage === 0} onClick={(event) => { event.stopPropagation(); gotoPage(safePage - 1) }}>←</button>
+          <button aria-label={t.previous} disabled={safePage === 0} onClick={(event) => { event.stopPropagation(); gotoPage(safePage - 1) }}><ChevronLeft size={18} /></button>
           <span>{safePage + 1} / {pages.length}</span>
-          <button aria-label={t.next} disabled={safePage >= pages.length - 1} onClick={(event) => { event.stopPropagation(); gotoPage(safePage + 1) }}>→</button>
+          <button aria-label={t.next} disabled={safePage >= pages.length - 1} onClick={(event) => { event.stopPropagation(); gotoPage(safePage + 1) }}><ChevronRight size={18} /></button>
         </div>
-
-        <button className="text-button edit-toggle" onClick={(event) => { event.stopPropagation(); editing ? setEditing(false) : startEditing() }}>{editing ? t.doneEditing : `✎ ${t.editText}`}</button>
-        {confirmingDelete
-          ? <div className="delete-confirm" onClick={(event) => event.stopPropagation()}><p>{t.confirmDelete}</p><div><button className="outline" onClick={() => setConfirmingDelete(false)}>{t.cancel}</button><button className="danger" onClick={() => onDelete(resource.id)}>{t.deleteResource}</button></div></div>
-          : <button className="text-button delete-link" onClick={(event) => { event.stopPropagation(); setConfirmingDelete(true) }}>🗑 {t.deleteResource}</button>}
       </aside>
 
       <article className={`reading-text ${settings.readerWidth}`}>
-        {page.map((entry, entryIndex) => {
+        {page.map((entry) => {
           const paragraphKey = `${entry.chapterIndex}:${entry.paragraphIndex}`
           const original = originals[paragraphKey]
           const greenChars = (original !== undefined && original !== entry.text)
@@ -378,17 +429,12 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           return (
             <div key={`${entry.chapterId}-${entry.paragraphIndex}`}>
               {entry.isChapterStart && <ChapterTitle hint={t.chapterRename} title={entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`} onRename={(title) => renameChapter(entry.chapterIndex, title)} />}
-              {editing
-                ? <textarea className="paragraph-edit" value={draftParagraphs[entryIndex] ?? entry.text} rows={Math.max(3, Math.ceil(entry.text.length / 90))}
-                  onClick={(event) => event.stopPropagation()}
-                  onChange={(event) => setDraftParagraphs((current) => current.map((value, index) => (index === entryIndex ? event.target.value : value)))} />
-                : <Paragraph text={entry.text} fontSize={fontSize} language={resource.language} state={state} markMode={markMode} green={greenChars}
-                  onWordClick={(raw, target) => clickWord(raw, entry, target)}
-                  onLetterClick={(raw, letterIndex) => onSilentMark(markKey(resource.language, normalizeWord(raw)), letterIndex)} />}
+              <Paragraph text={entry.text} fontSize={fontSize} language={resource.language} state={state} markMode={markMode} green={greenChars}
+                onWordClick={(raw, target) => clickWord(raw, entry, target)}
+                onLetterClick={(raw, letterIndex) => onSilentMark(markKey(resource.language, normalizeWord(raw)), letterIndex)} />
             </div>
           )
         })}
-        {editing && <button className="primary" onClick={(event) => { event.stopPropagation(); saveEditing() }}>{t.saveText} <span>→</span></button>}
       </article>
 
       <aside className="reader-right">
@@ -457,7 +503,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               setNewMarkModalOpen(true)
             }}
           >
-            {t.addMarking}
+            <Plus size={13} /> {t.addMarking}
           </button>
         </div>
       </aside>
@@ -477,7 +523,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             setContextMenu(null)
           }}
         >
-          ✎ {t.rename}
+          <Pencil size={13} /> {t.rename}
         </button>
         <button
           className="mark-context-item danger"
@@ -487,7 +533,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             setContextMenu(null)
           }}
         >
-          🗑 {t.delete}
+          <Trash2 size={13} /> {t.delete}
         </button>
       </div>
     )}
@@ -503,14 +549,14 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           className="page-context-item"
           onClick={handleResetFormatting}
         >
-          <i>↺</i> {t.resetFormatting}
+          <i><RotateCcw size={14} /></i> {t.resetFormatting}
         </button>
         <button
           type="button"
           className="page-context-item"
           onClick={handleResetTeacherMode}
         >
-          <i>✎</i> {t.resetTeacherMode}
+          <i><Undo2 size={14} /></i> {t.resetTeacherMode}
         </button>
         <div className="page-context-sep" />
         <button
@@ -518,9 +564,44 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           className="page-context-item"
           onClick={handleBackToLibrary}
         >
-          <i>←</i> {t.backToLibrary}
+          <i><ArrowLeft size={14} /></i> {t.backToLibrary}
         </button>
       </div>
+    )}
+
+    {resourceMenuTarget && (
+      <ResourceContextMenu
+        target={resourceMenuTarget}
+        onSelectAction={handleResourceAction}
+        onClose={() => setResourceMenuTarget(null)}
+      />
+    )}
+
+    {editingContent && (
+      <EditContentModal
+        resource={resource}
+        onSave={(updated) => onUpdate(updated)}
+        onClose={() => setEditingContent(false)}
+      />
+    )}
+
+    {renaming && (
+      <RenameModal
+        resource={resource}
+        onSave={(updated) => onUpdate(updated)}
+        onClose={() => setRenaming(false)}
+      />
+    )}
+
+    {deleting && (
+      <DeleteModal
+        resource={resource}
+        onConfirm={(id) => {
+          onDelete(id)
+          onBack()
+        }}
+        onClose={() => setDeleting(false)}
+      />
     )}
 
     {newMarkModalOpen && (
@@ -546,7 +627,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
     {markMode === 'silent' && <div className="mark-silent-exit" onClick={(event) => event.stopPropagation()}>
       <span>{t.markHintSilent}</span>
-      <button onClick={() => setMarkMode(null)}>✕</button>
+      <button onClick={() => setMarkMode(null)}><X size={14} /></button>
     </div>}
 
     {markMode && markMode !== 'silent' && <p className="mark-hint">{t.markHintWord}</p>}
@@ -576,7 +657,7 @@ function WikiPanel({ word, language, onClose }: { word: string; language: Langua
         <button role="tab" className={tab === 'wiktionary' ? 'active' : ''} onClick={() => setTab('wiktionary')}>Wiktionary</button>
         <button role="tab" className={tab === 'linguee' ? 'active' : ''} onClick={() => setTab('linguee')}>Linguee</button>
       </div>
-      <button className="card-x" onClick={onClose}>×</button>
+      <button className="card-x" onClick={onClose} aria-label="Fermer"><X size={16} /></button>
     </div>
     <iframe key={`${tab}:${language}:${word}`} title={`${tab} — ${word}`} src={src} className="wiki-frame" />
   </div>
@@ -605,7 +686,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
   const [parent, setParent] = useState(() => findExisting()?.parent ?? '')
   const [pronunciation, setPronunciation] = useState(() => findExisting()?.phonetic ?? '')
   const [translation, setTranslation] = useState(() => findExisting()?.translation ?? findExisting()?.definitions[0]?.translation ?? '')
-  // Migration douce : un ancien tag prédéfini (partOfSpeech) devient un tag personnalisé.
   const initialTags = () => {
     const existing = findExisting()
     if (!existing) return [] as string[]
@@ -645,7 +725,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     ? parents.filter((item) => item.toLowerCase().includes(query) && item !== parent.trim()).slice(0, 6)
     : []
 
-  // Tags personnalisés : création libre + suggestions des tags déjà utilisés.
   const allTags = knownTags(state, language)
 
   const addTag = (value: string) => {
@@ -669,12 +748,11 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
   }
 
   const actions = <div className="wp-actions">
-    {existing && <button className="wp-icon wp-icon-delete" title="Supprimer le mot enregistré" aria-label="Supprimer le mot enregistré" onClick={handleDelete}>🗑</button>}
-    {viewing && <button className="wp-icon wp-icon-edit" title={t.editWord} aria-label={t.editWord} onClick={() => setViewing(false)}>✎</button>}
-    <button className="wp-icon" aria-label="×" onClick={onClose}>×</button>
+    {existing && <button className="wp-icon wp-icon-delete" title="Supprimer le mot enregistré" aria-label="Supprimer le mot enregistré" onClick={handleDelete}><Trash2 size={14} /></button>}
+    {viewing && <button className="wp-icon wp-icon-edit" title={t.editWord} aria-label={t.editWord} onClick={() => setViewing(false)}><Pencil size={14} /></button>}
+    <button className="wp-icon" aria-label="Fermer" onClick={onClose}><X size={15} /></button>
   </div>
 
-  // Données de la vue lecture seule : fiche du parent et mots liés.
   const parentEntry = parent ? state.words.find((item) => item.normalized === normalizeWord(parent) && item.language === language) : undefined
   const linked = state.words.filter((item) => item.language === language && item.parent
     && normalizeWord(item.parent) === normalizeWord(word) && item.normalized !== normalizeWord(word))
@@ -686,7 +764,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     </div>
     {knowledge !== undefined && <div className="wp-knowledge-view">
       {knowledge === 6
-        ? <span className="wp-known-check">✓ {t.knownByHeart}</span>
+        ? <span className="wp-known-check"><Check size={14} /> {t.knownByHeart}</span>
         : <span className="wp-dots" title={`${knowledge} / 5`}>{[1, 2, 3, 4, 5].map((n) => <i key={n}
           style={n <= knowledge ? { background: KNOWLEDGE_COLORS[knowledge - 1] } : undefined} />)}</span>}
     </div>}
@@ -713,13 +791,13 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
           style={{ ['--kl' as string]: KNOWLEDGE_COLORS[n - 1] }}
           onClick={() => { setKnowledge(knowledge === n ? undefined : n); setSaved(false) }}>{n}</button>)}
         <button type="button" className={knowledge === 6 ? 'kl-btn known active' : 'kl-btn known'} title={t.knownByHeart} aria-label={t.knownByHeart}
-          onClick={() => { setKnowledge(knowledge === 6 ? undefined : 6); setSaved(false) }}>✓</button>
+          onClick={() => { setKnowledge(knowledge === 6 ? undefined : 6); setSaved(false) }}><Check size={14} /></button>
       </div>
     </div>
 
     <div className="wp-field">
       {parent && !parentTyping
-        ? <span className="wp-tag">{parent}<button aria-label="×" onClick={() => { setParent(''); setParentTyping(true); setSaved(false) }}>×</button></span>
+        ? <span className="wp-tag">{parent}<button aria-label="Supprimer" onClick={() => { setParent(''); setParentTyping(true); setSaved(false) }}><X size={12} /></button></span>
         : <>
           <input value={parent} placeholder={t.parentLabel} autoFocus={parentTyping && !parent}
             onChange={(event) => { setParent(event.target.value); setParentTyping(true); setSaved(false) }}
@@ -745,7 +823,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     </div>
 
     <div className="wp-footer">
-      <button className={saved ? 'saved-deck' : 'primary'} disabled={!word.trim()} onClick={submit}>{saved ? t.savedWord : `＋ ${t.saveWord}`}</button>
+      <button className={saved ? 'saved-deck' : 'primary'} disabled={!word.trim()} onClick={submit}>{saved ? <><Check size={14} /> {t.savedWord.replace('✓', '').trim()}</> : <><Plus size={14} /> {t.saveWord}</>}</button>
       {word && <span className="wp-footer-word"><em>{word}</em></span>}
     </div>
   </>
@@ -755,7 +833,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     {viewing ? view : form}
   </div>
 
-  // Floating next to the clicked word, clamped inside the viewport.
   const panelWidth = 320
   const panelMaxHeight = Math.min(520, window.innerHeight - 24)
   const left = Math.max(12, Math.min((selected.x ?? 40) - 20, window.innerWidth - panelWidth - 12))
@@ -840,7 +917,7 @@ function TagInput({ allTags, existingTags, onAdd, onRemove, label }: {
               aria-label={`Supprimer ${item}`}
               onClick={() => onRemove(item)}
             >
-              {item}
+              {item} <X size={10} style={{ marginLeft: 2, opacity: 0.7 }} />
             </button>
           ))}
         </div>
@@ -881,7 +958,6 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
   }
 
   const clickWord = (raw: string, text: string) => {
-    // Dictionary armed: the click opens the dictionary popup instead of the word form.
     if (wikiArmed) {
       setWikiWord(wikiLookup(raw))
       setWikiOpen(true)
@@ -895,11 +971,11 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
     <header className="focus-top">
       <strong className="focus-title">{resource.title}</strong>
       <div className="focus-nav">
-        <button aria-label={t.previous} disabled={safePage === 0} onClick={() => gotoPage(safePage - 1)}>←</button>
+        <button aria-label={t.previous} disabled={safePage === 0} onClick={() => gotoPage(safePage - 1)}><ChevronLeft size={18} /></button>
         <span>{safePage + 1} / {pages.length}</span>
-        <button aria-label={t.next} disabled={safePage >= pages.length - 1} onClick={() => gotoPage(safePage + 1)}>→</button>
+        <button aria-label={t.next} disabled={safePage >= pages.length - 1} onClick={() => gotoPage(safePage + 1)}><ChevronRight size={18} /></button>
       </div>
-      <button className="focus-exit" onClick={onClose}>✕ {t.focusExit}</button>
+      <button className="focus-exit" onClick={onClose}><Minimize2 size={15} /> {t.focusExit}</button>
     </header>
 
     <div className="focus-body">
@@ -1001,7 +1077,7 @@ function MarkMenu({ ui, type, name, color, style, markColor, toolbarStyle, onSty
             title={t.customColor}
             onClick={() => { setHexOpen(true); setHexInput(markColor) }}
           >
-            +
+            <Plus size={14} />
           </button>
         </div>}
 
@@ -1037,12 +1113,12 @@ function MarkMenu({ ui, type, name, color, style, markColor, toolbarStyle, onSty
             />
           </div>
           <button type="button" className="mark-hex-back-btn" onClick={() => setHexOpen(false)}>
-            ← {t.back.replace('←', '').trim()}
+            <ArrowLeft size={13} /> {t.back.replace('←', '').trim()}
           </button>
         </div>}
       </div>
     </div>
-    <button className="mark-menu-close" onClick={onClose}>✕</button>
+    <button className="mark-menu-close" onClick={onClose} aria-label="Fermer"><X size={16} /></button>
   </div>
 }
 
@@ -1076,7 +1152,7 @@ function NewMarkingModal({
       <div className="mark-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="mark-modal-head">
           <h3>{t.newMarking}</h3>
-          <button onClick={onClose} aria-label={t.cancel}>×</button>
+          <button onClick={onClose} aria-label={t.cancel}><X size={16} /></button>
         </div>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="mark-modal-field">
@@ -1133,7 +1209,7 @@ function NewMarkingModal({
 
           <div className="mark-modal-actions">
             <button type="button" className="outline" onClick={onClose}>{t.cancel}</button>
-            <button type="submit" className="primary" disabled={!label.trim()}>{t.createMarking} <span>→</span></button>
+            <button type="submit" className="primary" disabled={!label.trim()}><Plus size={15} /> {t.createMarking}</button>
           </div>
         </form>
       </div>
@@ -1211,7 +1287,6 @@ function Word({ raw, language, state, markMode, green, offset = 0, onClick, onLe
 
   const markClass = mark ? `marked-${mark.style}` : ''
   const style = mark ? ({ ['--mark-color' as string]: mark.color } as React.CSSProperties) : undefined
-  // Surlignage LUTE : niveau 1-5 = pointillés colorés, 6 (connu par cœur) = aucun surlignage.
   const deckClass = !savedWord || savedWord.knowledge === 6
     ? ''
     : savedWord.knowledge ? `word-known kl-${savedWord.knowledge}` : 'word-known'
