@@ -1,344 +1,956 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import type { Language } from '../domain'
-import { guidedTexts, tongueTwisters } from '../seed'
-import { speak, stopSpeaking } from '../ai'
-import type { ApiSettings } from '../domain'
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import type { Language, ApiSettings } from '../domain'
+import {
+  GLOBAL_CATEGORIES,
+  IMPROV_CHALLENGES,
+  GlobalTopicCategory,
+  NicheTopic,
+  getPromptText,
+  getChallengeText,
+} from './speaking/speakingTopics'
+import {
+  SpeakingSessionRecord,
+  saveSpeakingSession,
+  getAllSpeakingSessions,
+  deleteSpeakingSession,
+  updateSpeakingSession,
+} from './speaking/speakingStorage'
+import { ImprovWheel } from './speaking/ImprovWheel'
+import { TeleprompterOverlay } from './speaking/TeleprompterOverlay'
+import { SessionReviewModal } from './speaking/SessionReviewModal'
 import {
   Sparkles,
   BookOpen,
-  Activity,
   Zap,
-  Play,
-  Pause,
   Camera,
   CameraOff,
-  Trash2,
   Mic,
   MicOff,
-  ArrowRight,
   RotateCcw,
+  Sliders,
+  ChevronRight,
+  ChevronLeft,
   X,
+  Play,
+  Pause,
+  Trash2,
+  Download,
+  FileText,
+  Clock,
   Check,
+  Video,
+  Layers,
+  HelpCircle,
 } from 'lucide-react'
 
-/**
- * Parler — studio vocal.
- * 2.1 : deux boutons "Texte libre" / "Texte guidé" (prompteur 1–3 min qui
- *       défile automatiquement — suivi vocal si disponible — ou manuellement).
- * 2.2 : modes bonus : Virelangues et Défi impro.
- */
-
-type Mode = 'none' | 'free' | 'guided' | 'twister' | 'challenge'
-
-type Recording = { id: string; url: string; label: string; duration: number; createdAt: string; kind: 'video' | 'audio' }
-
-const challenges = [
-  'Décris ta matinée comme si c’était la bande-annonce d’un film.',
-  'Vends-moi ta chaise comme si c’était le meilleur objet du monde.',
-  'Raconte ta dernière semaine en utilisant seulement des phrases courtes.',
-  'Explique ton plat préféré à quelqu’un qui ne l’a jamais goûté.',
-  'Invente une excuse absurde pour arriver en retard.',
-  'Présente ta ville à un touriste en 30 secondes.',
-  'Raconte un souvenir d’enfance avec le plus de détails possibles.',
-  'Défends une opinion impopulaire (ananas sur la pizza ?).',
-]
+type Mode = 'free' | 'guided' | 'challenge'
 
 const L = {
   fr: {
-    heading: 'Studio vocal', sub: 'Texte libre ou texte guidé. À toi de choisir.',
-    free: 'Texte libre', freeHint: 'Aucun texte. Tu pars de ce que tu veux.',
-    guided: 'Texte guidé', guidedHint: 'Un prompteur défile en bas de l’écran.',
-    twister: 'Virelangues', twisterHint: 'Un classique, mais avec le chronomètre.',
-    challenge: 'Défi impro', challengeHint: 'Une carte au hasard, 30 secondes chrono.',
-    record: 'Enregistrer', stop: 'Arrêter', camera: 'Caméra', cameraOff: 'Couper la caméra',
-    sessions: 'Tes prises', noSessions: 'Aucune prise pour l’instant.',
-    pickText: 'Choisis un texte', minutes: 'min', startPrompt: 'Lancer le prompteur',
-    pause: 'Pause', play: 'Défiler', speed: 'vitesse', follow: 'Suivi vocal',
-    followOff: 'Défilement auto', listenModel: 'Écouter le modèle',
-    again: 'Un autre !', go: 'C’est parti !', timesup: 'Temps écoulé — bien joué !',
+    heading: 'Studio vocal & vidéo',
+    sub: 'Entraîne ton éloquence face caméra : en roue libre, guidé par un prompteur, ou au hasard d’un défi.',
+    free: 'Texte libre',
+    freeHint: 'Parle librement de ce que tu veux, sans contrainte.',
+    guided: 'Texte guidé',
+    guidedHint: 'Choisis un domaine, tes sujets de niche et ton prompteur.',
+    challenge: 'Défi improvisé',
+    challengeHint: 'La roue aux 55 sujets insolites pour tester ta répartie.',
+    enableCam: 'Activer la caméra & le micro',
+    camPrompt: 'Autorise l’accès à ta caméra et ton micro pour lancer le studio.',
+    camOff: 'Caméra désactivée',
+    micOff: 'Micro désactivé',
+    record: 'Enregistrer',
+    stop: 'Terminer',
+    pause: 'Pause',
+    resume: 'Reprendre',
+    changeTopic: 'Changer de sujet',
+    spinWheel: 'Faire tourner la roue',
+    chooseTopic: 'Choisir un domaine & sujet',
+    prompterPromptTitle: 'Utiliser un prompteur ?',
+    prompterPromptDesc: 'Préfères-tu lire un texte structuré ou t’exprimer librement sur ce sujet ?',
+    withPrompter: 'Oui, avec prompteur',
+    withoutPrompter: 'Non, sans prompteur',
+    takesHeading: 'Mes Prises & Enregistrements',
+    noTakes: 'Aucune prise enregistrée. Lance ta première session !',
+    openReview: 'Ouvrir l’Espace Notes',
+    deleteTake: 'Supprimer',
+    downloadTake: 'Télécharger',
+    opacityControl: 'Opacité de l’overlay',
+    anglesTitle: 'Pistes pour structurer ta pensée :',
   },
   en: {
-    heading: 'Voice studio', sub: 'Free speech or guided text. Your call.',
-    free: 'Free speech', freeHint: 'No text. Start from anything you want.',
-    guided: 'Guided text', guidedHint: 'A teleprompter scrolls at the bottom.',
-    twister: 'Tongue twisters', twisterHint: 'A classic, but timed.',
-    challenge: 'Improv challenge', challengeHint: 'A random card, 30 seconds on the clock.',
-    record: 'Record', stop: 'Stop', camera: 'Camera', cameraOff: 'Turn camera off',
-    sessions: 'Your takes', noSessions: 'No takes yet.',
-    pickText: 'Pick a text', minutes: 'min', startPrompt: 'Start the prompter',
-    pause: 'Pause', play: 'Scroll', speed: 'speed', follow: 'Voice follow',
-    followOff: 'Auto-scroll', listenModel: 'Listen to the model',
-    again: 'Another one!', go: 'Go!', timesup: 'Time’s up — well done!',
+    heading: 'Voice & Video Studio',
+    sub: 'Practice your speaking on camera: free-form, guided with a teleprompter, or through improv challenges.',
+    free: 'Free Speech',
+    freeHint: 'Talk freely about anything you want with zero constraints.',
+    guided: 'Guided Text',
+    guidedHint: 'Pick a category, niche topics, and optional teleprompter.',
+    challenge: 'Improv Challenge',
+    challengeHint: 'A 55-topic fortune wheel to test your spontaneous speaking.',
+    enableCam: 'Enable Camera & Microphone',
+    camPrompt: 'Grant browser permission to camera and microphone to start.',
+    camOff: 'Camera off',
+    micOff: 'Microphone off',
+    record: 'Record',
+    stop: 'Finish',
+    pause: 'Pause',
+    resume: 'Resume',
+    changeTopic: 'Change topic',
+    spinWheel: 'Spin the wheel',
+    chooseTopic: 'Choose category & topic',
+    prompterPromptTitle: 'Use a teleprompter?',
+    prompterPromptDesc: 'Would you like a prepared text to scroll or speak freely with topic prompts?',
+    withPrompter: 'Yes, with prompter',
+    withoutPrompter: 'No, speak freely',
+    takesHeading: 'My Takes & Recordings',
+    noTakes: 'No recorded takes yet. Start your very first session!',
+    openReview: 'Open Notes Workspace',
+    deleteTake: 'Delete',
+    downloadTake: 'Download',
+    opacityControl: 'Overlay opacity',
+    anglesTitle: 'Key ideas to structure your talk:',
   },
 } as const
 
-// ---- speech recognition (optional, Chromium) --------------------------------
-type Recognition = {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null
-  onend: (() => void) | null
-  start: () => void
-  stop: () => void
-}
-function createRecognition(lang: Language): Recognition | null {
-  const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition }
-  const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition
-  if (!Ctor) return null
-  const recognition = new Ctor()
-  recognition.continuous = true
-  recognition.interimResults = true
-  recognition.lang = lang === 'en' ? 'en-US' : 'fr-FR'
-  return recognition
-}
-
-export function SpeakingPage({ ui, language, api }: { ui: 'fr' | 'en'; language: Language; api: ApiSettings }) {
+export function SpeakingPage({
+  ui,
+  language,
+}: {
+  ui: 'fr' | 'en'
+  language: Language
+  api: ApiSettings
+}) {
   const t = L[ui]
-  const [mode, setMode] = useState<Mode>('none')
-  const [recording, setRecording] = useState(false)
-  const [elapsed, setElapsed] = useState(0)
-  const [stream, setStream] = useState<MediaStream | null>(null)
-  const [cameraOn, setCameraOn] = useState(false)
-  const [recordings, setRecordings] = useState<Recording[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [guidedId, setGuidedId] = useState(guidedTexts[0].id)
-  const [prompting, setPrompting] = useState(false)
-  const [twisterId, setTwisterId] = useState(tongueTwisters[0].id)
-  const [challenge, setChallenge] = useState<string | null>(null)
-  const [challengeLeft, setChallengeLeft] = useState(30)
+  const [mode, setMode] = useState<Mode>('free')
 
+  // Stream & Recording state
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [cameraActive, setCameraActive] = useState(false)
+  const [micMuted, setMicMuted] = useState(false)
+  const [cameraDisabled, setCameraDisabled] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const [permissionError, setPermissionError] = useState<string | null>(null)
+  const [audioLevel, setAudioLevel] = useState(0)
+
+  // Guided Mode state
+  const [selectedCategory, setSelectedCategory] = useState<GlobalTopicCategory | null>(null)
+  const [selectedNiche, setSelectedNiche] = useState<NicheTopic | null>(null)
+  const [showTopicPicker, setShowTopicPicker] = useState(false)
+  const [showPrompterChoiceModal, setShowPrompterChoiceModal] = useState(false)
+  const [showPrompter, setShowPrompter] = useState(false)
+
+  // Challenge Mode state
+  const [showWheel, setShowWheel] = useState(false)
+  const [currentChallenge, setCurrentChallenge] = useState<typeof IMPROV_CHALLENGES[0] | null>(null)
+
+  // HUD Glassmorphism settings
+  const [overlayOpacity, setOverlayOpacity] = useState(0.82)
+  const [showHudSettings, setShowHudSettings] = useState(false)
+
+  // Saved sessions & Review modal
+  const [sessions, setSessions] = useState<SpeakingSessionRecord[]>([])
+  const [activeReviewSession, setActiveReviewSession] = useState<SpeakingSessionRecord | null>(null)
+
+  // Refs
   const videoRef = useRef<HTMLVideoElement>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<number | null>(null)
-  const startedAtRef = useRef(0)
+  const startTimeRef = useRef<number>(0)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const animFrameRef = useRef<number | null>(null)
 
-  useEffect(() => () => { stopAll(); stopSpeaking() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
+  // Load saved sessions on mount
   useEffect(() => {
-    if (videoRef.current && stream) { videoRef.current.srcObject = stream; void videoRef.current.play().catch(() => undefined) }
+    void getAllSpeakingSessions().then((list) => {
+      setSessions(list)
+    })
+  }, [])
+
+  // Clean up media streams and timers on unmount
+  useEffect(() => {
+    return () => {
+      stopAllMedia()
+    }
+  }, [])
+
+  // Connect stream to video element
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream
+      void videoRef.current.play().catch(() => undefined)
+    }
   }, [stream])
 
-  const stopAll = () => {
-    stream?.getTracks().forEach((track) => track.stop())
+  // Setup Audio Visualizer VU-Meter
+  const setupAudioAnalyser = useCallback((mediaStream: MediaStream) => {
+    try {
+      const audioCtx = new (window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 64
+      const source = audioCtx.createMediaStreamSource(mediaStream)
+      source.connect(analyser)
+
+      audioContextRef.current = audioCtx
+      analyserRef.current = analyser
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+
+      const updateMeter = () => {
+        analyser.getByteFrequencyData(dataArray)
+        let sum = 0
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i]
+        }
+        const avg = sum / dataArray.length
+        setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)))
+        animFrameRef.current = requestAnimationFrame(updateMeter)
+      }
+
+      updateMeter()
+    } catch {
+      // AudioContext not available or blocked
+    }
+  }, [])
+
+  const stopAllMedia = () => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop())
+    }
     setStream(null)
-    setCameraOn(false)
+    setCameraActive(false)
     if (timerRef.current) window.clearInterval(timerRef.current)
     timerRef.current = null
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+    if (audioContextRef.current) {
+      void audioContextRef.current.close().catch(() => undefined)
+      audioContextRef.current = null
+    }
   }
 
-  const ensureMic = async (withCamera: boolean) => {
+  // Request user camera & mic permission
+  const requestMediaAccess = async () => {
     try {
-      if (stream && cameraOn === withCamera) return true
-      stopAll()
-      const next = await navigator.mediaDevices.getUserMedia(withCamera
-        ? { video: { facingMode: 'user', width: { ideal: 1280 } }, audio: { echoCancellation: true, noiseSuppression: true } }
-        : { audio: { echoCancellation: true, noiseSuppression: true } })
-      setStream(next)
-      setCameraOn(withCamera)
-      setError(null)
-      return true
-    } catch {
-      setError(ui === 'fr' ? 'Micro (ou caméra) indisponible. Vérifie les autorisations du navigateur.' : 'Microphone (or camera) unavailable. Check browser permissions.')
-      return false
+      setPermissionError(null)
+      const media = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
+      setStream(media)
+      setCameraActive(true)
+      setCameraDisabled(false)
+      setMicMuted(false)
+      setupAudioAnalyser(media)
+    } catch (err) {
+      console.error('Error requesting media stream:', err)
+      setPermissionError(
+        ui === 'fr'
+          ? 'Impossible d’accéder à la caméra ou au microphone. Vérifie les autorisations de ton navigateur.'
+          : 'Unable to access camera or microphone. Please check your browser permissions.',
+      )
     }
   }
 
-  const toggleRecording = async (label: string) => {
-    if (recording) {
-      recorderRef.current?.state !== 'inactive' && recorderRef.current?.stop()
-      return
+  // Toggle Camera video track
+  const toggleCameraTrack = () => {
+    if (!stream) return
+    const videoTracks = stream.getVideoTracks()
+    if (videoTracks.length > 0) {
+      const nextState = !videoTracks[0].enabled
+      videoTracks[0].enabled = nextState
+      setCameraDisabled(!nextState)
     }
-    if (!stream && !(await ensureMic(cameraOn))) return
+  }
+
+  // Toggle Mic audio track
+  const toggleMicTrack = () => {
+    if (!stream) return
+    const audioTracks = stream.getAudioTracks()
+    if (audioTracks.length > 0) {
+      const nextState = !audioTracks[0].enabled
+      audioTracks[0].enabled = nextState
+      setMicMuted(!nextState)
+    }
+  }
+
+  // Recording controls with MediaRecorder
+  const startRecording = async () => {
+    if (!stream) {
+      await requestMediaAccess()
+    }
     const currentStream = stream
     if (!currentStream) return
-    const mime = ['video/webm;codecs=vp9,opus', 'video/webm', 'audio/webm', 'video/mp4'].find((value) => MediaRecorder.isTypeSupported(value))
-    const recorder = mime ? new MediaRecorder(currentStream, { mimeType: mime }) : new MediaRecorder(currentStream)
-    chunksRef.current = []
-    recorder.ondataavailable = (event) => { if (event.data.size) chunksRef.current.push(event.data) }
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'video/webm' })
+
+    try {
+      const mimeTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4',
+      ]
+      const supportedMime = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m))
+      const recorder = supportedMime
+        ? new MediaRecorder(currentStream, { mimeType: supportedMime })
+        : new MediaRecorder(currentStream)
+
       chunksRef.current = []
-      if (blob.size) {
-        const kind = (recorder.mimeType || '').includes('video') ? 'video' as const : 'audio' as const
-        setRecordings((list) => [{ id: `${Date.now()}`, url: URL.createObjectURL(blob), label, duration: Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000)), createdAt: new Date().toISOString(), kind }, ...list])
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data)
+        }
       }
-      setRecording(false)
-      if (timerRef.current) window.clearInterval(timerRef.current)
-      timerRef.current = null
+
+      recorder.onstop = async () => {
+        const mime = recorder.mimeType || 'video/webm'
+        const blob = new Blob(chunksRef.current, { type: mime })
+        chunksRef.current = []
+
+        if (blob.size > 0) {
+          const finalDuration = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000))
+          let sessionTitle = ''
+          let topicId = ''
+          let topicName = ''
+
+          if (mode === 'guided' && selectedNiche) {
+            topicId = selectedNiche.id
+            topicName = ui === 'fr' ? selectedNiche.title : selectedNiche.titleEn
+            sessionTitle = topicName
+          } else if (mode === 'challenge' && currentChallenge) {
+            topicId = `challenge-${currentChallenge.id}`
+            topicName = `${currentChallenge.category}: #${currentChallenge.id}`
+            sessionTitle = getChallengeText(currentChallenge, language)
+          } else {
+            sessionTitle = ui === 'fr' ? 'Session libre' : 'Free session'
+          }
+
+          const newSessionRecord = await saveSpeakingSession({
+            id: `rec-${Date.now()}`,
+            title: sessionTitle,
+            mode,
+            topicId,
+            topicName,
+            duration: finalDuration,
+            createdAt: new Date().toISOString(),
+            kind: 'video',
+            notes: '',
+            timestamps: [],
+            tags: [mode === 'guided' ? 'Guidé' : mode === 'challenge' ? 'Défi' : 'Libre'],
+            ratings: { fluency: 4, pronunciation: 4, confidence: 4 },
+            blob,
+          })
+
+          setSessions((prev) => [newSessionRecord, ...prev])
+        }
+
+        setRecording(false)
+        setIsPaused(false)
+        if (timerRef.current) window.clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+
+      recorderRef.current = recorder
+      startTimeRef.current = Date.now()
+      setElapsed(0)
+      timerRef.current = window.setInterval(() => {
+        setElapsed(Math.round((Date.now() - startTimeRef.current) / 1000))
+      }, 500)
+
+      recorder.start(500)
+      setRecording(true)
+      setIsPaused(false)
+    } catch (err) {
+      console.error('Error starting MediaRecorder:', err)
     }
-    recorderRef.current = recorder
-    startedAtRef.current = Date.now()
-    setElapsed(0)
-    timerRef.current = window.setInterval(() => setElapsed(Math.round((Date.now() - startedAtRef.current) / 1000)), 500)
-    recorder.start(500)
-    setRecording(true)
   }
 
-  const format = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+  const pauseRecording = () => {
+    if (recorderRef.current && recorderRef.current.state === 'recording') {
+      recorderRef.current.pause()
+      setIsPaused(true)
+    }
+  }
 
-  const guided = guidedTexts.find((text) => text.id === guidedId) ?? guidedTexts[0]
-  const twister = tongueTwisters.find((item) => item.id === twisterId) ?? tongueTwisters[0]
+  const resumeRecording = () => {
+    if (recorderRef.current && recorderRef.current.state === 'paused') {
+      recorderRef.current.resume()
+      setIsPaused(false)
+    }
+  }
 
-  // challenge countdown
-  useEffect(() => {
-    if (mode !== 'challenge' || challenge === null || challengeLeft <= 0) return
-    const timer = window.setTimeout(() => setChallengeLeft((v) => v - 1), 1000)
-    return () => window.clearTimeout(timer)
-  }, [mode, challenge, challengeLeft])
+  const stopRecording = () => {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      recorderRef.current.stop()
+    }
+  }
+
+  const formatTimer = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = Math.floor(seconds % 60)
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+
+  // Handle guided subtopic selection
+  const handleSelectNiche = (niche: NicheTopic) => {
+    setSelectedNiche(niche)
+    setShowTopicPicker(false)
+    setShowPrompterChoiceModal(true)
+  }
+
+  // Handle session updates from Review modal
+  const handleUpdateSession = async (updated: SpeakingSessionRecord) => {
+    await updateSpeakingSession(updated.id, {
+      title: updated.title,
+      notes: updated.notes,
+      timestamps: updated.timestamps,
+      tags: updated.tags,
+      ratings: updated.ratings,
+    })
+    setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
+    setActiveReviewSession(updated)
+  }
+
+  const handleDeleteSession = async (id: string) => {
+    await deleteSpeakingSession(id)
+    setSessions((prev) => prev.filter((s) => s.id !== id))
+    if (activeReviewSession?.id === id) {
+      setActiveReviewSession(null)
+    }
+  }
 
   const modeCards: { id: Mode; title: string; hint: string; icon: React.ReactNode }[] = [
     { id: 'free', title: t.free, hint: t.freeHint, icon: <Sparkles size={20} /> },
     { id: 'guided', title: t.guided, hint: t.guidedHint, icon: <BookOpen size={20} /> },
-    { id: 'twister', title: t.twister, hint: t.twisterHint, icon: <Activity size={20} /> },
     { id: 'challenge', title: t.challenge, hint: t.challengeHint, icon: <Zap size={20} /> },
   ]
 
-  return <div className="page speaking-page">
-    <header className="page-header"><div><p className="eyebrow">{ui === 'fr' ? 'PARLER' : 'SPEAK'}</p><h1>{t.heading}</h1><p className="subhead">{t.sub}</p></div><span className="session-count">{recordings.length} {ui === 'fr' ? 'prises' : 'takes'}</span></header>
-
-    <section className="mode-grid">
-      {modeCards.map((card) => <button key={card.id} className={mode === card.id ? 'mode-card active' : 'mode-card'}
-        onClick={() => { setMode(card.id); setPrompting(false); setChallenge(null); setChallengeLeft(30) }}>
-        <span>{card.icon}</span><strong>{card.title}</strong><small>{card.hint}</small>
-      </button>)}
-    </section>
-
-    {mode !== 'none' && <section className={`speak-studio ${cameraOn ? 'with-camera' : ''}`}>
-      {cameraOn && <video ref={videoRef} className="speak-video" autoPlay muted playsInline />}
-      <div className="speak-stage">
-        {mode === 'free' && <div className="speak-copy"><p className="eyebrow">{t.free.toUpperCase()}</p><h2>{ui === 'fr' ? 'Parle de ce que tu veux.' : 'Talk about anything.'}</h2><p>{ui === 'fr' ? 'Ton quotidien, une opinion, une histoire. Le micro écoute, c’est tout.' : 'Your day, an opinion, a story. The mic just listens.'}</p></div>}
-        {mode === 'guided' && <div className="speak-copy">
-          <p className="eyebrow">{t.pickText.toUpperCase()}</p>
-          <div className="guided-picker">
-            {guidedTexts.map((text) => <button key={text.id} className={guidedId === text.id ? 'guided-chip active' : 'guided-chip'} onClick={() => setGuidedId(text.id)}>
-              <strong>{text.title}</strong><span>~{text.minutes} {t.minutes}</span>
-            </button>)}
-          </div>
-          <div className="guided-actions">
-            <button className="outline" onClick={() => void speak(guided.text, language, api)}><Play size={13} /> {t.listenModel}</button>
-            <button className="primary" onClick={() => setPrompting(true)}>{t.startPrompt} <ArrowRight size={15} /></button>
-          </div>
-        </div>}
-        {mode === 'twister' && <div className="speak-copy">
-          <p className="eyebrow">{t.twister.toUpperCase()}</p>
-          <h2 className="twister-text">“{twister.text}”</h2>
-          <p>{ui === 'fr' ? `Travail ciblé : ${twister.focus}.` : `Focus: ${twister.focus}.`}</p>
-          <div className="guided-actions">
-            <button className="outline" onClick={() => void speak(twister.text, language, api)}><Play size={13} /> {t.listenModel}</button>
-            <button className="outline" onClick={() => setTwisterId(tongueTwisters[(tongueTwisters.findIndex((i) => i.id === twisterId) + 1) % tongueTwisters.length].id)}><RotateCcw size={13} /> {t.again}</button>
-          </div>
-        </div>}
-        {mode === 'challenge' && <div className="speak-copy">
-          <p className="eyebrow">{t.challenge.toUpperCase()}</p>
-          {challenge === null
-            ? <><h2>{ui === 'fr' ? 'Prêt·e ? 30 secondes.' : 'Ready? 30 seconds.'}</h2><button className="primary" onClick={() => { setChallenge(challenges[Math.floor(Math.random() * challenges.length)]); setChallengeLeft(30) }}>{t.go} <ArrowRight size={15} /></button></>
-            : <><h2 className="challenge-text">{challenge}</h2>
-                <div className="challenge-timer"><i style={{ width: `${(challengeLeft / 30) * 100}%` }} /><strong>{challengeLeft > 0 ? `${challengeLeft}s` : t.timesup}</strong></div>
-                {challengeLeft <= 0 && <button className="outline" onClick={() => { setChallenge(challenges[Math.floor(Math.random() * challenges.length)]); setChallengeLeft(30) }}><RotateCcw size={13} /> {t.again}</button>}</>}
-        </div>}
-        <div className="speak-controls">
-          {recording && <span className="rec-timer"><i />{format(elapsed)}</span>}
-          <button className={recording ? 'record-btn recording' : 'record-btn'} onClick={() => void toggleRecording(mode === 'guided' ? guided.title : mode === 'twister' ? 'Virelangue' : mode === 'challenge' ? 'Défi impro' : 'Texte libre')}>
-            {recording ? <><span style={{ width: 10, height: 10, background: '#fff', borderRadius: 2, display: 'inline-block' }} /> {t.stop}</> : <><span style={{ width: 10, height: 10, background: '#dc2626', borderRadius: '50%', display: 'inline-block' }} /> {t.record}</>}
-          </button>
-          <button className="camera-toggle" onClick={() => void (cameraOn ? Promise.resolve(stopAll()) : ensureMic(true))}>
-            {cameraOn ? <><CameraOff size={14} /> {t.cameraOff}</> : <><Camera size={14} /> {t.camera}</>}
-          </button>
+  return (
+    <div className="page speaking-page">
+      {/* Header */}
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">{ui === 'fr' ? 'PARLER & STUDIO VOCAL' : 'SPEAK & VOICE STUDIO'}</p>
+          <h1>{t.heading}</h1>
+          <p className="subhead">{t.sub}</p>
         </div>
-        {error && <p className="speak-error">{error}</p>}
-      </div>
-    </section>}
+        <div className="header-right-badges">
+          <span className="session-count-pill">
+            <Video size={14} /> {sessions.length} {ui === 'fr' ? 'prises' : 'takes'}
+          </span>
+        </div>
+      </header>
 
-    {prompting && mode === 'guided' && <Teleprompter ui={ui} text={guided.text} language={language} active={recording} onClose={() => setPrompting(false)} />}
+      {/* 3 Modes Bar */}
+      <section className="mode-selector-grid">
+        {modeCards.map((card) => (
+          <button
+            key={card.id}
+            className={`mode-selector-card ${mode === card.id ? 'active' : ''}`}
+            onClick={() => {
+              setMode(card.id)
+              if (card.id === 'guided' && !selectedNiche) {
+                setShowTopicPicker(true)
+              }
+              if (card.id === 'challenge' && !currentChallenge) {
+                setShowWheel(true)
+              }
+            }}
+          >
+            <div className="mode-card-icon">{card.icon}</div>
+            <div className="mode-card-text">
+              <strong>{card.title}</strong>
+              <small>{card.hint}</small>
+            </div>
+            {mode === card.id && <span className="active-dot" />}
+          </button>
+        ))}
+      </section>
 
-    <section className="session-strip">
-      <p className="eyebrow">{t.sessions.toUpperCase()}</p>
-      {recordings.length === 0 && <p className="subhead">{t.noSessions}</p>}
-      <div className="take-grid">
-        {recordings.map((take, index) => <article key={take.id} className="take-card">
-          <span>{String(recordings.length - index).padStart(2, '0')}</span>
-          <div><strong>{take.label}</strong><small>{format(take.duration)}</small></div>
-          {take.kind === 'video' ? <video controls playsInline preload="metadata" src={take.url} /> : <audio controls src={take.url} />}
-          <button className="text-button" onClick={() => setRecordings((list) => list.filter((item) => item.id !== take.id))} aria-label="Supprimer"><Trash2 size={14} /></button>
-        </article>)}
-      </div>
-    </section>
-  </div>
-}
+      {/* Main Full-Size Video Studio Stage */}
+      <section className="studio-stage-wrapper">
+        <div className="studio-camera-viewport">
+          {/* Active Live Camera Stream */}
+          {cameraActive && (
+            <video
+              ref={videoRef}
+              className={`studio-live-video ${cameraDisabled ? 'disabled' : ''}`}
+              autoPlay
+              muted
+              playsInline
+            />
+          )}
 
-function Teleprompter({ ui, text, language, active, onClose }: { ui: 'fr' | 'en'; text: string; language: Language; active: boolean; onClose: () => void }) {
-  const t = L[ui]
-  const words = useMemo(() => text.split(/\s+/).filter(Boolean), [text])
-  const [index, setIndex] = useState(0)
-  const [playing, setPlaying] = useState(true)
-  const [speed, setSpeed] = useState(1) // 0.5 – 2
-  const [follow, setFollow] = useState(false)
-  const recognitionRef = useRef<Recognition | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const hasRecognition = useMemo(() => createRecognition(language) !== null, [language])
+          {/* Camera Disabled / Off Placeholder */}
+          {cameraActive && cameraDisabled && (
+            <div className="studio-black-screen">
+              <CameraOff size={42} />
+              <p>{t.camOff}</p>
+            </div>
+          )}
 
-  // timed auto-scroll: ~150 wpm at speed 1
-  useEffect(() => {
-    if (!playing || follow || index >= words.length) return
-    const perWord = 60000 / (150 * speed)
-    const timer = window.setTimeout(() => setIndex((i) => Math.min(words.length, i + 1)), perWord)
-    return () => window.clearTimeout(timer)
-  }, [playing, follow, index, speed, words.length])
+          {/* Initial Authorization View if Camera not started */}
+          {!cameraActive && (
+            <div className="studio-auth-placeholder">
+              <div className="studio-auth-glow" />
+              <div className="studio-auth-card">
+                <div className="studio-cam-icon-halo">
+                  <Camera size={34} />
+                </div>
+                <h3>{t.enableCam}</h3>
+                <p>{t.camPrompt}</p>
+                {permissionError && <p className="studio-auth-error">{permissionError}</p>}
+                <button className="studio-auth-btn" onClick={() => void requestMediaAccess()}>
+                  <Sparkles size={16} /> {t.enableCam}
+                </button>
+              </div>
+            </div>
+          )}
 
-  // voice follow: advance to the furthest matched word
-  useEffect(() => {
-    if (!follow || !hasRecognition) return
-    const recognition = createRecognition(language)
-    if (!recognition) return
-    recognitionRef.current = recognition
-    let cursor = 0
-    recognition.onresult = (event) => {
-      const last = event.results[event.results.length - 1]
-      const heard = last?.[0]?.transcript.toLowerCase().replace(/[^a-zà-ÿ\s'-]/gi, '').split(/\s+/).filter(Boolean) ?? []
-      for (const spoken of heard) {
-        for (let ahead = cursor; ahead < Math.min(cursor + 6, words.length); ahead += 1) {
-          if (words[ahead].toLowerCase().replace(/[^a-zà-ÿ'-]/gi, '') === spoken) { cursor = ahead + 1; break }
-        }
-      }
-      setIndex(cursor)
-    }
-    recognition.onend = () => { try { recognition.start() } catch { /* stopped */ } }
-    try { recognition.start() } catch { /* unsupported */ }
-    return () => { recognition.onend = null; try { recognition.stop() } catch { /* noop */ } }
-  }, [follow, hasRecognition, language, words])
+          {/* Web3 Glassmorphism HUD Overlay (Active Camera) */}
+          {cameraActive && (
+            <div
+              className="studio-glass-hud"
+              style={{
+                background: `radial-gradient(ellipse at center, rgba(14, 18, 26, ${Math.max(0, overlayOpacity - 0.45)}) 0%, rgba(10, 12, 18, ${overlayOpacity}) 100%)`,
+              }}
+            >
+              {/* HUD Top Bar */}
+              <div className="hud-top-bar">
+                <div className="hud-mode-badge">
+                  <span className="mode-tag">
+                    {mode === 'guided' ? <BookOpen size={13} /> : mode === 'challenge' ? <Zap size={13} /> : <Sparkles size={13} />}
+                    {mode === 'guided' ? t.guided : mode === 'challenge' ? t.challenge : t.free}
+                  </span>
+                  <span className="lang-tag">{language.toUpperCase()}</span>
+                </div>
 
-  // keep current word visible (centered in the 3-line window)
-  useEffect(() => {
-    const container = scrollRef.current
-    const current = container?.querySelector('[data-current="true"]') as HTMLElement | null
-    if (container && current) {
-      container.scrollTop = current.offsetTop - container.clientHeight / 2 + current.clientHeight
-    }
-  }, [index])
+                <div className="hud-top-right-tools">
+                  {/* VU-Meter Live Audio Level */}
+                  <div className="hud-audio-meter" title={micMuted ? t.micOff : `Audio: ${audioLevel}%`}>
+                    {micMuted ? (
+                      <MicOff size={14} className="muted-icon" />
+                    ) : (
+                      <>
+                        <Mic size={14} />
+                        <div className="vu-bars">
+                          <i style={{ height: `${Math.min(100, audioLevel * 1.4)}%` }} />
+                          <i style={{ height: `${Math.min(100, audioLevel * 1.8)}%` }} />
+                          <i style={{ height: `${Math.min(100, audioLevel * 1.2)}%` }} />
+                        </div>
+                      </>
+                    )}
+                  </div>
 
-  const done = index >= words.length
-  const pct = Math.min(100, Math.round((index / words.length) * 100))
+                  {/* HUD Opacity Slider Toggle */}
+                  <button
+                    className={`hud-glass-btn ${showHudSettings ? 'active' : ''}`}
+                    onClick={() => setShowHudSettings(!showHudSettings)}
+                    title={t.opacityControl}
+                  >
+                    <Sliders size={14} />
+                  </button>
 
-  return <div className="prompter-bar">
-    <div className="prompter-head">
-      <span className="eyebrow">{ui === 'fr' ? 'PROMPTEUR' : 'TELEPROMPTER'}{active ? ' · REC' : ''}</span>
-      <div className="prompter-progress"><i style={{ width: `${pct}%` }} /></div>
-      <div className="prompter-actions">
-        {hasRecognition && <button className={follow ? 'pchip active' : 'pchip'} onClick={() => setFollow(!follow)}>{follow ? <><Mic size={13} /> {t.follow}</> : <><MicOff size={13} /> {t.followOff}</>}</button>}
-        <button className="pchip" onClick={() => setPlaying(!playing)}>{playing ? <><Pause size={13} /> {t.pause}</> : <><Play size={13} /> {t.play}</>}</button>
-        <label className="pspeed">{t.speed}<input type="range" min="0.5" max="2" step="0.25" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /></label>
-        <button className="pchip" onClick={() => setIndex(Math.max(0, index - 8))}>−</button>
-        <button className="pchip" onClick={() => setIndex(Math.min(words.length, index + 8))}>＋</button>
-        <button className="pchip pclose" onClick={onClose} aria-label="Fermer"><X size={15} /></button>
-      </div>
+                  {/* Settings popup */}
+                  {showHudSettings && (
+                    <div className="hud-opacity-popover">
+                      <label>
+                        <span>{t.opacityControl}</span>
+                        <input
+                          type="range"
+                          min="0.15"
+                          max="0.95"
+                          step="0.05"
+                          value={overlayOpacity}
+                          onChange={(e) => setOverlayOpacity(Number(e.target.value))}
+                        />
+                        <b>{Math.round(overlayOpacity * 100)}%</b>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* HUD Center / Mode Context Details */}
+              <div className="hud-center-stage">
+                {/* Mode 2 (Guided) : Centered badge if "without prompter" was chosen */}
+                {mode === 'guided' && selectedNiche && !showPrompter && (
+                  <div className="guided-centered-card">
+                    <div className="niche-card-header">
+                      <span className="niche-badge">{selectedNiche.badge}</span>
+                      <h4>{ui === 'fr' ? selectedNiche.title : selectedNiche.titleEn}</h4>
+                    </div>
+                    <div className="niche-angles-box">
+                      <p className="angles-title">{t.anglesTitle}</p>
+                      <ul>
+                        {(ui === 'fr' ? selectedNiche.angles : selectedNiche.anglesEn).map((angle, i) => (
+                          <li key={i}>{angle}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="niche-card-actions">
+                      <button className="niche-action-pill" onClick={() => setShowTopicPicker(true)}>
+                        <Layers size={13} /> {t.changeTopic}
+                      </button>
+                      <button className="niche-action-pill highlight" onClick={() => setShowPrompter(true)}>
+                        <FileText size={13} /> {t.withPrompter}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mode 3 (Challenge) : Display active chosen challenge */}
+                {mode === 'challenge' && currentChallenge && (
+                  <div className="challenge-hud-card">
+                    <div className="challenge-tag-row">
+                      <span className="challenge-chip">{currentChallenge.category}</span>
+                      <span className="challenge-num">#{currentChallenge.id}</span>
+                    </div>
+                    <h3>“{getChallengeText(currentChallenge, language)}”</h3>
+                    <div className="challenge-hud-actions">
+                      <button className="challenge-btn-ghost" onClick={() => setShowWheel(true)}>
+                        <RotateCcw size={13} /> {t.spinWheel}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mode 3 (Challenge) : Prompt to spin if no challenge is active */}
+                {mode === 'challenge' && !currentChallenge && (
+                  <button className="spin-wheel-launch-btn" onClick={() => setShowWheel(true)}>
+                    <Zap size={18} />
+                    <span>{t.spinWheel}</span>
+                  </button>
+                )}
+
+                {/* Mode 2 (Guided) : Prompt to pick a topic if none selected */}
+                {mode === 'guided' && !selectedNiche && !showTopicPicker && (
+                  <button className="spin-wheel-launch-btn" onClick={() => setShowTopicPicker(true)}>
+                    <BookOpen size={18} />
+                    <span>{t.chooseTopic}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Guided Mode: Bottom-Right Topic Selection Drawer/Overlay */}
+              {mode === 'guided' && showTopicPicker && (
+                <div
+                  className="guided-picker-bottom-right"
+                  style={{
+                    background: `rgba(15, 20, 28, ${Math.min(0.96, overlayOpacity + 0.15)})`,
+                  }}
+                >
+                  <div className="picker-drawer-header">
+                    {selectedCategory ? (
+                      <button className="picker-back-btn" onClick={() => setSelectedCategory(null)}>
+                        <ChevronLeft size={16} /> {ui === 'fr' ? 'Domaines' : 'Categories'}
+                      </button>
+                    ) : (
+                      <strong className="picker-heading">
+                        <Layers size={14} /> {ui === 'fr' ? 'Choisis un domaine' : 'Pick a domain'}
+                      </strong>
+                    )}
+                    <button className="picker-close-btn" onClick={() => setShowTopicPicker(false)}>
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  <div className="picker-drawer-content">
+                    {/* Level 1: Global Categories */}
+                    {!selectedCategory && (
+                      <div className="global-categories-list">
+                        {GLOBAL_CATEGORIES.map((cat) => (
+                          <button
+                            key={cat.id}
+                            className="global-cat-row"
+                            onClick={() => setSelectedCategory(cat)}
+                          >
+                            <span className="cat-icon">{cat.icon}</span>
+                            <div className="cat-info">
+                              <strong>{ui === 'fr' ? cat.title : cat.titleEn}</strong>
+                              <small>{ui === 'fr' ? cat.description : cat.descriptionEn}</small>
+                            </div>
+                            <ChevronRight size={16} className="arrow" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Level 2: Niche Subtopics */}
+                    {selectedCategory && (
+                      <div className="niche-subtopics-list">
+                        <p className="subtopics-category-title">
+                          {selectedCategory.icon} {ui === 'fr' ? selectedCategory.title : selectedCategory.titleEn}
+                        </p>
+                        {selectedCategory.subtopics.map((sub) => (
+                          <button
+                            key={sub.id}
+                            className="niche-topic-row"
+                            onClick={() => handleSelectNiche(sub)}
+                          >
+                            <div className="niche-info">
+                              <span className="badge">{sub.badge}</span>
+                              <strong>{ui === 'fr' ? sub.title : sub.titleEn}</strong>
+                            </div>
+                            <ChevronRight size={15} className="arrow" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Guided Mode: Prompter Choice Modal (Oui / Non) */}
+              {showPrompterChoiceModal && selectedNiche && (
+                <div
+                  className="prompter-choice-backdrop"
+                  onClick={(e) => e.target === e.currentTarget && setShowPrompterChoiceModal(false)}
+                >
+                  <div className="prompter-choice-dialog">
+                    <span className="dialog-icon-sparkle">
+                      <Sparkles size={24} />
+                    </span>
+                    <h3>{t.prompterPromptTitle}</h3>
+                    <p className="dialog-topic-name">
+                      “{ui === 'fr' ? selectedNiche.title : selectedNiche.titleEn}”
+                    </p>
+                    <p className="dialog-desc">{t.prompterPromptDesc}</p>
+
+                    <div className="dialog-choice-buttons">
+                      <button
+                        className="choice-btn secondary"
+                        onClick={() => {
+                          setShowPrompterChoiceModal(false)
+                          setShowPrompter(false)
+                        }}
+                      >
+                        {t.withoutPrompter}
+                      </button>
+                      <button
+                        className="choice-btn primary"
+                        onClick={() => {
+                          setShowPrompterChoiceModal(false)
+                          setShowPrompter(true)
+                        }}
+                      >
+                        <Play size={14} /> {t.withPrompter}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Teleprompter Overlay */}
+              {showPrompter && selectedNiche && (
+                <TeleprompterOverlay
+                  ui={ui}
+                  text={getPromptText(selectedNiche, language)}
+                  title={ui === 'fr' ? selectedNiche.title : selectedNiche.titleEn}
+                  badge={selectedNiche.badge}
+                  language={language}
+                  recording={recording}
+                  onClose={() => setShowPrompter(false)}
+                />
+              )}
+
+              {/* HUD Bottom Bar: Recording Controls */}
+              <div className="hud-bottom-bar">
+                {/* Left Device Controls */}
+                <div className="hud-device-controls">
+                  <button
+                    className={`device-btn ${micMuted ? 'off' : ''}`}
+                    onClick={toggleMicTrack}
+                    title={micMuted ? 'Activer micro' : 'Couper micro'}
+                  >
+                    {micMuted ? <MicOff size={16} /> : <Mic size={16} />}
+                  </button>
+                  <button
+                    className={`device-btn ${cameraDisabled ? 'off' : ''}`}
+                    onClick={toggleCameraTrack}
+                    title={cameraDisabled ? 'Activer caméra' : 'Couper caméra'}
+                  >
+                    {cameraDisabled ? <CameraOff size={16} /> : <Camera size={16} />}
+                  </button>
+                </div>
+
+                {/* Central Record Trigger */}
+                <div className="hud-record-center">
+                  {recording && (
+                    <div className="hud-live-timer">
+                      <span className="red-recording-dot" />
+                      <span className="timer-digits">{formatTimer(elapsed)}</span>
+                    </div>
+                  )}
+
+                  {!recording ? (
+                    <button className="primary-record-btn" onClick={() => void startRecording()}>
+                      <span className="rec-red-circle" />
+                      <span className="rec-label">{t.record}</span>
+                    </button>
+                  ) : (
+                    <div className="active-recording-actions">
+                      <button
+                        className="pause-record-btn"
+                        onClick={isPaused ? resumeRecording : pauseRecording}
+                        title={isPaused ? t.resume : t.pause}
+                      >
+                        {isPaused ? <Play size={16} /> : <Pause size={16} />}
+                      </button>
+                      <button className="stop-record-btn" onClick={stopRecording} title={t.stop}>
+                        <span className="stop-white-square" />
+                        <span>{t.stop}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Mode Actions */}
+                <div className="hud-right-actions">
+                  {mode === 'guided' && (
+                    <button
+                      className="hud-quick-btn"
+                      onClick={() => setShowTopicPicker(!showTopicPicker)}
+                    >
+                      <BookOpen size={14} />
+                      <span>{t.changeTopic}</span>
+                    </button>
+                  )}
+                  {mode === 'challenge' && (
+                    <button className="hud-quick-btn" onClick={() => setShowWheel(true)}>
+                      <Zap size={14} />
+                      <span>{t.spinWheel}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Wheel of Fortune Modal */}
+      {showWheel && (
+        <ImprovWheel
+          ui={ui}
+          language={language}
+          onSelectChallenge={(ch) => setCurrentChallenge(ch)}
+          onClose={() => setShowWheel(false)}
+        />
+      )}
+
+      {/* Split-Screen Review & Notes Modal */}
+      {activeReviewSession && (
+        <SessionReviewModal
+          ui={ui}
+          session={activeReviewSession}
+          onUpdate={handleUpdateSession}
+          onDelete={handleDeleteSession}
+          onClose={() => setActiveReviewSession(null)}
+        />
+      )}
+
+      {/* "Tes Prises" Management Grid */}
+      <section className="recorded-sessions-section">
+        <div className="section-header-row">
+          <div>
+            <p className="eyebrow">{ui === 'fr' ? 'HISTORIQUE VIDÉO' : 'VIDEO ARCHIVE'}</p>
+            <h2>{t.takesHeading}</h2>
+          </div>
+          <span className="sessions-counter-badge">{sessions.length}</span>
+        </div>
+
+        {sessions.length === 0 ? (
+          <div className="empty-sessions-box">
+            <Video size={36} />
+            <p>{t.noTakes}</p>
+          </div>
+        ) : (
+          <div className="sessions-cards-grid">
+            {sessions.map((take, index) => (
+              <article key={take.id} className="session-grid-card">
+                <div className="card-video-preview" onClick={() => setActiveReviewSession(take)}>
+                  {take.mediaUrl ? (
+                    <video src={take.mediaUrl} preload="metadata" playsInline />
+                  ) : (
+                    <div className="video-empty-preview">
+                      <Video size={28} />
+                    </div>
+                  )}
+                  <div className="preview-hover-play">
+                    <Play size={22} />
+                  </div>
+                  <span className="preview-duration-badge">{formatTimer(take.duration)}</span>
+                </div>
+
+                <div className="card-content-area">
+                  <div className="card-top-meta">
+                    <span className="card-mode-chip">
+                      {take.mode === 'guided'
+                        ? ui === 'fr'
+                          ? 'Guidé'
+                          : 'Guided'
+                        : take.mode === 'challenge'
+                        ? ui === 'fr'
+                          ? 'Défi'
+                          : 'Challenge'
+                        : ui === 'fr'
+                        ? 'Libre'
+                        : 'Free'}
+                    </span>
+                    <span className="card-date">{new Date(take.createdAt).toLocaleDateString()}</span>
+                  </div>
+
+                  <h3 className="card-session-title" onClick={() => setActiveReviewSession(take)}>
+                    {take.title}
+                  </h3>
+
+                  <div className="card-footer-actions">
+                    <button
+                      className="card-review-link"
+                      onClick={() => setActiveReviewSession(take)}
+                    >
+                      <FileText size={14} /> {t.openReview}
+                    </button>
+
+                    <div className="card-icon-buttons">
+                      {take.mediaUrl && (
+                        <a
+                          href={take.mediaUrl}
+                          download={`${take.title.replace(/[^a-z0-9à-ÿ]/gi, '_') || 'session'}.webm`}
+                          className="icon-action-btn"
+                          title={t.downloadTake}
+                        >
+                          <Download size={14} />
+                        </a>
+                      )}
+                      <button
+                        className="icon-action-btn delete"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              ui === 'fr'
+                                ? 'Supprimer cette prise définitivement ?'
+                                : 'Delete this take permanently?',
+                            )
+                          ) {
+                            void handleDeleteSession(take.id)
+                          }
+                        }}
+                        title={t.deleteTake}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
-    <div className="prompter-window" ref={scrollRef}>
-      <p className="prompter-text">
-        {words.map((word, i) => <span key={i} data-current={i === index} className={i < index ? 'said' : i === index ? 'current' : ''}>{word} </span>)}
-      </p>
-    </div>
-    {done && <div className="prompter-done"><Check size={14} /> {ui === 'fr' ? 'Texte terminé — belle lecture !' : 'Text finished — great reading!'}</div>}
-  </div>
+  )
 }
