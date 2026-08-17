@@ -3,7 +3,7 @@ import type { Language, ApiSettings } from '../domain'
 import { GLOBAL_CATEGORIES, GlobalTopicCategory, NicheTopic, getPromptText } from './speaking/speakingTopics'
 import { useCamera } from './speaking/CameraContext'
 import { TeleprompterOverlay } from './speaking/TeleprompterOverlay'
-import { SessionReviewModal } from './speaking/SessionReviewModal'
+import { SpeakingWorkspace } from './speaking/SpeakingWorkspace'
 import {
   Camera,
   CameraOff,
@@ -44,6 +44,8 @@ const L = {
     resume: 'Reprendre',
     chooseTopic: 'Choisir un sujet',
     changeTopic: 'Changer de sujet',
+    clearTopic: 'Enlever le sujet',
+    closeCam: 'Couper la caméra',
     prompterPromptTitle: 'Utiliser un prompteur ?',
     withPrompter: 'Oui',
     withoutPrompter: 'Non',
@@ -67,6 +69,8 @@ const L = {
     resume: 'Resume',
     chooseTopic: 'Choose a topic',
     changeTopic: 'Change topic',
+    clearTopic: 'Clear topic',
+    closeCam: 'Turn off camera',
     prompterPromptTitle: 'Use a teleprompter?',
     withPrompter: 'Yes',
     withoutPrompter: 'No',
@@ -93,6 +97,7 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
     permissionError,
     overlayOpacity,
     requestMediaAccess,
+    stopAllMedia,
     toggleCameraTrack,
     toggleMicTrack,
     isCountingDown,
@@ -107,6 +112,7 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
     setSelectedNiche,
     showPrompter,
     setShowPrompter,
+    clearTopic,
     sessions,
     activeReviewSession,
     setActiveReviewSession,
@@ -176,6 +182,21 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
     setInPickerCategory(null)
   }
 
+  // If a session is open in the notes workspace, render the full workspace view!
+  if (activeReviewSession) {
+    return (
+      <div className="page speaking-page">
+        <SpeakingWorkspace
+          ui={ui}
+          session={activeReviewSession}
+          onUpdate={handleUpdateSession}
+          onDelete={handleDeleteSession}
+          onBack={() => setActiveReviewSession(null)}
+        />
+      </div>
+    )
+  }
+
   // Reusable bottom control bar (rendered standalone or integrated into prompter)
   const renderControls = (inPrompter: boolean) => (
     <div className={`hud-bottom-bar ${inPrompter ? 'in-prompter' : ''}`}>
@@ -228,7 +249,7 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
         )}
       </div>
 
-      {/* Right: Topic selection / Change Topic */}
+      {/* Right: Topic selection & Clear Topic button */}
       <div className="hud-right-actions-stack">
         {selectedNiche && !inPrompter && (
           <>
@@ -254,17 +275,29 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
           </>
         )}
 
-        <button
-          className="hud-topic-trigger-btn"
-          onClick={() => {
-            setShowTopicPicker(!showTopicPicker)
-            setPendingNiche(null)
-            setInPickerCategory(null)
-          }}
-        >
-          <BookOpen size={14} />
-          <span>{selectedNiche ? t.changeTopic : t.chooseTopic}</span>
-        </button>
+        <div className="hud-topic-btn-group">
+          {selectedNiche && !showPrompter && (
+            <button
+              className="hud-topic-clear-btn"
+              onClick={clearTopic}
+              title={t.clearTopic}
+            >
+              <X size={14} />
+            </button>
+          )}
+
+          <button
+            className="hud-topic-trigger-btn"
+            onClick={() => {
+              setShowTopicPicker(!showTopicPicker)
+              setPendingNiche(null)
+              setInPickerCategory(null)
+            }}
+          >
+            <BookOpen size={14} />
+            <span>{selectedNiche ? t.changeTopic : t.chooseTopic}</span>
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -362,13 +395,22 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
                     )}
                   </div>
 
-                  {/* Fullscreen Button in Top-Right next to mic */}
+                  {/* Fullscreen Button */}
                   <button
                     className="hud-glass-btn"
                     onClick={toggleFullscreen}
                     title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
                   >
                     {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+                  </button>
+
+                  {/* Close / Turn Off Camera Button */}
+                  <button
+                    className="hud-glass-btn close-cam"
+                    onClick={stopAllMedia}
+                    title={t.closeCam}
+                  >
+                    <X size={15} />
                   </button>
                 </div>
               </div>
@@ -475,17 +517,6 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
           )}
         </div>
       </section>
-
-      {/* Split-Screen Review & Notes Modal */}
-      {activeReviewSession && (
-        <SessionReviewModal
-          ui={ui}
-          session={activeReviewSession}
-          onUpdate={handleUpdateSession}
-          onDelete={handleDeleteSession}
-          onClose={() => setActiveReviewSession(null)}
-        />
-      )}
 
       {/* "Mes Prises" Management Grid */}
       <section className="recorded-sessions-section">
