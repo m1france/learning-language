@@ -70,7 +70,7 @@ export function CameraProvider({
   const [elapsed, setElapsed] = useState(0)
   const [audioLevel, setAudioLevel] = useState(0)
   const [permissionError, setPermissionError] = useState<string | null>(null)
-  const [overlayOpacity, setOverlayOpacity] = useState(0.4) // Default 40%
+  const [overlayOpacity, setOverlayOpacity] = useState(0.1) // Default 10%
 
   // Countdown state
   const [isCountingDown, setIsCountingDown] = useState(false)

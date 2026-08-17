@@ -9,7 +9,6 @@ import {
   CameraOff,
   Mic,
   MicOff,
-  Sliders,
   ChevronRight,
   ChevronLeft,
   X,
@@ -22,6 +21,7 @@ import {
   Maximize2,
   Minimize2,
   BookOpen,
+  Sparkles,
 } from 'lucide-react'
 
 type SpeakingPageProps = {
@@ -47,12 +47,12 @@ const L = {
     prompterPromptTitle: 'Utiliser un prompteur ?',
     withPrompter: 'Oui',
     withoutPrompter: 'Non',
+    talkingPoints: 'Pistes de réflexion :',
     takesHeading: 'Mes Prises & Enregistrements',
     noTakes: 'Aucune prise enregistrée. Lance ta première session !',
     openReview: 'Ouvrir l’Espace Notes',
     deleteTake: 'Supprimer',
     downloadTake: 'Télécharger',
-    opacityControl: 'Opacité de l’overlay',
   },
   en: {
     heading: 'Voice & Video Studio',
@@ -70,12 +70,12 @@ const L = {
     prompterPromptTitle: 'Use a teleprompter?',
     withPrompter: 'Yes',
     withoutPrompter: 'No',
+    talkingPoints: 'Talking points:',
     takesHeading: 'My Takes & Recordings',
     noTakes: 'No recorded takes yet. Start your very first session!',
     openReview: 'Open Notes Workspace',
     deleteTake: 'Delete',
     downloadTake: 'Download',
-    opacityControl: 'Overlay opacity',
   },
 } as const
 
@@ -92,7 +92,6 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
     audioLevel,
     permissionError,
     overlayOpacity,
-    setOverlayOpacity,
     requestMediaAccess,
     toggleCameraTrack,
     toggleMicTrack,
@@ -118,7 +117,6 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
   const [showTopicPicker, setShowTopicPicker] = useState(false)
   const [inPickerCategory, setInPickerCategory] = useState<GlobalTopicCategory | null>(null)
   const [pendingNiche, setPendingNiche] = useState<NicheTopic | null>(null)
-  const [showHudSettings, setShowHudSettings] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -177,6 +175,99 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
     setShowTopicPicker(false)
     setInPickerCategory(null)
   }
+
+  // Reusable bottom control bar (rendered standalone or integrated into prompter)
+  const renderControls = (inPrompter: boolean) => (
+    <div className={`hud-bottom-bar ${inPrompter ? 'in-prompter' : ''}`}>
+      {/* Left: Device toggles */}
+      <div className="hud-device-controls">
+        <button
+          className={`device-btn ${micMuted ? 'off' : ''}`}
+          onClick={toggleMicTrack}
+          title={micMuted ? 'Activer micro' : 'Couper micro'}
+        >
+          {micMuted ? <MicOff size={16} /> : <Mic size={16} />}
+        </button>
+        <button
+          className={`device-btn ${cameraDisabled ? 'off' : ''}`}
+          onClick={toggleCameraTrack}
+          title={cameraDisabled ? 'Activer caméra' : 'Couper caméra'}
+        >
+          {cameraDisabled ? <CameraOff size={16} /> : <Camera size={16} />}
+        </button>
+      </div>
+
+      {/* Center: Record button / Live timer */}
+      <div className="hud-record-center">
+        {recording && (
+          <div className="hud-live-timer">
+            <span className="red-recording-dot" />
+            <span className="timer-digits">{formatTimer(elapsed)}</span>
+          </div>
+        )}
+
+        {!recording ? (
+          <button className="primary-record-btn" onClick={handleStartRecord}>
+            <span className="rec-red-circle" />
+            <span className="rec-label">{t.record}</span>
+          </button>
+        ) : (
+          <div className="active-recording-actions">
+            <button
+              className="pause-record-btn"
+              onClick={isPaused ? resumeRecording : pauseRecording}
+              title={isPaused ? t.resume : t.pause}
+            >
+              {isPaused ? <Play size={16} /> : <Pause size={16} />}
+            </button>
+            <button className="stop-record-btn" onClick={stopRecording} title={t.stop}>
+              <span className="stop-white-square" />
+              <span>{t.stop}</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Right: Topic selection / Change Topic */}
+      <div className="hud-right-actions-stack">
+        {selectedNiche && !inPrompter && (
+          <>
+            {/* Directive Talking Points (when without prompter) */}
+            <div className="topic-directives-card">
+              <div className="directives-title">
+                <Sparkles size={12} />
+                <span>{t.talkingPoints}</span>
+              </div>
+              <ul className="directives-list">
+                {(ui === 'fr' ? selectedNiche.angles : selectedNiche.anglesEn).map((angle, idx) => (
+                  <li key={idx}>{angle}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="selected-topic-pill-overlay">
+              <span className="topic-badge">{selectedNiche.badge}</span>
+              <span className="topic-text">
+                {ui === 'fr' ? selectedNiche.title : selectedNiche.titleEn}
+              </span>
+            </div>
+          </>
+        )}
+
+        <button
+          className="hud-topic-trigger-btn"
+          onClick={() => {
+            setShowTopicPicker(!showTopicPicker)
+            setPendingNiche(null)
+            setInPickerCategory(null)
+          }}
+        >
+          <BookOpen size={14} />
+          <span>{selectedNiche ? t.changeTopic : t.chooseTopic}</span>
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <div className="page speaking-page">
@@ -247,20 +338,12 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
             <div
               className="studio-glass-hud"
               style={{
-                background: `radial-gradient(ellipse at center, rgba(14, 18, 26, ${Math.max(0, overlayOpacity - 0.35)}) 0%, rgba(10, 12, 18, ${overlayOpacity}) 100%)`,
+                background: `radial-gradient(ellipse at center, rgba(14, 18, 26, 0) 0%, rgba(10, 12, 18, ${overlayOpacity}) 100%)`,
               }}
             >
               {/* HUD Top Bar */}
               <div className="hud-top-bar">
-                <div className="hud-top-left-actions">
-                  <button
-                    className="hud-glass-btn"
-                    onClick={toggleFullscreen}
-                    title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
-                  >
-                    {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                  </button>
-                </div>
+                <div className="hud-top-left-actions" />
 
                 <div className="hud-top-right-tools">
                   {/* VU Meter */}
@@ -279,49 +362,23 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
                     )}
                   </div>
 
-                  {/* Opacity Control */}
+                  {/* Fullscreen Button in Top-Right next to mic */}
                   <button
-                    className={`hud-glass-btn ${showHudSettings ? 'active' : ''}`}
-                    onClick={() => setShowHudSettings(!showHudSettings)}
-                    title={t.opacityControl}
+                    className="hud-glass-btn"
+                    onClick={toggleFullscreen}
+                    title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
                   >
-                    <Sliders size={14} />
+                    {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
                   </button>
-
-                  {showHudSettings && (
-                    <div className="hud-opacity-popover">
-                      <label>
-                        <span>{t.opacityControl}</span>
-                        <input
-                          type="range"
-                          min="0.1"
-                          max="0.9"
-                          step="0.05"
-                          value={overlayOpacity}
-                          onChange={(e) => setOverlayOpacity(Number(e.target.value))}
-                        />
-                        <b>{Math.round(overlayOpacity * 100)}%</b>
-                      </label>
-                    </div>
-                  )}
                 </div>
               </div>
-
-              {/* Minimalist Transparent Prompter at Bottom */}
-              {showPrompter && selectedNiche && (
-                <TeleprompterOverlay
-                  text={getPromptText(selectedNiche, language)}
-                  opacity={overlayOpacity}
-                  onClose={() => setShowPrompter(false)}
-                />
-              )}
 
               {/* Bottom-Right In-Place Topic Selection Drawer (Does NOT mask camera) */}
               {showTopicPicker && (
                 <div
                   className="in-place-topic-drawer"
                   style={{
-                    backgroundColor: `rgba(15, 20, 28, ${Math.min(0.95, overlayOpacity + 0.3)})`,
+                    backgroundColor: 'rgba(15, 20, 28, 0.75)',
                   }}
                 >
                   {/* Step 1: Pick Category / Domain */}
@@ -401,80 +458,19 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
                 </div>
               )}
 
-              {/* HUD Bottom Bar */}
-              <div className="hud-bottom-bar">
-                {/* Left: Device toggles */}
-                <div className="hud-device-controls">
-                  <button
-                    className={`device-btn ${micMuted ? 'off' : ''}`}
-                    onClick={toggleMicTrack}
-                    title={micMuted ? 'Activer micro' : 'Couper micro'}
-                  >
-                    {micMuted ? <MicOff size={16} /> : <Mic size={16} />}
-                  </button>
-                  <button
-                    className={`device-btn ${cameraDisabled ? 'off' : ''}`}
-                    onClick={toggleCameraTrack}
-                    title={cameraDisabled ? 'Activer caméra' : 'Couper caméra'}
-                  >
-                    {cameraDisabled ? <CameraOff size={16} /> : <Camera size={16} />}
-                  </button>
-                </div>
-
-                {/* Center: Record button / Live timer */}
-                <div className="hud-record-center">
-                  {recording && (
-                    <div className="hud-live-timer">
-                      <span className="red-recording-dot" />
-                      <span className="timer-digits">{formatTimer(elapsed)}</span>
-                    </div>
-                  )}
-
-                  {!recording ? (
-                    <button className="primary-record-btn" onClick={handleStartRecord}>
-                      <span className="rec-red-circle" />
-                      <span className="rec-label">{t.record}</span>
-                    </button>
-                  ) : (
-                    <div className="active-recording-actions">
-                      <button
-                        className="pause-record-btn"
-                        onClick={isPaused ? resumeRecording : pauseRecording}
-                        title={isPaused ? t.resume : t.pause}
-                      >
-                        {isPaused ? <Play size={16} /> : <Pause size={16} />}
-                      </button>
-                      <button className="stop-record-btn" onClick={stopRecording} title={t.stop}>
-                        <span className="stop-white-square" />
-                        <span>{t.stop}</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Right: Topic selection / Change Topic */}
-                <div className="hud-right-actions-stack">
-                  {selectedNiche && (
-                    <div className="selected-topic-pill-overlay">
-                      <span className="topic-badge">{selectedNiche.badge}</span>
-                      <span className="topic-text">
-                        {ui === 'fr' ? selectedNiche.title : selectedNiche.titleEn}
-                      </span>
-                    </div>
-                  )}
-                  <button
-                    className="hud-topic-trigger-btn"
-                    onClick={() => {
-                      setShowTopicPicker(!showTopicPicker)
-                      setPendingNiche(null)
-                      setInPickerCategory(null)
-                    }}
-                  >
-                    <BookOpen size={14} />
-                    <span>{selectedNiche ? t.changeTopic : t.chooseTopic}</span>
-                  </button>
-                </div>
-              </div>
+              {/* Minimalist Transparent Prompter Integrated with Controls */}
+              {showPrompter && selectedNiche ? (
+                <TeleprompterOverlay
+                  text={getPromptText(selectedNiche, language)}
+                  opacity={overlayOpacity}
+                  onClose={() => setShowPrompter(false)}
+                >
+                  {renderControls(true)}
+                </TeleprompterOverlay>
+              ) : (
+                /* Standalone Bottom Bar when Prompter is not shown */
+                renderControls(false)
+              )}
             </div>
           )}
         </div>
