@@ -6,6 +6,8 @@ import { importFromFile, importFromUrl, paragraphsToResource } from './importer'
 import { Reader, Cover } from './features/Reader'
 import { LearningFocus } from './features/LearningFocus'
 import { SpeakingPage } from './features/SpeakingPage'
+import { CameraProvider } from './features/speaking/CameraContext'
+import { FloatingMiniCam } from './features/speaking/FloatingMiniCam'
 import { LifePage } from './features/LifePage'
 import { Settings } from './features/Settings'
 import { prompts } from './data'
@@ -85,47 +87,56 @@ export default function App() {
 
   const go = (next: Page) => { setReaderId(null); setPage(next) }
 
-  return <main className={`app-shell ${sideCollapsed ? 'side-collapsed' : ''}`}>
-    <Sidebar page={page} setPage={go} t={t} theme={state.settings.theme} toggleTheme={() => change({ ...state, settings: { ...state.settings, theme: state.settings.theme === 'light' ? 'dark' : 'light' } })} name={state.settings.name} collapsed={sideCollapsed} onToggleCollapse={toggleSide} />
-    <section className="page-canvas">
-      <header className="mobile-header"><Brand /><button className="avatar">{state.settings.name.slice(0, 1).toUpperCase()}</button></header>
-      {reader ? (
-        <Reader state={state} resource={reader} ui={ui}
-          onBack={() => setReaderId(null)}
-          onUpdate={(updated) => change(upsertResource(state, updated))}
-          onDelete={(resourceId) => { change(deleteResource(state, resourceId)); setReaderId(null) }}
-          onProgress={(resourceId, chapterIndex, paragraphIndex) => change({
-            ...state,
-            progress: { ...state.progress, [resourceId]: { resourceId, chapterIndex, paragraphIndex, completed: false, updatedAt: new Date().toISOString() } },
-          })}
-          onSaveWord={(args) => change(upsertWordDetails(state, args))}
-          onDeleteWord={(raw, language) => change(deleteWord(state, raw, language))}
-          onOpenFocus={(resource) => setFocusId(resource.id)}
-          onPageSize={(size) => change({ ...state, settings: { ...state.settings, readerPageSize: size } })}
-          onWordMark={(key, mark) => change(setWordMark(state, key, mark))}
-          onSilentMark={(key, letterIndex) => change(toggleSilentMark(state, key, letterIndex))}
-          onMarkColor={(type, color) => change({ ...state, settings: { ...state.settings, markColors: { ...state.settings.markColors, [type]: color } } })}
-          onAddMarking={(label, color) => change(addMarking(state, label, color))}
-          onRenameMarking={(markingId, newLabel) => change(renameMarking(state, markingId, newLabel))}
-          onDeleteMarking={(markingId) => change(deleteMarking(state, markingId))}
-          onResetMarks={(language) => change(resetResourceMarks(state, language))} />
-      ) : (
-        <>
-          {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}
-          {page === 'reading' && <ReadingLibrary state={state} t={t} onOpen={(resource) => setReaderId(resource.id)} onAdd={(resource) => change(upsertResource(state, resource))} onChange={change} />}
-          {page === 'speaking' && <SpeakingPage ui={baseUi(ui)} language={state.settings.learningLanguage} api={state.settings.api} />}
-          {page === 'writing' && <Writing t={t} />}
-          {page === 'life' && <LifePage ui={baseUi(ui)} state={state} onChange={change} />}
-          {page === 'settings' && <Settings settings={state.settings} state={state}
-            onSave={(settings) => change({ ...state, settings })}
-            onChangeState={change}
-            onResetData={() => { resetState(); setState(null); setPage('home') }} />}
-        </>
-      )}
-    </section>
-    <nav className="mobile-nav">{navItems.slice(1).map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => go(item.id)} key={item.id}><b>{item.icon}</b><span>{t[item.label]}</span></button>)}</nav>
-    {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} shortcuts={state.settings.teacherShortcuts} onUpdateResource={(updated) => change(upsertResource(state, updated))} onClose={() => setFocusId(null)} />}
-  </main>
+  return (
+    <CameraProvider language={state.settings.learningLanguage}>
+      <main className={`app-shell ${sideCollapsed ? 'side-collapsed' : ''}`}>
+        <Sidebar page={page} setPage={go} t={t} theme={state.settings.theme} toggleTheme={() => change({ ...state, settings: { ...state.settings, theme: state.settings.theme === 'light' ? 'dark' : 'light' } })} name={state.settings.name} collapsed={sideCollapsed} onToggleCollapse={toggleSide} />
+        <section className="page-canvas">
+          <header className="mobile-header"><Brand /><button className="avatar">{state.settings.name.slice(0, 1).toUpperCase()}</button></header>
+          {reader ? (
+            <Reader state={state} resource={reader} ui={ui}
+              onBack={() => setReaderId(null)}
+              onUpdate={(updated) => change(upsertResource(state, updated))}
+              onDelete={(resourceId) => { change(deleteResource(state, resourceId)); setReaderId(null) }}
+              onProgress={(resourceId, chapterIndex, paragraphIndex) => change({
+                ...state,
+                progress: { ...state.progress, [resourceId]: { resourceId, chapterIndex, paragraphIndex, completed: false, updatedAt: new Date().toISOString() } },
+              })}
+              onSaveWord={(args) => change(upsertWordDetails(state, args))}
+              onDeleteWord={(raw, language) => change(deleteWord(state, raw, language))}
+              onOpenFocus={(resource) => setFocusId(resource.id)}
+              onPageSize={(size) => change({ ...state, settings: { ...state.settings, readerPageSize: size } })}
+              onWordMark={(key, mark) => change(setWordMark(state, key, mark))}
+              onSilentMark={(key, letterIndex) => change(toggleSilentMark(state, key, letterIndex))}
+              onMarkColor={(type, color) => change({ ...state, settings: { ...state.settings, markColors: { ...state.settings.markColors, [type]: color } } })}
+              onAddMarking={(label, color) => change(addMarking(state, label, color))}
+              onRenameMarking={(markingId, newLabel) => change(renameMarking(state, markingId, newLabel))}
+              onDeleteMarking={(markingId) => change(deleteMarking(state, markingId))}
+              onResetMarks={(language) => change(resetResourceMarks(state, language))} />
+          ) : (
+            <>
+              {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}
+              {page === 'reading' && <ReadingLibrary state={state} t={t} onOpen={(resource) => setReaderId(resource.id)} onAdd={(resource) => change(upsertResource(state, resource))} onChange={change} />}
+              {page === 'speaking' && <SpeakingPage ui={baseUi(ui)} language={state.settings.learningLanguage} api={state.settings.api} />}
+              {page === 'writing' && <Writing t={t} />}
+              {page === 'life' && <LifePage ui={baseUi(ui)} state={state} onChange={change} />}
+              {page === 'settings' && <Settings settings={state.settings} state={state}
+                onSave={(settings) => change({ ...state, settings })}
+                onChangeState={change}
+                onResetData={() => { resetState(); setState(null); setPage('home') }} />}
+            </>
+          )}
+        </section>
+        <nav className="mobile-nav">{navItems.slice(1).map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => go(item.id)} key={item.id}><b>{item.icon}</b><span>{t[item.label]}</span></button>)}</nav>
+        {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} shortcuts={state.settings.teacherShortcuts} onUpdateResource={(updated) => change(upsertResource(state, updated))} onClose={() => setFocusId(null)} />}
+        
+        {/* Floating Mini Cam (shown when camera is active and user is outside speaking page) */}
+        {(page !== 'speaking' || reader !== null) && (
+          <FloatingMiniCam onNavigateToSpeaking={() => go('speaking')} />
+        )}
+      </main>
+    </CameraProvider>
+  )
 }
 
 function Brand() {
