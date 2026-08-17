@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react'
+import React, { useRef, useState, useMemo } from 'react'
 import type { SpeakingSessionRecord } from './speakingStorage'
+import { NotionSpeakingEditor } from './NotionSpeakingEditor'
 import {
   ArrowLeft,
   Play,
@@ -11,15 +12,6 @@ import {
   Edit2,
   Volume2,
   VolumeX,
-  Bold,
-  Italic,
-  List,
-  Heading2,
-  Quote,
-  Eye,
-  Edit3,
-  Columns,
-  Sparkles,
 } from 'lucide-react'
 
 type SpeakingWorkspaceProps = {
@@ -30,18 +22,8 @@ type SpeakingWorkspaceProps = {
   onBack: () => void
 }
 
-function parseTimeToSeconds(timeStr: string): number {
-  const clean = timeStr.replace(/^[@\[\]]/g, '').trim()
-  const parts = clean.split(':').map((p) => parseInt(p, 10))
-  if (parts.length === 2) {
-    return parts[0] * 60 + parts[1]
-  } else if (parts.length === 3) {
-    return parts[0] * 3600 + parts[1] * 60 + parts[2]
-  }
-  return 0
-}
-
 function formatTime(seconds: number): string {
+  if (!seconds || isNaN(seconds) || !isFinite(seconds)) return '00:00'
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
@@ -55,7 +37,6 @@ export function SpeakingWorkspace({
   onBack,
 }: SpeakingWorkspaceProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -64,23 +45,28 @@ export function SpeakingWorkspace({
   const [isMuted, setIsMuted] = useState(false)
   const [title, setTitle] = useState(session.title)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
-  const [notes, setNotes] = useState(
-    session.notes ||
-      (ui === 'fr'
-        ? '## Notes de session\n\n- Remarques générales :\n- Points forts :\n- Pistes d’amélioration :\n\n@00:05 Première prise de parole\n'
-        : '## Session Notes\n\n- Key points:\n- Highlights:\n- Improvement areas:\n\n@00:05 First talking point\n'),
-  )
-  const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split')
+  const [notes, setNotes] = useState(session.notes || '')
   const [ratings, setRatings] = useState(
     session.ratings || { fluency: 4, pronunciation: 4, confidence: 4 },
   )
   const [savedBadge, setSavedBadge] = useState(false)
 
+  // Safe duration display without Infinity / NaN
+  const displayDuration = useMemo(() => {
+    if (duration && !isNaN(duration) && isFinite(duration) && duration > 0) {
+      return duration
+    }
+    if (session.duration && isFinite(session.duration) && session.duration > 0) {
+      return session.duration
+    }
+    return 0
+  }, [duration, session.duration])
+
   // Sync video time
   const handleTimeUpdate = () => {
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime)
-      if (videoRef.current.duration && !isNaN(videoRef.current.duration)) {
+      if (videoRef.current.duration && !isNaN(videoRef.current.duration) && isFinite(videoRef.current.duration)) {
         setDuration(videoRef.current.duration)
       }
     }
@@ -149,33 +135,6 @@ export function SpeakingWorkspace({
     triggerAutosave({ ratings: updated })
   }
 
-  // Insert markdown snippet or timestamp at cursor position
-  const insertFormatting = (before: string, after = '', placeholder = '') => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const currentText = textarea.value
-    const selectedText = currentText.substring(start, end) || placeholder
-
-    const replacement = `${before}${selectedText}${after}`
-    const newText = currentText.substring(0, start) + replacement + currentText.substring(end)
-
-    setNotes(newText)
-    triggerAutosave({ notes: newText })
-
-    setTimeout(() => {
-      textarea.focus()
-      textarea.setSelectionRange(start + before.length, start + before.length + selectedText.length)
-    }, 10)
-  }
-
-  const insertCurrentTimestamp = () => {
-    const timeStr = `@${formatTime(currentTime)} `
-    insertFormatting(timeStr, '', '')
-  }
-
   const downloadMedia = () => {
     if (!session.mediaUrl) return
     const a = document.createElement('a')
@@ -186,70 +145,9 @@ export function SpeakingWorkspace({
     document.body.removeChild(a)
   }
 
-  // Interactive Markdown Parser with Clickable @Timestamps
-  const renderedMarkdown = useMemo(() => {
-    if (!notes) return null
-
-    const lines = notes.split('\n')
-    return lines.map((line, lineIdx) => {
-      // Empty line
-      if (!line.trim()) {
-        return <div key={lineIdx} className="md-empty-line" />
-      }
-
-      // Heading 1
-      if (line.startsWith('# ')) {
-        return (
-          <h1 key={lineIdx} className="md-h1">
-            {renderInlineMarkdown(line.substring(2), seekTo)}
-          </h1>
-        )
-      }
-      // Heading 2
-      if (line.startsWith('## ')) {
-        return (
-          <h2 key={lineIdx} className="md-h2">
-            {renderInlineMarkdown(line.substring(3), seekTo)}
-          </h2>
-        )
-      }
-      // Heading 3
-      if (line.startsWith('### ')) {
-        return (
-          <h3 key={lineIdx} className="md-h3">
-            {renderInlineMarkdown(line.substring(4), seekTo)}
-          </h3>
-        )
-      }
-      // Blockquote
-      if (line.startsWith('> ')) {
-        return (
-          <blockquote key={lineIdx} className="md-blockquote">
-            {renderInlineMarkdown(line.substring(2), seekTo)}
-          </blockquote>
-        )
-      }
-      // Unordered list
-      if (line.startsWith('- ') || line.startsWith('* ')) {
-        return (
-          <li key={lineIdx} className="md-list-item">
-            {renderInlineMarkdown(line.substring(2), seekTo)}
-          </li>
-        )
-      }
-
-      // Regular paragraph
-      return (
-        <p key={lineIdx} className="md-paragraph">
-          {renderInlineMarkdown(line, seekTo)}
-        </p>
-      )
-    })
-  }, [notes])
-
   return (
     <div className="speaking-workspace-page">
-      {/* Top Navigation Bar */}
+      {/* Top Header Bar */}
       <header className="workspace-header-bar">
         <div className="workspace-header-left">
           <button className="workspace-back-btn" onClick={onBack}>
@@ -294,7 +192,7 @@ export function SpeakingWorkspace({
               {session.topicName && <span className="ws-chip topic">{session.topicName}</span>}
               <span className="ws-chip date">
                 <Clock size={12} /> {new Date(session.createdAt).toLocaleDateString()} ·{' '}
-                {formatTime(session.duration)}
+                {formatTime(displayDuration)}
               </span>
               {savedBadge && (
                 <span className="ws-saved-pill">
@@ -334,9 +232,9 @@ export function SpeakingWorkspace({
         </div>
       </header>
 
-      {/* Main Workspace Body (Video Left / Markdown Notes Right) */}
+      {/* Main Split Grid (Video Left / Notion Editor Right) */}
       <main className="workspace-body-grid">
-        {/* Left Column: Video Player */}
+        {/* Left Column: Video Player with External Controls Underneath */}
         <section className="workspace-video-pane">
           <div className="workspace-video-wrapper">
             {session.mediaUrl ? (
@@ -353,163 +251,81 @@ export function SpeakingWorkspace({
                 <p>Aucun flux vidéo disponible</p>
               </div>
             )}
-
-            {/* Glassmorphism Player Toolbar */}
-            <div className="ws-player-glass-bar">
-              <button
-                className={`ws-play-btn ${isPlaying ? 'playing' : ''}`}
-                onClick={togglePlay}
-                title={isPlaying ? 'Pause' : 'Lecture'}
-              >
-                {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-              </button>
-
-              <div className="ws-scrubber-box">
-                <input
-                  type="range"
-                  min="0"
-                  max={duration || 100}
-                  step="0.1"
-                  value={currentTime}
-                  onChange={(e) => seekTo(Number(e.target.value))}
-                />
-                <span className="ws-time-display">
-                  {formatTime(currentTime)} / {formatTime(duration)}
-                </span>
-              </div>
-
-              <div className="ws-speed-group">
-                {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
-                  <button
-                    key={rate}
-                    className={`ws-speed-chip ${playbackRate === rate ? 'active' : ''}`}
-                    onClick={() => changeSpeed(rate)}
-                  >
-                    {rate}x
-                  </button>
-                ))}
-              </div>
-
-              <button className="ws-mute-btn" onClick={toggleMute} title={isMuted ? 'Activer le son' : 'Muet'}>
-                {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
-              </button>
-            </div>
           </div>
 
-          {/* Quick Insert Timestamp Button Below Video */}
-          <div className="ws-insert-ts-row">
-            <button className="ws-insert-ts-btn" onClick={insertCurrentTimestamp}>
-              <Clock size={14} />
-              <span>
-                {ui === 'fr'
-                  ? `Insérer @${formatTime(currentTime)} dans les notes`
-                  : `Insert @${formatTime(currentTime)} into notes`}
+          {/* External Controls Bar Underneath the Video (Not taking 1/3 of the video) */}
+          <div className="ws-video-external-controls">
+            <button
+              className={`ws-play-btn ${isPlaying ? 'playing' : ''}`}
+              onClick={togglePlay}
+              title={isPlaying ? 'Pause' : 'Lecture'}
+            >
+              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+            </button>
+
+            <div className="ws-scrubber-box">
+              <input
+                type="range"
+                min="0"
+                max={displayDuration || 100}
+                step="0.1"
+                value={currentTime}
+                onChange={(e) => seekTo(Number(e.target.value))}
+              />
+              <span className="ws-time-display">
+                {formatTime(currentTime)} / {formatTime(displayDuration)}
               </span>
+            </div>
+
+            <div className="ws-speed-group">
+              {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
+                <button
+                  key={rate}
+                  className={`ws-speed-chip ${playbackRate === rate ? 'active' : ''}`}
+                  onClick={() => changeSpeed(rate)}
+                >
+                  {rate}x
+                </button>
+              ))}
+            </div>
+
+            <button
+              className="ws-mute-btn"
+              onClick={toggleMute}
+              title={isMuted ? 'Activer le son' : 'Muet'}
+            >
+              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </button>
           </div>
         </section>
 
-        {/* Right Column: Markdown Notes Editor & Interactive Viewer */}
+        {/* Right Column: Unified Notion-style Notes Editor */}
         <section className="workspace-notes-pane">
-          {/* Notes Toolbar */}
-          <div className="ws-notes-toolbar">
-            <div className="ws-format-tools">
-              <button
-                className="ws-tool-btn"
-                onClick={() => insertFormatting('## ', '', 'Titre')}
-                title="Titre (##)"
-              >
-                <Heading2 size={14} />
-              </button>
-              <button
-                className="ws-tool-btn"
-                onClick={() => insertFormatting('**', '**', 'texte en gras')}
-                title="Gras (**)"
-              >
-                <Bold size={14} />
-              </button>
-              <button
-                className="ws-tool-btn"
-                onClick={() => insertFormatting('*', '*', 'texte en italique')}
-                title="Italique (*)"
-              >
-                <Italic size={14} />
-              </button>
-              <button
-                className="ws-tool-btn"
-                onClick={() => insertFormatting('- ', '', 'Point clé')}
-                title="Liste (-)"
-              >
-                <List size={14} />
-              </button>
-              <button
-                className="ws-tool-btn"
-                onClick={() => insertFormatting('> ', '', 'Citation ou remarque')}
-                title="Citation (>)"
-              >
-                <Quote size={14} />
-              </button>
-              <button
-                className="ws-tool-btn timestamp"
-                onClick={insertCurrentTimestamp}
-                title="Insérer le chrono actuel (@MM:SS)"
-              >
-                <Clock size={13} />
-                <span>@{formatTime(currentTime)}</span>
-              </button>
-            </div>
-
-            {/* View Mode Switch */}
-            <div className="ws-mode-switch">
-              <button
-                className={`ws-mode-tab ${viewMode === 'edit' ? 'active' : ''}`}
-                onClick={() => setViewMode('edit')}
-                title="Éditer en Markdown"
-              >
-                <Edit3 size={13} />
-                <span>{ui === 'fr' ? 'Édition' : 'Edit'}</span>
-              </button>
-              <button
-                className={`ws-mode-tab ${viewMode === 'split' ? 'active' : ''}`}
-                onClick={() => setViewMode('split')}
-                title="Vue partagée Édition + Rendu"
-              >
-                <Columns size={13} />
-                <span>{ui === 'fr' ? 'Mixte' : 'Split'}</span>
-              </button>
-              <button
-                className={`ws-mode-tab ${viewMode === 'preview' ? 'active' : ''}`}
-                onClick={() => setViewMode('preview')}
-                title="Aperçu interactif"
-              >
-                <Eye size={13} />
-                <span>{ui === 'fr' ? 'Rendu' : 'Preview'}</span>
-              </button>
-            </div>
+          <div className="ws-notes-header-hint">
+            <span className="hint-label">{ui === 'fr' ? 'Bloc-notes interactif' : 'Interactive notes'}</span>
+            <span className="hint-shortcuts">
+              {ui === 'fr'
+                ? 'Tape @ pour insérer un horodatage · Cmd+B · Cmd+I · # pour les titres'
+                : 'Type @ to insert timestamp · Cmd+B · Cmd+I · # for headings'}
+            </span>
           </div>
 
-          {/* Notes Content Workspace */}
-          <div className={`ws-notes-content-area ${viewMode}`}>
-            {(viewMode === 'edit' || viewMode === 'split') && (
-              <textarea
-                ref={textareaRef}
-                className="ws-markdown-editor"
-                value={notes}
-                onChange={(e) => handleNotesChange(e.target.value)}
-                placeholder={
-                  ui === 'fr'
-                    ? 'Tape tes remarques ici en Markdown...\nUtilise @01:23 pour insérer un marqueur temporel cliquable.'
-                    : 'Write your notes in Markdown here...\nUse @01:23 to insert a clickable timestamp.'
-                }
-              />
-            )}
-
-            {(viewMode === 'preview' || viewMode === 'split') && (
-              <div className="ws-markdown-rendered-view">{renderedMarkdown}</div>
-            )}
+          {/* Unified Notion-Style WYSIWYG Document */}
+          <div className="ws-notes-editor-scroll">
+            <NotionSpeakingEditor
+              initialContent={notes}
+              currentTime={currentTime}
+              onSeek={seekTo}
+              onChange={handleNotesChange}
+              placeholder={
+                ui === 'fr'
+                  ? 'Écris tes notes librement...\nTape @ pour insérer un horodatage interactif.'
+                  : 'Write your notes freely...\nType @ to insert an interactive timestamp.'
+              }
+            />
           </div>
 
-          {/* Discreet Star Ratings at the very bottom (No unnecessary labels) */}
+          {/* Discreet Star Ratings at the Very Bottom (No "Auto-évaluation" label) */}
           <footer className="ws-discreet-ratings-footer">
             <div className="ws-rating-row">
               <span className="ws-rating-name">{ui === 'fr' ? 'Fluidité' : 'Fluency'}</span>
@@ -568,48 +384,4 @@ export function SpeakingWorkspace({
       </main>
     </div>
   )
-}
-
-// Inline Markdown Parser helper supporting **bold**, *italic*, and @MM:SS timestamps
-function renderInlineMarkdown(
-  text: string,
-  onSeek: (seconds: number) => void,
-): React.ReactNode[] {
-  // Regex to split by @MM:SS or [MM:SS] or **bold** or *italic*
-  const pattern = /(@[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?|\[[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?\]|\*\*[^*]+\*\*|\*[^*]+\*)/g
-
-  const parts = text.split(pattern)
-
-  return parts.map((part, idx) => {
-    if (!part) return null
-
-    // Match Timestamp @MM:SS or [MM:SS]
-    if (/^(@[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?|\[[0-9]{1,2}:[0-9]{2}(?::[0-9]{2})?\])$/.test(part)) {
-      const seconds = parseTimeToSeconds(part)
-      const label = part.replace(/^[@\[\]]/g, '').trim()
-      return (
-        <button
-          key={idx}
-          className="md-interactive-timestamp"
-          onClick={() => onSeek(seconds)}
-          title={`Sauter à ${label}`}
-        >
-          <Play size={10} />
-          <span>{label}</span>
-        </button>
-      )
-    }
-
-    // Match Bold **text**
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-      return <strong key={idx}>{part.slice(2, -2)}</strong>
-    }
-
-    // Match Italic *text*
-    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
-      return <em key={idx}>{part.slice(1, -1)}</em>
-    }
-
-    return <span key={idx}>{part}</span>
-  })
 }

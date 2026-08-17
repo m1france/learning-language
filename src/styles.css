@@ -2995,9 +2995,10 @@ h2 {
 
 /* ===== Studio Parler / Vocal & Vidéo Web3 Glassmorphism ===== */
 .speaking-page {
-  max-width: 1200px;
+  max-width: 1480px;
   margin: 0 auto;
-  padding-bottom: 60px;
+  padding: 0 24px 60px;
+  width: 100%;
 }
 
 .header-right-badges {
@@ -4259,12 +4260,13 @@ h2 {
 }
 
 /* ========================================================
-   Speaking Workspace Page (Grand écran & Markdown)
+   Speaking Workspace Page (Grand écran & Notion-like)
    ======================================================== */
 .speaking-workspace-page {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  width: 100%;
   padding-bottom: 60px;
   animation: fadeIn 0.22s ease-out;
 }
@@ -4276,14 +4278,14 @@ h2 {
   background: var(--white);
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 14px 20px;
+  padding: 14px 24px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
 }
 
 .workspace-header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 }
 
 .workspace-back-btn {
@@ -4322,7 +4324,7 @@ h2 {
 
 .workspace-title-display h1 {
   font-family: 'Fraunces', serif;
-  font-size: 20px;
+  font-size: 22px;
   margin: 0;
   color: var(--ink);
 }
@@ -4436,29 +4438,31 @@ h2 {
   border-color: rgba(239, 68, 68, 0.3);
 }
 
-/* Main Workspace Body */
+/* Main Workspace Body Grid */
 .workspace-body-grid {
   display: grid;
-  grid-template-columns: 1.05fr 1fr;
-  gap: 20px;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 28px;
+  width: 100%;
   min-height: 580px;
 }
 
+/* Left Column: Video & External Controls Underneath */
 .workspace-video-pane {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .workspace-video-wrapper {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9.5;
+  aspect-ratio: 16 / 10;
   background: #090c12;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4477,38 +4481,35 @@ h2 {
   font-size: 13px;
 }
 
-.ws-player-glass-bar {
-  position: absolute;
-  bottom: 12px;
-  left: 12px;
-  right: 12px;
-  background: rgba(12, 16, 24, 0.85);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
-  padding: 8px 12px;
+/* External Controls Bar Underneath the Video */
+.ws-video-external-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
 }
 
 .ws-play-btn {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: rgba(238, 119, 93, 0.25);
-  border: 1px solid rgba(238, 119, 93, 0.4);
-  color: #ee775d;
+  background: rgba(238, 119, 93, 0.15);
+  border: 1px solid rgba(238, 119, 93, 0.35);
+  color: var(--coral);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: 0.15s;
+  flex-shrink: 0;
 }
 
 .ws-play-btn:hover {
-  background: #ee775d;
+  background: var(--coral);
   color: #fff;
   transform: scale(1.05);
 }
@@ -4517,88 +4518,70 @@ h2 {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .ws-scrubber-box input {
   flex: 1;
-  accent-color: #ee775d;
+  accent-color: var(--coral);
+  cursor: pointer;
 }
 
 .ws-time-display {
   font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: 12px;
+  color: var(--muted);
   white-space: nowrap;
 }
 
 .ws-speed-group {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 .ws-speed-chip {
-  background: rgba(255, 255, 255, 0.08);
-  border: 0;
-  color: #94a3b8;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--muted);
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  padding: 3px 6px;
-  border-radius: 4px;
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 6px;
   cursor: pointer;
   transition: 0.15s;
 }
 
 .ws-speed-chip:hover {
-  color: #fff;
+  color: var(--ink);
+  border-color: var(--ink);
 }
 
 .ws-speed-chip.active {
-  background: #ee775d;
+  background: var(--coral);
   color: #fff;
+  border-color: var(--coral);
 }
 
 .ws-mute-btn {
   background: transparent;
   border: 0;
-  color: #cbd5e1;
+  color: var(--muted);
   cursor: pointer;
-  padding: 2px;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.15s;
 }
 
 .ws-mute-btn:hover {
-  color: #fff;
-}
-
-.ws-insert-ts-row {
-  display: flex;
-  justify-content: center;
-}
-
-.ws-insert-ts-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--white);
-  border: 1px solid var(--line);
   color: var(--ink);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: all 0.15s ease;
+  background: var(--paper);
 }
 
-.ws-insert-ts-btn:hover {
-  border-color: var(--coral);
-  color: var(--coral);
-  transform: translateY(-1px);
-}
-
-/* Notes Pane */
+/* Right Column: Unified Notion-style Notes Pane */
 .workspace-notes-pane {
   background: var(--white);
   border: 1px solid var(--line);
@@ -4609,201 +4592,198 @@ h2 {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
 }
 
-.ws-notes-toolbar {
+.ws-notes-header-hint {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
+  padding: 10px 16px;
   background: var(--paper);
   border-bottom: 1px solid var(--line);
 }
 
-.ws-format-tools {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.ws-tool-btn {
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--muted);
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: 0.15s;
-}
-
-.ws-tool-btn:hover {
-  background: var(--white);
-  border-color: var(--line);
-  color: var(--ink);
-}
-
-.ws-tool-btn.timestamp {
-  width: auto;
-  padding: 0 8px;
-  gap: 4px;
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  color: var(--coral);
-  background: rgba(238, 119, 93, 0.1);
-  border-color: rgba(238, 119, 93, 0.25);
-}
-
-.ws-tool-btn.timestamp:hover {
-  background: var(--coral);
-  color: #fff;
-}
-
-.ws-mode-switch {
-  display: flex;
-  align-items: center;
-  background: var(--white);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 2px;
-  gap: 2px;
-}
-
-.ws-mode-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: transparent;
-  border: 0;
-  color: var(--muted);
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: 0.15s;
-}
-
-.ws-mode-tab.active {
-  background: var(--ink);
-  color: var(--white);
-}
-
-/* Notes Content Area */
-.ws-notes-content-area {
-  flex: 1;
-  display: flex;
-  min-height: 380px;
-  max-height: 480px;
-  overflow: hidden;
-}
-
-.ws-notes-content-area.split .ws-markdown-editor {
-  width: 50%;
-  border-right: 1px solid var(--line);
-}
-
-.ws-notes-content-area.split .ws-markdown-rendered-view {
-  width: 50%;
-}
-
-.ws-markdown-editor {
-  width: 100%;
-  height: 100%;
-  background: transparent;
-  border: 0;
-  padding: 16px;
-  font-family: 'DM Mono', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--ink);
-  resize: none;
-  outline: none;
-}
-
-.ws-markdown-rendered-view {
-  width: 100%;
-  height: 100%;
-  overflow-y: auto;
-  padding: 16px 20px;
-  background: var(--white);
-}
-
-/* Rendered Markdown Elements */
-.md-h1 {
-  font-family: 'Fraunces', serif;
-  font-size: 20px;
-  color: var(--ink);
-  margin: 0 0 10px;
-}
-
-.md-h2 {
-  font-family: 'Fraunces', serif;
-  font-size: 17px;
-  color: var(--ink);
-  margin: 12px 0 8px;
-}
-
-.md-h3 {
-  font-size: 15px;
+.hint-label {
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink);
-  margin: 10px 0 6px;
 }
 
-.md-paragraph {
-  font-size: 13px;
-  line-height: 1.6;
+.hint-shortcuts {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+
+.ws-notes-editor-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 24px;
+  min-height: 400px;
+  max-height: 520px;
+}
+
+/* Notion-like Editor Container & Document */
+.notion-speaking-editor-container {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+}
+
+.notion-live-document {
+  width: 100%;
+  min-height: 360px;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.7;
   color: var(--ink);
+  word-break: break-word;
+}
+
+.notion-live-document[data-placeholder]:empty:before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
+.notion-live-document h1 {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  margin: 12px 0 6px;
+  color: var(--ink);
+}
+
+.notion-live-document h2 {
+  font-family: 'Fraunces', serif;
+  font-size: 18px;
+  margin: 10px 0 4px;
+  color: var(--ink);
+}
+
+.notion-live-document h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 8px 0 4px;
+  color: var(--ink);
+}
+
+.notion-live-document p {
   margin: 0 0 8px;
 }
 
-.md-blockquote {
+.notion-live-document blockquote {
   margin: 8px 0;
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-left: 3px solid var(--coral);
   background: var(--paper);
   border-radius: 0 8px 8px 0;
   color: var(--muted);
-  font-size: 13px;
 }
 
-.md-list-item {
-  margin-left: 18px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ink);
+.notion-live-document ul {
+  margin: 4px 0 8px 20px;
+  padding: 0;
+}
+
+.notion-live-document li {
   margin-bottom: 4px;
 }
 
-.md-empty-line {
-  height: 10px;
-}
-
-/* Clickable @Timestamp chip in Markdown */
-.md-interactive-timestamp {
+/* Notion Styled Timestamp Chip */
+.notion-ts-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(238, 119, 93, 0.15);
+  gap: 5px;
+  background: rgba(238, 119, 93, 0.14);
   border: 1px solid rgba(238, 119, 93, 0.3);
   color: var(--coral);
   font-family: 'DM Mono', monospace;
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 6px;
   cursor: pointer;
-  margin: 0 3px;
+  user-select: none;
   vertical-align: baseline;
+  margin-right: 4px;
   transition: all 0.15s ease;
 }
 
-.md-interactive-timestamp:hover {
+.notion-ts-chip:hover {
   background: var(--coral);
   color: #fff;
-  transform: scale(1.05);
+  border-color: var(--coral);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(238, 119, 93, 0.35);
+}
+
+.chip-icon {
+  font-size: 8px;
+}
+
+/* Contextual @ Autocomplete Popup Menu */
+.notion-at-menu-popup {
+  position: absolute;
+  z-index: 50;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.14);
+  padding: 6px;
+  min-width: 230px;
+  animation: slide-up 0.15s ease-out;
+}
+
+.at-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+.at-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: 0.12s;
+}
+
+.at-menu-item:hover,
+.at-menu-item.active {
+  background: var(--paper);
+}
+
+.at-item-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(238, 119, 93, 0.15);
+  color: var(--coral);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.at-item-label {
+  flex: 1;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.at-enter-icon {
+  color: var(--muted);
 }
 
 /* Discreet Rating Stars at the Very Bottom */
@@ -4813,7 +4793,7 @@ h2 {
   align-items: center;
   background: var(--paper);
   border-top: 1px solid var(--line);
-  padding: 10px 16px;
+  padding: 12px 20px;
 }
 
 .ws-rating-row {
@@ -4823,7 +4803,7 @@ h2 {
 }
 
 .ws-rating-name {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--muted);
 }
@@ -4837,7 +4817,7 @@ h2 {
   background: transparent;
   border: 0;
   color: #d1d5db;
-  font-size: 15px;
+  font-size: 16px;
   cursor: pointer;
   padding: 0;
   transition: 0.12s;
