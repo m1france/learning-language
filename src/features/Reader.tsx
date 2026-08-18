@@ -72,6 +72,8 @@ const AVAILABLE_MARK_COLORS = [
   '#84cc16', '#6366f1', '#e11d48', '#0d9488', '#ca8a04', '#9333ea',
 ]
 
+let lastMultiWordDragTimestamp = 0
+
 const cleanRaw = (raw: string) => raw.replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '').replace(/\s+/g, ' ').trim()
 /** Retire les élisions françaises (l', d', j'…) pour la recherche dictionnaire. */
 const wikiLookup = (raw: string) => cleanRaw(raw).replace(/^(l|d|j|n|s|t|c|qu|m)['’]/i, '')
@@ -461,19 +463,33 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
   useEffect(() => {
     const handleWindowSelection = (e: MouseEvent) => {
+      if (Date.now() - lastMultiWordDragTimestamp < 500) return
       const sel = window.getSelection()
       if (!sel || sel.isCollapsed) return
       const text = sel.toString().trim()
       if (!text || !text.includes(' ')) return
 
       const target = e.target as HTMLElement | null
-      if (!target?.closest('.reading-text')) return
+      if (!target?.closest('.reading-text, .focus-text')) return
 
       const cleaned = cleanRaw(text)
       if (cleaned.length < 2) return
 
-      const x = Math.min(window.innerWidth - 160, Math.max(160, e.clientX))
-      const y = Math.min(window.innerHeight - 100, e.clientY + 12)
+      lastMultiWordDragTimestamp = Date.now()
+
+      let x = e.clientX
+      let y = e.clientY + 14
+      try {
+        const range = sel.getRangeAt(0)
+        const rect = range.getBoundingClientRect()
+        if (rect.width > 0) {
+          x = rect.left + rect.width / 2
+          y = rect.bottom + 8
+        }
+      } catch {}
+
+      x = Math.min(window.innerWidth - 160, Math.max(160, x))
+      y = Math.min(window.innerHeight - 100, y)
 
       if (markMode && markMode !== 'silent') {
         const isInstance = e.altKey || e.ctrlKey
@@ -587,7 +603,10 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   }
 
   return <div className={`reader-page ${markMode === 'silent' ? 'arm-silent' : ''} ${markMode && markMode !== 'silent' ? 'arm-word' : ''}`}
-    onClick={() => { setSelected(null); setContextMenu(null); setPageContextMenu(null); setResourceMenuTarget(null); setWordContextMenu(null); if (wikiArmed) setWikiArmed(false) }}
+    onClick={() => {
+      if (Date.now() - lastMultiWordDragTimestamp < 500) return
+      setSelected(null); setContextMenu(null); setPageContextMenu(null); setResourceMenuTarget(null); setWordContextMenu(null); if (wikiArmed) setWikiArmed(false)
+    }}
     onContextMenu={handlePageContextMenu}>
     <header className="reader-top">
       <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}><ArrowLeft size={16} /> {t.back.replace('←', '').trim()}</button>
@@ -1766,7 +1785,10 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
     return () => window.removeEventListener('keydown', onKey)
   }, [wikiOpen, wikiArmed])
 
-  return <div className="focus-reader" onClick={() => { setSelected(null); if (wikiArmed) setWikiArmed(false) }}>
+  return <div className="focus-reader" onClick={() => {
+    if (Date.now() - lastMultiWordDragTimestamp < 500) return
+    setSelected(null); if (wikiArmed) setWikiArmed(false)
+  }}>
     <header className="focus-top">
       <strong className="focus-title">{resource.title}</strong>
       <div className="focus-nav">
@@ -2166,6 +2188,7 @@ function Paragraph({
         if (currentRange && (currentRange.endOffset - currentRange.startOffset > currentDragStart.length)) {
           const phrase = text.slice(currentRange.startOffset, currentRange.endOffset).trim()
           if (phrase) {
+            lastMultiWordDragTimestamp = Date.now()
             const isInstance = e.altKey || e.ctrlKey
             onMultiWordSelect?.(phrase, currentRange.startOffset, currentRange.endOffset, isInstance, e)
           }
@@ -2317,6 +2340,10 @@ function Word({
       onMouseEnter={onMouseEnter}
       onClick={(event) => {
         event.stopPropagation()
+        if (Date.now() - lastMultiWordDragTimestamp < 500) {
+          event.preventDefault()
+          return
+        }
         const isInstance = event.altKey || event.ctrlKey
         onClick(raw, event.currentTarget, isInstance, offset)
       }}
