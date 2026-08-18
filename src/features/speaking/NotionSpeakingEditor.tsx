@@ -235,6 +235,130 @@ export function NotionSpeakingEditor({
       }
     }
 
+    // Handle Enter: Exit blockquote / heading to normal paragraph <p>
+    if (e.key === 'Enter') {
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0)
+        const blockquote = (range.startContainer.nodeType === Node.ELEMENT_NODE
+          ? (range.startContainer as HTMLElement)
+          : range.startContainer.parentElement
+        )?.closest('blockquote')
+
+        const heading = (range.startContainer.nodeType === Node.ELEMENT_NODE
+          ? (range.startContainer as HTMLElement)
+          : range.startContainer.parentElement
+        )?.closest('h1, h2, h3')
+
+        // Inside blockquote
+        if (blockquote) {
+          // Shift+Enter: soft break inside blockquote
+          if (e.shiftKey) {
+            e.preventDefault()
+            document.execCommand('insertLineBreak')
+            handleInput()
+            return
+          }
+
+          // Enter: Exit blockquote and create a normal paragraph <p> right after it
+          e.preventDefault()
+          const text = (blockquote.textContent || '').replace(/[\u200B\u00A0]/g, '').trim()
+
+          // If the blockquote was completely empty, replace it directly with <p>
+          if (!text) {
+            const p = document.createElement('p')
+            p.innerHTML = '<br>'
+            blockquote.replaceWith(p)
+            const newRange = document.createRange()
+            newRange.setStart(p, 0)
+            newRange.collapse(true)
+            sel.removeAllRanges()
+            sel.addRange(newRange)
+            handleInput()
+            return
+          }
+
+          // If it has content, append a new <p> after the blockquote and move focus there
+          const p = document.createElement('p')
+          p.innerHTML = '<br>'
+          blockquote.insertAdjacentElement('afterend', p)
+          const newRange = document.createRange()
+          newRange.setStart(p, 0)
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+          handleInput()
+          return
+        }
+
+        // Inside heading
+        if (heading && !e.shiftKey) {
+          e.preventDefault()
+          const p = document.createElement('p')
+          p.innerHTML = '<br>'
+          heading.insertAdjacentElement('afterend', p)
+          const newRange = document.createRange()
+          newRange.setStart(p, 0)
+          newRange.collapse(true)
+          sel.removeAllRanges()
+          sel.addRange(newRange)
+          handleInput()
+          return
+        }
+      }
+    }
+
+    // Handle Backspace: Convert empty blockquote/heading back to normal paragraph
+    if (e.key === 'Backspace') {
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0)
+        const blockquote = (range.startContainer.nodeType === Node.ELEMENT_NODE
+          ? (range.startContainer as HTMLElement)
+          : range.startContainer.parentElement
+        )?.closest('blockquote')
+
+        const heading = (range.startContainer.nodeType === Node.ELEMENT_NODE
+          ? (range.startContainer as HTMLElement)
+          : range.startContainer.parentElement
+        )?.closest('h1, h2, h3')
+
+        if (blockquote) {
+          const text = (blockquote.textContent || '').replace(/[\u200B\u00A0]/g, '').trim()
+          if (!text || (range.startOffset === 0 && range.collapsed)) {
+            e.preventDefault()
+            const p = document.createElement('p')
+            p.innerHTML = text ? text : '<br>'
+            blockquote.replaceWith(p)
+            const newRange = document.createRange()
+            newRange.setStart(p, 0)
+            newRange.collapse(true)
+            sel.removeAllRanges()
+            sel.addRange(newRange)
+            handleInput()
+            return
+          }
+        }
+
+        if (heading) {
+          const text = (heading.textContent || '').replace(/[\u200B\u00A0]/g, '').trim()
+          if (!text || (range.startOffset === 0 && range.collapsed)) {
+            e.preventDefault()
+            const p = document.createElement('p')
+            p.innerHTML = text ? text : '<br>'
+            heading.replaceWith(p)
+            const newRange = document.createRange()
+            newRange.setStart(p, 0)
+            newRange.collapse(true)
+            sel.removeAllRanges()
+            sel.addRange(newRange)
+            handleInput()
+            return
+          }
+        }
+      }
+    }
+
     // Markdown Shortcut: Cmd+B / Ctrl+B
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
       e.preventDefault()

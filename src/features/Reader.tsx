@@ -805,6 +805,144 @@ function WikiPanel({ word, language, initialTab = 'wiktionary', onClose }: { wor
 }
 
 /**
+ * Helper to apply markdown formatting (bold, italic, underline) with toggle support.
+ */
+function applyMarkdownFormat(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  type: 'bold' | 'italic' | 'underline',
+  setValue: (val: string) => void,
+) {
+  const val = element.value
+  const start = element.selectionStart ?? 0
+  const end = element.selectionEnd ?? 0
+  const selected = val.slice(start, end)
+
+  let nextVal = val
+  let newStart = start
+  let newEnd = end
+
+  if (type === 'bold') {
+    if (selected.startsWith('**') && selected.endsWith('**') && selected.length >= 4) {
+      const inner = selected.slice(2, -2)
+      nextVal = val.slice(0, start) + inner + val.slice(end)
+      newStart = start
+      newEnd = start + inner.length
+    } else if (start >= 2 && val.slice(start - 2, start) === '**' && val.slice(end, end + 2) === '**') {
+      nextVal = val.slice(0, start - 2) + selected + val.slice(end + 2)
+      newStart = start - 2
+      newEnd = end - 2
+    } else if (start === end) {
+      nextVal = val.slice(0, start) + '****' + val.slice(end)
+      newStart = start + 2
+      newEnd = start + 2
+    } else {
+      nextVal = val.slice(0, start) + '**' + selected + '**' + val.slice(end)
+      newStart = start + 2
+      newEnd = end + 2
+    }
+  } else if (type === 'italic') {
+    if (selected.startsWith('*') && selected.endsWith('*') && !selected.startsWith('**') && selected.length >= 2) {
+      const inner = selected.slice(1, -1)
+      nextVal = val.slice(0, start) + inner + val.slice(end)
+      newStart = start
+      newEnd = start + inner.length
+    } else if (
+      start >= 1 &&
+      val.slice(start - 1, start) === '*' &&
+      val.slice(end, end + 1) === '*' &&
+      (start < 2 || val.slice(start - 2, start) !== '**') &&
+      val.slice(end, end + 2) !== '**'
+    ) {
+      nextVal = val.slice(0, start - 1) + selected + val.slice(end + 1)
+      newStart = start - 1
+      newEnd = end - 1
+    } else if (start === end) {
+      nextVal = val.slice(0, start) + '**' + val.slice(end)
+      newStart = start + 1
+      newEnd = start + 1
+    } else {
+      nextVal = val.slice(0, start) + '*' + selected + '*' + val.slice(end)
+      newStart = start + 1
+      newEnd = end + 1
+    }
+  } else if (type === 'underline') {
+    if (selected.toLowerCase().startsWith('<u>') && selected.toLowerCase().endsWith('</u>') && selected.length >= 7) {
+      const inner = selected.slice(3, -4)
+      nextVal = val.slice(0, start) + inner + val.slice(end)
+      newStart = start
+      newEnd = start + inner.length
+    } else if (
+      start >= 3 &&
+      val.slice(start - 3, start).toLowerCase() === '<u>' &&
+      val.slice(end, end + 4).toLowerCase() === '</u>'
+    ) {
+      nextVal = val.slice(0, start - 3) + selected + val.slice(end + 4)
+      newStart = start - 3
+      newEnd = end - 3
+    } else if (start === end) {
+      nextVal = val.slice(0, start) + '<u></u>' + val.slice(end)
+      newStart = start + 3
+      newEnd = start + 3
+    } else {
+      nextVal = val.slice(0, start) + '<u>' + selected + '</u>' + val.slice(end)
+      newStart = start + 3
+      newEnd = end + 3
+    }
+  }
+
+  setValue(nextVal)
+  requestAnimationFrame(() => {
+    element.focus()
+    element.setSelectionRange(newStart, newEnd)
+  })
+}
+
+/**
+ * Safely renders markdown bold, italic, and underline tokens into React nodes.
+ */
+function renderSimpleMarkdown(text?: string): React.ReactNode {
+  if (!text) return null
+
+  function parse(input: string, keyPrefix = ''): React.ReactNode[] {
+    if (!input) return []
+
+    const regex = /(\*\*(?:[\s\S]+?)\*\*|__(?:[\s\S]+?)__|<u>[\s\S]*?<\/u>|\*(?:[^*]+?)\*|_(?:[^_]+?)_)/i
+    const parts = input.split(regex)
+
+    return parts.map((part, index) => {
+      const key = `${keyPrefix}-${index}`
+      if (!part) return null
+
+      if (
+        (part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
+        (part.startsWith('__') && part.endsWith('__') && part.length >= 4)
+      ) {
+        const inner = part.slice(2, -2)
+        return <strong key={key}>{parse(inner, `${key}-b`)}</strong>
+      }
+
+      if (part.toLowerCase().startsWith('<u>') && part.toLowerCase().endsWith('</u>') && part.length >= 7) {
+        const inner = part.slice(3, -4)
+        return <u key={key}>{parse(inner, `${key}-u`)}</u>
+      }
+
+      if (
+        (part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
+        (part.startsWith('_') && part.endsWith('_') && part.length >= 2)
+      ) {
+        const inner = part.slice(1, -1)
+        return <em key={key}>{parse(inner, `${key}-i`)}</em>
+      }
+
+      return part
+    }).filter(Boolean)
+  }
+
+  const nodes = parse(text, 'md')
+  return <>{nodes}</>
+}
+
+/**
  * Word annotation panel — LUTE-style fields, app style.
  * A word already saved opens in read-only view (no save button); the ✎ button
  * next to × switches to the editable form. New words open the form directly.
@@ -875,6 +1013,28 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
 
   const removeTag = (value: string) => { setTags(tags.filter((item) => item !== value)); setSaved(false) }
 
+  const handleMarkdownKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+    setter: (val: string) => void,
+  ) => {
+    if (e.metaKey || e.ctrlKey) {
+      const key = e.key.toLowerCase()
+      if (key === 'b') {
+        e.preventDefault()
+        applyMarkdownFormat(e.currentTarget, 'bold', setter)
+        setSaved(false)
+      } else if (key === 'i') {
+        e.preventDefault()
+        applyMarkdownFormat(e.currentTarget, 'italic', setter)
+        setSaved(false)
+      } else if (key === 'u') {
+        e.preventDefault()
+        applyMarkdownFormat(e.currentTarget, 'underline', setter)
+        setSaved(false)
+      }
+    }
+  }
+
   const submit = () => {
     if (!word.trim()) return
     onSave({ raw: word.trim(), translation: translation.trim(), parent: parent.trim(), pronunciation: pronunciation.trim(), knowledge, tags })
@@ -913,11 +1073,11 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
       <div className="wp-parent-line">
         <button className="wp-parent-tag" title={t.openLinkedWord} onClick={() => onOpenWord(parent)}>{parent}</button>
         {(parentEntry?.tags ?? []).map((item) => <span key={item} className="wp-pos">{item}</span>)}
-        {parentEntry?.translation && <em className="wp-parent-translation">{parentEntry.translation}</em>}
+        {parentEntry?.translation && <em className="wp-parent-translation">{renderSimpleMarkdown(parentEntry.translation)}</em>}
       </div>
     </div>}
-    {pronunciation && <div className="wp-view-field"><span>{t.pronunciationLabel}</span><p className="wp-view-text">{pronunciation}</p></div>}
-    {translation && <div className="wp-view-field"><span>{t.translationLabel}</span><p className="wp-view-text">{translation}</p></div>}
+    {pronunciation && <div className="wp-view-field"><span>{t.pronunciationLabel}</span><p className="wp-view-text">{renderSimpleMarkdown(pronunciation)}</p></div>}
+    {translation && <div className="wp-view-field"><span>{t.translationLabel}</span><p className="wp-view-text">{renderSimpleMarkdown(translation)}</p></div>}
     {linked.length > 0 && <div className="wp-view-field"><span>{t.linkedWordsLabel}</span>
       <div className="wp-linked">{linked.map((item) => <button key={item.id} className="wp-parent-tag" title={t.openLinkedWord}
         onClick={() => onOpenWord(item.word)}>{item.word}</button>)}</div>
@@ -952,11 +1112,22 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     </div>
 
     <div className="wp-field">
-      <input value={pronunciation} placeholder={t.pronunciationLabel} onChange={(event) => { setPronunciation(event.target.value); setSaved(false) }} />
+      <input
+        value={pronunciation}
+        placeholder={t.pronunciationLabel}
+        onChange={(event) => { setPronunciation(event.target.value); setSaved(false) }}
+        onKeyDown={(event) => handleMarkdownKeyDown(event, setPronunciation)}
+      />
     </div>
 
     <div className="wp-field">
-      <textarea rows={3} value={translation} placeholder={t.translationLabel} onChange={(event) => { setTranslation(event.target.value); setSaved(false) }} />
+      <textarea
+        rows={3}
+        value={translation}
+        placeholder={t.translationLabel}
+        onChange={(event) => { setTranslation(event.target.value); setSaved(false) }}
+        onKeyDown={(event) => handleMarkdownKeyDown(event, setTranslation)}
+      />
     </div>
 
     <div className="wp-field">
