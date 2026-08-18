@@ -32,6 +32,7 @@ import {
   X,
   Trash2,
   Check,
+  ArrowUpDown,
 } from 'lucide-react'
 import {
   ResourceContextMenu,
@@ -233,6 +234,10 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
   const [type, setType] = useState('all')
   const [difficulty, setDifficulty] = useState<Difficulty | 'all'>('all')
   const [adding, setAdding] = useState(false)
+  const [reorderMode, setReorderMode] = useState(false)
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const isDraggingRef = useRef(false)
   const [menuTarget, setMenuTarget] = useState<ResourceContextTarget | null>(null)
   const [editingResource, setEditingResource] = useState<Resource | null>(null)
   const [renamingResource, setRenamingResource] = useState<Resource | null>(null)
@@ -266,6 +271,24 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
     e.target.value = ''
   }
 
+  const handleDropOnResource = (targetId: string) => {
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null)
+      setDragOverId(null)
+      return
+    }
+    const fromIndex = state.resources.findIndex((r) => r.id === draggedId)
+    const toIndex = state.resources.findIndex((r) => r.id === targetId)
+    if (fromIndex !== -1 && toIndex !== -1) {
+      const next = [...state.resources]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      onChange({ ...state, resources: next })
+    }
+    setDraggedId(null)
+    setDragOverId(null)
+  }
+
   return <div className="page library-page">
     <input ref={coverFileRef} type="file" accept="image/*" hidden onChange={handleCoverPicked} />
     <header className="page-header">
@@ -276,19 +299,78 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
     </header>
     {hasResources && <section className="filter-row">
       <div className="segmented">{types.map((item) => <button className={type === item ? 'selected' : ''} onClick={() => setType(item)} key={item}>{item === 'all' ? t.all : labelFor(item)}</button>)}</div>
-      <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty | 'all')}><option value="all">{t.allLevels}</option>{(['beginner', 'intermediate', 'advanced', 'native'] as Difficulty[]).map((level) => <option value={level} key={level}>{t.difficulty[level]}</option>)}</select>
+      <div className="filter-right-group">
+        <button
+          type="button"
+          className={`reorder-toggle-btn ${reorderMode ? 'active' : ''}`}
+          onClick={() => setReorderMode(!reorderMode)}
+          title={reorderMode ? 'Terminer le tri' : 'Trier et réorganiser les ressources'}
+          aria-label="Trier les ressources"
+        >
+          <ArrowUpDown size={16} />
+        </button>
+        <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty | 'all')}><option value="all">{t.allLevels}</option>{(['beginner', 'intermediate', 'advanced', 'native'] as Difficulty[]).map((level) => <option value={level} key={level}>{t.difficulty[level]}</option>)}</select>
+      </div>
     </section>}
     {hasResources
-      ? <section className="resource-grid">
-        {filtered.map((resource) => <button className="resource-card" onClick={() => onOpen(resource)} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenuTarget({ resource, x: e.clientX, y: e.clientY }) }} key={resource.id}>
-          <Cover cover={resource.cover} coverImage={resource.coverImage} type={labelFor(resource.type)} />
-          <div className="resource-meta">
-            <span>{labelFor(resource.type)} · {t.difficulty[resource.difficulty]}</span>
-            <h3>{resource.title}</h3>
-            {resource.author && !isGenericImportedAuthor(resource.author) && <p>{resource.author}</p>}
-            <div className="card-bottom"><small>{resource.minutes} min</small>{progressFor(state, resource) > 0 && <div className="tiny-progress"><i style={{ width: `${progressFor(state, resource)}%` }} /></div>}</div>
-          </div>
-        </button>)}
+      ? <section className={`resource-grid ${reorderMode ? 'reorder-mode' : ''}`}>
+        {filtered.map((resource) => {
+          const isBeingDragged = draggedId === resource.id
+          const isTargetOver = dragOverId === resource.id
+          return (
+            <button
+              className={`resource-card ${isBeingDragged ? 'dragging' : ''} ${isTargetOver ? 'drag-over' : ''}`}
+              draggable
+              onDragStart={(e) => {
+                isDraggingRef.current = true
+                setDraggedId(resource.id)
+                e.dataTransfer.setData('text/plain', resource.id)
+                e.dataTransfer.effectAllowed = 'move'
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault()
+                if (draggedId && draggedId !== resource.id) {
+                  setDragOverId(resource.id)
+                }
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                if (dragOverId === resource.id) {
+                  setDragOverId(null)
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                handleDropOnResource(resource.id)
+                setTimeout(() => { isDraggingRef.current = false }, 50)
+              }}
+              onDragEnd={() => {
+                setDraggedId(null)
+                setDragOverId(null)
+                setTimeout(() => { isDraggingRef.current = false }, 50)
+              }}
+              onClick={() => {
+                if (!isDraggingRef.current) {
+                  onOpen(resource)
+                }
+              }}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenuTarget({ resource, x: e.clientX, y: e.clientY }) }}
+              key={resource.id}
+            >
+              <Cover cover={resource.cover} coverImage={resource.coverImage} type={labelFor(resource.type)} />
+              <div className="resource-meta">
+                <span>{labelFor(resource.type)} · {t.difficulty[resource.difficulty]}</span>
+                <h3>{resource.title}</h3>
+                {resource.author && !isGenericImportedAuthor(resource.author) && <p>{resource.author}</p>}
+                <div className="card-bottom"><small>{resource.minutes} min</small>{progressFor(state, resource) > 0 && <div className="tiny-progress"><i style={{ width: `${progressFor(state, resource)}%` }} /></div>}</div>
+              </div>
+            </button>
+          )
+        })}
       </section>
       : <section className="empty-library">
         <h2>{t.emptyTitle}</h2>

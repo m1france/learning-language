@@ -709,6 +709,34 @@ h2 {
   color: var(--paper);
 }
 
+.filter-right-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reorder-toggle-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.reorder-toggle-btn:hover {
+  color: var(--ink);
+}
+
+.reorder-toggle-btn.active {
+  color: var(--ink);
+  transform: scale(1.08);
+}
+
 .filter-row select {
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -724,12 +752,28 @@ h2 {
   gap: 18px;
 }
 
+.resource-grid.reorder-mode .resource-card {
+  cursor: grab;
+}
+
 .resource-card {
   background: transparent;
   padding: 0;
   border: 0;
   text-align: left;
   min-width: 0;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.resource-card.dragging {
+  opacity: 0.45;
+  transform: scale(0.96);
+}
+
+.resource-card.drag-over {
+  outline: 2px dashed var(--ink);
+  outline-offset: 4px;
+  border-radius: 10px;
 }
 
 .resource-card:hover .cover {
@@ -5809,6 +5853,12 @@ h2 {
 
 .word.marked-overlay {
   background: color-mix(in srgb, var(--mark-color) 30%, transparent);
+}
+
+.word.word-drag-selected {
+  background: color-mix(in srgb, var(--coral) 28%, transparent) !important;
+  border-bottom-color: var(--coral) !important;
+  border-radius: 3px;
 }
 
 .word.as-span {

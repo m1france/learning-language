@@ -131,7 +131,7 @@ export const upsertWordDetails = (state: AppState, args: {
   knowledge?: number
   tags?: string[]
 }): AppState => {
-  const cleaned = args.raw.replace(/[.,!?;:()"“”]/g, '').trim()
+  const cleaned = args.raw.replace(/^[.,!?;:()"“”\s]+|[.,!?;:()"“”\s]+$/g, '').replace(/\s+/g, ' ').trim()
   if (!cleaned) return state
   const normalized = normalizeWord(cleaned)
   const existing = state.words.find((word) => word.normalized === normalized && word.language === args.language)
@@ -282,16 +282,26 @@ export const toggleSilentMark = (state: AppState, key: string, letterIndex: numb
 }
 
 /** Reset all word markings and silent marks for a given language (or all marks). */
-export const resetResourceMarks = (state: AppState, language?: Language): AppState => {
-  if (!language) return { ...state, wordMarks: {}, silentMarks: {} }
+export const resetResourceMarks = (state: AppState, language?: Language, resourceId?: string): AppState => {
+  if (!language && !resourceId) return { ...state, wordMarks: {}, silentMarks: {} }
   const wordMarks = { ...state.wordMarks }
   const silentMarks = { ...state.silentMarks }
-  const prefix = `${language}:`
+  const prefix = language ? `${language}:` : ''
+  const instPrefix = resourceId ? `inst:${resourceId}:` : 'inst:'
   Object.keys(wordMarks).forEach((key) => {
-    if (key.startsWith(prefix)) delete wordMarks[key]
+    if (prefix && key.startsWith(prefix)) delete wordMarks[key]
+    if (key.startsWith(instPrefix)) {
+      if (resourceId) {
+        delete wordMarks[key]
+      } else if (language) {
+        const targetResId = key.split(':')[1]
+        const res = state.resources.find((r) => r.id === targetResId)
+        if (!res || res.language === language) delete wordMarks[key]
+      }
+    }
   })
   Object.keys(silentMarks).forEach((key) => {
-    if (key.startsWith(prefix)) delete silentMarks[key]
+    if (prefix && key.startsWith(prefix)) delete silentMarks[key]
   })
   return { ...state, wordMarks, silentMarks }
 }

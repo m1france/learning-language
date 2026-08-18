@@ -142,6 +142,9 @@ export function CameraProvider({
   }, [])
 
   const stopAllMedia = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined)
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
     }
@@ -320,6 +323,9 @@ export function CameraProvider({
   }, [])
 
   const stopRecording = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined)
+    }
     if (countdownIntervalRef.current) {
       window.clearInterval(countdownIntervalRef.current)
       countdownIntervalRef.current = null

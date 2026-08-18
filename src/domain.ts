@@ -191,4 +191,4 @@ export const todayKey = () => new Date().toISOString().slice(0, 10)
 
 export const id = (prefix: string) => `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
-export const normalizeWord = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-zà-ÿ'-]/gi, '')
+export const normalizeWord = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-zà-ÿ' -]/gi, '').replace(/\s+/g, ' ').trim()

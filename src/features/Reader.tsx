@@ -72,7 +72,7 @@ const AVAILABLE_MARK_COLORS = [
   '#84cc16', '#6366f1', '#e11d48', '#0d9488', '#ca8a04', '#9333ea',
 ]
 
-const cleanRaw = (raw: string) => raw.replace(/[.,!?;:()"“”]/g, '').trim()
+const cleanRaw = (raw: string) => raw.replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '').replace(/\s+/g, ' ').trim()
 /** Retire les élisions françaises (l', d', j'…) pour la recherche dictionnaire. */
 const wikiLookup = (raw: string) => cleanRaw(raw).replace(/^(l|d|j|n|s|t|c|qu|m)['’]/i, '')
 const wikiUrl = (language: Language, word: string) => `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`
@@ -375,24 +375,128 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     if (markMode && markMode !== 'silent') onMarkColor(markMode, color)
   }
 
-  const clickWord = (raw: string, entry: Entry, target: HTMLElement) => {
+  const knownPhrases = useMemo(() => {
+    const fromWords = state.words
+      .filter((w) => w.language === resource.language && w.word.trim().includes(' '))
+      .map((w) => w.word.trim())
+    const fromMarks = Object.keys(state.wordMarks)
+      .filter((k) => k.startsWith(`${resource.language}:`) && k.includes(' '))
+      .map((k) => k.slice(resource.language.length + 1))
+    const all = Array.from(new Set([...fromWords, ...fromMarks]))
+    return all.sort((a, b) => b.length - a.length)
+  }, [state.words, state.wordMarks, resource.language])
+
+  const clickWord = (raw: string, entry: Entry, target: HTMLElement, isInstance = false, offset = 0) => {
+    const cleaned = cleanRaw(raw)
+    if (!cleaned) return
+
     if (wikiArmed) {
-      setWikiWord(wikiLookup(raw))
+      setWikiWord(wikiLookup(cleaned))
       setWikiOpen(true)
       return
     }
-    const normalized = normalizeWord(raw)
-    const key = markKey(resource.language, normalized)
+    const normalized = normalizeWord(cleaned)
+    const genericKey = markKey(resource.language, normalized)
+    const instKey = `inst:${resource.id}:${entry.chapterIndex}:${entry.paragraphIndex}:${offset}`
+
     if (markMode && markMode !== 'silent') {
-      const current = state.wordMarks[key]
-      if (current && current.type === markMode) onWordMark(key, null)
-      else onWordMark(key, { type: markMode, style: markStyle, color: markColor })
+      if (isInstance) {
+        const currentInst = state.wordMarks[instKey]
+        if (currentInst && currentInst.type === markMode) onWordMark(instKey, null)
+        else onWordMark(instKey, { type: markMode, style: markStyle, color: markColor })
+        return
+      }
+      const current = state.wordMarks[genericKey]
+      if (current && current.type === markMode) onWordMark(genericKey, null)
+      else onWordMark(genericKey, { type: markMode, style: markStyle, color: markColor })
       return
     }
     const rect = target.getBoundingClientRect()
-    setSelected({ raw, sentence: sentenceOf(raw, entry.text), x: rect.left + rect.width / 2, y: rect.bottom + 8 })
-    setWikiWord(wikiLookup(raw))
+    setSelected({ raw: cleaned, sentence: sentenceOf(cleaned, entry.text), x: rect.left + rect.width / 2, y: rect.bottom + 8 })
+    setWikiWord(wikiLookup(cleaned))
   }
+
+  const handleMultiWordSelect = (
+    phrase: string,
+    startOffset: number,
+    _endOffset: number,
+    entry: Entry,
+    isInstance: boolean,
+    event: MouseEvent | React.MouseEvent
+  ) => {
+    const cleaned = cleanRaw(phrase)
+    if (!cleaned) return
+
+    if (wikiArmed) {
+      setWikiWord(wikiLookup(cleaned))
+      setWikiOpen(true)
+      return
+    }
+
+    if (markMode && markMode !== 'silent') {
+      const instKey = `inst:${resource.id}:${entry.chapterIndex}:${entry.paragraphIndex}:${startOffset}`
+      const genericKey = markKey(resource.language, normalizeWord(cleaned))
+      if (isInstance) {
+        const cur = state.wordMarks[instKey]
+        if (cur && cur.type === markMode) onWordMark(instKey, null)
+        else onWordMark(instKey, { type: markMode, style: markStyle, color: markColor })
+      } else {
+        const cur = state.wordMarks[genericKey]
+        if (cur && cur.type === markMode) onWordMark(genericKey, null)
+        else onWordMark(genericKey, { type: markMode, style: markStyle, color: markColor })
+      }
+      return
+    }
+
+    const x = Math.min(window.innerWidth - 160, Math.max(160, 'clientX' in event ? event.clientX : window.innerWidth / 2))
+    const y = Math.min(window.innerHeight - 100, 'clientY' in event ? event.clientY + 12 : 200)
+    setSelected({
+      raw: cleaned,
+      sentence: sentenceOf(cleaned, entry.text),
+      x,
+      y,
+    })
+    setWikiWord(wikiLookup(cleaned))
+  }
+
+  useEffect(() => {
+    const handleWindowSelection = (e: MouseEvent) => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed) return
+      const text = sel.toString().trim()
+      if (!text || !text.includes(' ')) return
+
+      const target = e.target as HTMLElement | null
+      if (!target?.closest('.reading-text')) return
+
+      const cleaned = cleanRaw(text)
+      if (cleaned.length < 2) return
+
+      const x = Math.min(window.innerWidth - 160, Math.max(160, e.clientX))
+      const y = Math.min(window.innerHeight - 100, e.clientY + 12)
+
+      if (markMode && markMode !== 'silent') {
+        const isInstance = e.altKey || e.ctrlKey
+        const genericKey = markKey(resource.language, normalizeWord(cleaned))
+        if (!isInstance) {
+          onWordMark(genericKey, { type: markMode, style: markStyle, color: markColor })
+        }
+        return
+      }
+
+      const parText = target.closest('.paragraph')?.textContent ?? cleaned
+      setSelected({
+        raw: cleaned,
+        sentence: sentenceOf(cleaned, parText),
+        x,
+        y,
+      })
+      setWikiWord(wikiLookup(cleaned))
+    }
+
+    document.addEventListener('mouseup', handleWindowSelection)
+    return () => document.removeEventListener('mouseup', handleWindowSelection)
+  }, [markMode, markStyle, markColor, resource.language, onWordMark])
 
   const startFocus = () => {
     const root = document.documentElement
@@ -549,10 +653,22 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           return (
             <div key={`${entry.chapterId}-${entry.paragraphIndex}`}>
               {entry.isChapterStart && <ChapterTitle hint={t.chapterRename} title={entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`} onRename={(title) => renameChapter(entry.chapterIndex, title)} />}
-              <Paragraph text={entry.text} fontSize={fontSize} language={resource.language} state={state} markMode={markMode} green={greenChars}
-                onWordClick={(raw, target) => clickWord(raw, entry, target)}
+              <Paragraph
+                text={entry.text}
+                fontSize={fontSize}
+                language={resource.language}
+                state={state}
+                markMode={markMode}
+                green={greenChars}
+                resourceId={resource.id}
+                chapterIndex={entry.chapterIndex}
+                paragraphIndex={entry.paragraphIndex}
+                knownPhrases={knownPhrases}
+                onWordClick={(raw, target, isInstance, offset) => clickWord(raw, entry, target, isInstance, offset)}
+                onMultiWordSelect={(phrase, startOffset, endOffset, isInstance, event) => handleMultiWordSelect(phrase, startOffset, endOffset, entry, isInstance, event)}
                 onWordContextMenu={(raw, event) => handleWordContextMenu(raw, entry, event)}
-                onLetterClick={(raw, letterIndex) => onSilentMark(markKey(resource.language, normalizeWord(raw)), letterIndex)} />
+                onLetterClick={(raw, letterIndex) => onSilentMark(markKey(resource.language, normalizeWord(raw)), letterIndex)}
+              />
             </div>
           )
         })}
@@ -1586,19 +1702,44 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
   const safePage = Math.min(pageIndex, pages.length - 1)
   const page = pages[safePage] ?? []
 
+  const knownPhrases = useMemo(() => {
+    const fromWords = state.words
+      .filter((w) => w.language === resource.language && w.word.trim().includes(' '))
+      .map((w) => w.word.trim())
+    const fromMarks = Object.keys(state.wordMarks)
+      .filter((k) => k.startsWith(`${resource.language}:`) && k.includes(' '))
+      .map((k) => k.slice(resource.language.length + 1))
+    const all = Array.from(new Set([...fromWords, ...fromMarks]))
+    return all.sort((a, b) => b.length - a.length)
+  }, [state.words, state.wordMarks, resource.language])
+
   const gotoPage = (next: number) => {
     setSelected(null)
     setPageIndex(Math.max(0, Math.min(pages.length - 1, next)))
   }
 
-  const clickWord = (raw: string, text: string) => {
+  const clickWord = (raw: string, text: string, _isInstance = false, _offset = 0) => {
+    const cleaned = cleanRaw(raw)
+    if (!cleaned) return
     if (wikiArmed) {
-      setWikiWord(wikiLookup(raw))
+      setWikiWord(wikiLookup(cleaned))
       setWikiOpen(true)
       return
     }
-    setSelected({ raw, sentence: sentenceOf(raw, text) })
-    setWikiWord(wikiLookup(raw))
+    setSelected({ raw: cleaned, sentence: sentenceOf(cleaned, text) })
+    setWikiWord(wikiLookup(cleaned))
+  }
+
+  const handleMultiWordSelect = (phrase: string, _startOffset: number, _endOffset: number, text: string) => {
+    const cleaned = cleanRaw(phrase)
+    if (!cleaned) return
+    if (wikiArmed) {
+      setWikiWord(wikiLookup(cleaned))
+      setWikiOpen(true)
+      return
+    }
+    setSelected({ raw: cleaned, sentence: sentenceOf(cleaned, text) })
+    setWikiWord(wikiLookup(cleaned))
   }
 
   const toggleWiki = () => {
@@ -1649,9 +1790,21 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
           return (
             <div key={`${entry.chapterId}-${entry.paragraphIndex}`}>
               {entry.isChapterStart && <h3 className="focus-chapter">{entry.chapterTitle || `${t.chapterDefault} ${entry.chapterIndex + 1}`}</h3>}
-              <Paragraph text={entry.text} fontSize={settings.readerFontSize + 1} language={resource.language} state={state} markMode={null} green={greenChars}
-                onWordClick={(raw) => clickWord(raw, entry.text)}
-                onLetterClick={() => { }} />
+              <Paragraph
+                text={entry.text}
+                fontSize={settings.readerFontSize + 1}
+                language={resource.language}
+                state={state}
+                markMode={null}
+                green={greenChars}
+                resourceId={resource.id}
+                chapterIndex={entry.chapterIndex}
+                paragraphIndex={entry.paragraphIndex}
+                knownPhrases={knownPhrases}
+                onWordClick={(raw, _target, isInstance, offset) => clickWord(raw, entry.text, isInstance, offset)}
+                onMultiWordSelect={(phrase, startOffset, endOffset) => handleMultiWordSelect(phrase, startOffset, endOffset, entry.text)}
+                onLetterClick={() => { }}
+              />
             </div>
           )
         })}
@@ -1885,48 +2038,230 @@ function ChapterTitle({ title, hint, onRename }: { title: string; hint: string; 
     : <button className="chapter-title" title={hint} onClick={(event) => { event.stopPropagation(); setEditing(true) }}>{title}</button>
 }
 
-function Paragraph({ text, fontSize, language, state, markMode, green, onWordClick, onWordContextMenu, onLetterClick }: {
+function tokenizeParagraph(text: string, knownPhrases: string[] = []) {
+  if (!knownPhrases || knownPhrases.length === 0) {
+    const tokens: { raw: string; isWhitespace: boolean; offset: number; isMultiWord?: boolean }[] = []
+    let offset = 0
+    text.split(/(\s+)/).forEach((part) => {
+      if (part.length > 0) {
+        const isWhitespace = /^\s+$/.test(part)
+        tokens.push({ raw: part, isWhitespace, offset, isMultiWord: false })
+        offset += part.length
+      }
+    })
+    return tokens
+  }
+
+  type Match = { start: number; end: number; phrase: string }
+  const matches: Match[] = []
+
+  for (const phrase of knownPhrases) {
+    const normPhrase = normalizeWord(phrase)
+    if (!normPhrase.includes(' ')) continue
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')
+    const regex = new RegExp(`(^|[^a-zà-ÿ0-9'-])(${escaped})([^a-zà-ÿ0-9'-]|$)`, 'gi')
+    let m: RegExpExecArray | null
+    while ((m = regex.exec(text)) !== null) {
+      const matchStart = m.index + m[1].length
+      const matchText = m[2]
+      const matchEnd = matchStart + matchText.length
+      const overlaps = matches.some((ex) => matchStart < ex.end && matchEnd > ex.start)
+      if (!overlaps) {
+        matches.push({ start: matchStart, end: matchEnd, phrase: matchText })
+      }
+      regex.lastIndex = matchStart + 1
+    }
+  }
+
+  matches.sort((a, b) => a.start - b.start)
+
+  const tokens: { raw: string; isWhitespace: boolean; offset: number; isMultiWord?: boolean }[] = []
+  let cursor = 0
+
+  matches.forEach((match) => {
+    if (match.start > cursor) {
+      const segment = text.slice(cursor, match.start)
+      let segmentOffset = cursor
+      segment.split(/(\s+)/).forEach((part) => {
+        if (part.length > 0) {
+          const isWhitespace = /^\s+$/.test(part)
+          tokens.push({ raw: part, isWhitespace, offset: segmentOffset, isMultiWord: false })
+          segmentOffset += part.length
+        }
+      })
+    }
+    tokens.push({ raw: text.slice(match.start, match.end), isWhitespace: false, offset: match.start, isMultiWord: true })
+    cursor = match.end
+  })
+
+  if (cursor < text.length) {
+    const segment = text.slice(cursor)
+    let segmentOffset = cursor
+    segment.split(/(\s+)/).forEach((part) => {
+      if (part.length > 0) {
+        const isWhitespace = /^\s+$/.test(part)
+        tokens.push({ raw: part, isWhitespace, offset: segmentOffset, isMultiWord: false })
+        segmentOffset += part.length
+      }
+    })
+  }
+
+  return tokens
+}
+
+function Paragraph({
+  text,
+  fontSize,
+  language,
+  state,
+  markMode,
+  green,
+  resourceId,
+  chapterIndex,
+  paragraphIndex,
+  knownPhrases,
+  onWordClick,
+  onMultiWordSelect,
+  onWordContextMenu,
+  onLetterClick,
+}: {
   text: string
   fontSize: number
   language: Language
   state: AppState
   markMode: MarkMode
   green?: Set<number>
-  onWordClick: (raw: string, target: HTMLElement) => void
+  resourceId?: string
+  chapterIndex?: number
+  paragraphIndex?: number
+  knownPhrases?: string[]
+  onWordClick: (raw: string, target: HTMLElement, isInstance: boolean, offset: number) => void
+  onMultiWordSelect?: (phrase: string, startOffset: number, endOffset: number, isInstance: boolean, event: MouseEvent) => void
   onWordContextMenu?: (raw: string, event: React.MouseEvent) => void
   onLetterClick: (raw: string, letterIndex: number) => void
 }) {
-  let offset = 0
-  return <p className="paragraph" style={{ fontSize }}>
-    {text.split(/(\s+)/).map((part, index) => {
-      if (/\s+/.test(part)) {
-        offset += part.length
-        return <span key={index}>{part}</span>
+  const [selectionRange, setSelectionRange] = useState<{ startOffset: number; endOffset: number } | null>(null)
+  const selectionRangeRef = useRef<{ startOffset: number; endOffset: number } | null>(null)
+  const dragStartRef = useRef<{ offset: number; length: number; raw: string } | null>(null)
+  const isSelectingRef = useRef(false)
+
+  const tokens = useMemo(() => tokenizeParagraph(text, knownPhrases), [text, knownPhrases])
+
+  const handleTokenMouseDown = (token: { offset: number; raw: string }) => {
+    dragStartRef.current = { offset: token.offset, length: token.raw.length, raw: token.raw }
+    isSelectingRef.current = true
+    setSelectionRange(null)
+    selectionRangeRef.current = null
+
+    const handleWindowMouseUp = (e: MouseEvent) => {
+      window.removeEventListener('mouseup', handleWindowMouseUp)
+      if (isSelectingRef.current && dragStartRef.current) {
+        isSelectingRef.current = false
+        const currentDragStart = dragStartRef.current
+        const currentRange = selectionRangeRef.current
+        dragStartRef.current = null
+        selectionRangeRef.current = null
+        setSelectionRange(null)
+
+        if (currentRange && (currentRange.endOffset - currentRange.startOffset > currentDragStart.length)) {
+          const phrase = text.slice(currentRange.startOffset, currentRange.endOffset).trim()
+          if (phrase) {
+            const isInstance = e.altKey || e.ctrlKey
+            onMultiWordSelect?.(phrase, currentRange.startOffset, currentRange.endOffset, isInstance, e)
+          }
+        }
       }
-      const wordOffset = offset
-      offset += part.length
-      return (
-        <Word key={`${part}-${index}`} raw={part} language={language} state={state} markMode={markMode} green={green} offset={wordOffset} onClick={onWordClick} onContextMenu={onWordContextMenu} onLetterClick={onLetterClick} />
-      )
-    })}
-  </p>
+    }
+
+    window.addEventListener('mouseup', handleWindowMouseUp)
+  }
+
+  const handleTokenMouseEnter = (token: { offset: number; raw: string }) => {
+    if (isSelectingRef.current && dragStartRef.current) {
+      const minOff = Math.min(dragStartRef.current.offset, token.offset)
+      const maxOff = Math.max(dragStartRef.current.offset + dragStartRef.current.length, token.offset + token.raw.length)
+      const newRange = { startOffset: minOff, endOffset: maxOff }
+      selectionRangeRef.current = newRange
+      setSelectionRange(newRange)
+    }
+  }
+
+  return (
+    <p className="paragraph" style={{ fontSize }}>
+      {tokens.map((token, index) => {
+        if (token.isWhitespace) {
+          return <span key={index}>{token.raw}</span>
+        }
+        const isSelected = Boolean(
+          selectionRange &&
+          token.offset >= selectionRange.startOffset &&
+          token.offset + token.raw.length <= selectionRange.endOffset
+        )
+        return (
+          <Word
+            key={`${token.raw}-${token.offset}-${index}`}
+            raw={token.raw}
+            language={language}
+            state={state}
+            markMode={markMode}
+            green={green}
+            offset={token.offset}
+            resourceId={resourceId}
+            chapterIndex={chapterIndex}
+            paragraphIndex={paragraphIndex}
+            isSelected={isSelected}
+            onMouseDown={() => handleTokenMouseDown(token)}
+            onMouseEnter={() => handleTokenMouseEnter(token)}
+            onClick={onWordClick}
+            onContextMenu={onWordContextMenu}
+            onLetterClick={onLetterClick}
+          />
+        )
+      })}
+    </p>
+  )
 }
 
-function Word({ raw, language, state, markMode, green, offset = 0, onClick, onContextMenu, onLetterClick }: {
+function Word({
+  raw,
+  language,
+  state,
+  markMode,
+  green,
+  offset = 0,
+  resourceId,
+  chapterIndex,
+  paragraphIndex,
+  isSelected,
+  onMouseDown,
+  onMouseEnter,
+  onClick,
+  onContextMenu,
+  onLetterClick,
+}: {
   raw: string
   language: Language
   state: AppState
   markMode: MarkMode
   green?: Set<number>
   offset?: number
-  onClick: (raw: string, target: HTMLElement) => void
+  resourceId?: string
+  chapterIndex?: number
+  paragraphIndex?: number
+  isSelected?: boolean
+  onMouseDown?: (event: React.MouseEvent<HTMLElement>) => void
+  onMouseEnter?: (event: React.MouseEvent<HTMLElement>) => void
+  onClick: (raw: string, target: HTMLElement, isInstance: boolean, offset: number) => void
   onContextMenu?: (raw: string, event: React.MouseEvent) => void
   onLetterClick: (raw: string, letterIndex: number) => void
 }) {
   const normalized = normalizeWord(raw)
-  const key = markKey(language, normalized)
-  const mark = state.wordMarks[key]
-  const grayed = state.silentMarks[key] ?? []
+  const genericKey = markKey(language, normalized)
+  const instKey = (resourceId && chapterIndex !== undefined && paragraphIndex !== undefined)
+    ? `inst:${resourceId}:${chapterIndex}:${paragraphIndex}:${offset}`
+    : undefined
+  const mark = (instKey ? state.wordMarks[instKey] : undefined) ?? state.wordMarks[genericKey]
+  const grayed = state.silentMarks[genericKey] ?? []
   const savedWord = state.words.find((word) => word.normalized === normalized && word.language === language)
 
   const letters = [...raw]
@@ -1939,23 +2274,55 @@ function Word({ raw, language, state, markMode, green, offset = 0, onClick, onCo
     const isGreen = green?.has(offset + index) ?? false
     const cls = `${isGreen ? 'edited-char' : ''} ${isGrayed ? 'user-gray' : ''}`.trim()
     if (markMode === 'silent') {
-      return <span key={index} className={`letter-cell ${cls}`}
-        onClick={(event) => { event.stopPropagation(); if (isAlpha) onLetterClick(raw, myAlpha) }}>{letter}</span>
+      return (
+        <span
+          key={index}
+          className={`letter-cell ${cls}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            if (isAlpha) onLetterClick(raw, myAlpha)
+          }}
+        >
+          {letter}
+        </span>
+      )
     }
     return <span key={index} className={cls || undefined}>{letter}</span>
   })
 
   const markClass = mark ? `marked-${mark.style}` : ''
+  const selectedClass = isSelected ? 'word-drag-selected' : ''
   const style = mark ? ({ ['--mark-color' as string]: mark.color } as React.CSSProperties) : undefined
   const deckClass = !savedWord || savedWord.knowledge === 6
     ? ''
     : savedWord.knowledge ? `word-known kl-${savedWord.knowledge}` : 'word-known'
 
   if (markMode === 'silent') {
-    return <span className={`word as-span ${markClass} ${deckClass}`} style={style}
-      onContextMenu={(event) => { if (onContextMenu) { onContextMenu(raw, event) } }}>{spans}</span>
+    return (
+      <span
+        className={`word as-span ${markClass} ${deckClass} ${selectedClass}`}
+        style={style}
+        onContextMenu={(event) => { if (onContextMenu) { onContextMenu(raw, event) } }}
+      >
+        {spans}
+      </span>
+    )
   }
-  return <button className={`word ${markClass} ${deckClass}`} style={style}
-    onClick={(event) => { event.stopPropagation(); onClick(raw, event.currentTarget) }}
-    onContextMenu={(event) => { if (onContextMenu) { onContextMenu(raw, event) } }}>{spans}</button>
+  return (
+    <button
+      type="button"
+      className={`word ${markClass} ${deckClass} ${selectedClass}`}
+      style={style}
+      onMouseDown={onMouseDown}
+      onMouseEnter={onMouseEnter}
+      onClick={(event) => {
+        event.stopPropagation()
+        const isInstance = event.altKey || event.ctrlKey
+        onClick(raw, event.currentTarget, isInstance, offset)
+      }}
+      onContextMenu={(event) => { if (onContextMenu) { onContextMenu(raw, event) } }}
+    >
+      {spans}
+    </button>
+  )
 }

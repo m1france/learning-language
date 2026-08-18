@@ -136,13 +136,17 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
     }
   }, [stream])
 
-  // Fullscreen change listener
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement)
     }
     document.addEventListener('fullscreenchange', handleFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => undefined)
+      }
+    }
   }, [])
 
   const toggleFullscreen = () => {
