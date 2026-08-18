@@ -25,6 +25,7 @@ import {
   Star,
   Volume2,
   ArrowRight,
+  ExternalLink,
 } from 'lucide-react'
 import {
   ResourceContextMenu,
@@ -927,6 +928,26 @@ function WikiPanel({ word, language, initialTab, onClose }: {
     setTabContextMenu(null)
   }
 
+  const openCambridgePopup = (w: string = word) => {
+    const url = cambridgeUrl(language, w)
+    const width = 500
+    const height = 700
+    const left = Math.max(0, (window.screenX ?? 0) + window.innerWidth - width - 40)
+    const top = Math.max(0, (window.screenY ?? 0) + 80)
+    window.open(
+      url,
+      'cambridge_dict',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`,
+    )
+  }
+
+  useEffect(() => {
+    if (tab === 'cambridge' && word) {
+      openCambridgePopup(word)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, word, language])
+
   return (
     <div className="wiki-panel" onClick={(event) => event.stopPropagation()}>
       <div className="wiki-head">
@@ -947,12 +968,29 @@ function WikiPanel({ word, language, initialTab, onClose }: {
         <button className="card-x" onClick={onClose} aria-label="Fermer"><X size={16} /></button>
       </div>
 
-      <iframe
-        key={`${tab}:${language}:${word}`}
-        title={`${tab} — ${word}`}
-        src={src}
-        className="wiki-frame"
-      />
+      {tab === 'cambridge' ? (
+        <div className="wiki-external-card">
+          <div className="wiki-ext-icon">
+            <Volume2 size={26} />
+          </div>
+          <h3>Cambridge Dictionary</h3>
+          <p>Prononciation sound-by-sound pour <strong>{word}</strong></p>
+          <button
+            type="button"
+            className="wiki-ext-btn"
+            onClick={() => openCambridgePopup()}
+          >
+            <ExternalLink size={14} /> Ouvrir la fenêtre Cambridge
+          </button>
+        </div>
+      ) : (
+        <iframe
+          key={`${tab}:${language}:${word}`}
+          title={`${tab} — ${word}`}
+          src={src}
+          className="wiki-frame"
+        />
+      )}
 
       {tabContextMenu && (
         <div
