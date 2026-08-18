@@ -22,6 +22,9 @@ import {
   Globe,
   BookOpen,
   BookmarkPlus,
+  Star,
+  Volume2,
+  ArrowRight,
 } from 'lucide-react'
 import {
   ResourceContextMenu,
@@ -77,6 +80,56 @@ const lingueeUrl = (language: Language, word: string) =>
   language === 'fr'
     ? `https://www.linguee.com/french-english/translation/${encodeURIComponent(word)}.html`
     : `https://www.linguee.com/english-french/translation/${encodeURIComponent(word)}.html`
+
+/** Cambridge Dictionary — prononciation audio sound-by-sound (UK/US). */
+const cambridgeUrl = (language: Language, word: string) => {
+  const clean = cleanRaw(word).toLowerCase()
+  if (language === 'fr') {
+    return `https://dictionary.cambridge.org/dictionary/french-english/${encodeURIComponent(clean)}`
+  }
+  return `https://dictionary.cambridge.org/pronunciation/english/${encodeURIComponent(clean)}`
+}
+
+export type DictionaryTabId = 'wiktionary' | 'linguee' | 'cambridge'
+
+const DICTIONARY_TABS: Record<DictionaryTabId, { label: string; getUrl: (language: Language, word: string) => string }> = {
+  wiktionary: {
+    label: 'Wiktionary',
+    getUrl: wikiUrl,
+  },
+  linguee: {
+    label: 'Linguee',
+    getUrl: lingueeUrl,
+  },
+  cambridge: {
+    label: 'Cambridge',
+    getUrl: cambridgeUrl,
+  },
+}
+
+function getSavedDefaultTab(): DictionaryTabId {
+  try {
+    const raw = localStorage.getItem('vivre-dict-default-tab')
+    if (raw === 'wiktionary' || raw === 'linguee' || raw === 'cambridge') return raw
+  } catch {}
+  return 'wiktionary'
+}
+
+function getSavedTabOrder(): DictionaryTabId[] {
+  try {
+    const raw = localStorage.getItem('vivre-dict-tab-order')
+    if (raw) {
+      const parsed = JSON.parse(raw) as DictionaryTabId[]
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const allTabs: DictionaryTabId[] = ['wiktionary', 'linguee', 'cambridge']
+        const filtered = parsed.filter((id) => allTabs.includes(id))
+        allTabs.forEach((id) => { if (!filtered.includes(id)) filtered.push(id) })
+        return filtered
+      }
+    }
+  } catch {}
+  return ['wiktionary', 'linguee', 'cambridge']
+}
 
 function flatten(resource: Resource): Entry[] {
   return resource.chapters.flatMap((chapter, chapterIndex) =>
@@ -190,7 +243,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [wikiWord, setWikiWord] = useState('')
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiArmed, setWikiArmed] = useState(false)
-  const [wikiDefaultTab, setWikiDefaultTab] = useState<'wiktionary' | 'linguee'>('wiktionary')
+  const [wikiDefaultTab, setWikiDefaultTab] = useState<DictionaryTabId>(getSavedDefaultTab)
   const [focusOpen, setFocusOpen] = useState(false)
   const [leftCollapsed, setLeftCollapsed] = useState(() => localStorage.getItem('vivre-reader-left-collapsed') === '1')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; markingId: string } | null>(null)
@@ -246,6 +299,16 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     }
   }, [])
 
+  const toggleWiki = () => {
+    if (wikiOpen || wikiArmed) {
+      setWikiOpen(false)
+      setWikiArmed(false)
+    } else {
+      setWikiArmed(true)
+      setWikiOpen(false)
+    }
+  }
+
   // Raccourci clavier 'W' pour activer / désactiver Wiktionary & Linguee
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -254,26 +317,12 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       if (typing || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key.toLowerCase() === 'w') {
         event.preventDefault()
-        if (wikiOpen || wikiArmed) {
-          setWikiOpen(false)
-          setWikiArmed(false)
-        } else {
-          if (selected?.raw) {
-            setWikiWord(wikiLookup(selected.raw))
-            setWikiDefaultTab('wiktionary')
-            setWikiOpen(true)
-          } else if (wikiWord) {
-            setWikiDefaultTab('wiktionary')
-            setWikiOpen(true)
-          } else {
-            setWikiArmed(true)
-          }
-        }
+        toggleWiki()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [wikiOpen, wikiArmed, selected, wikiWord])
+  }, [wikiOpen, wikiArmed])
 
   const entries = useMemo(() => flatten(resource), [resource])
   const pages = useMemo(() => paginate(entries, settings.readerPageSize), [entries, settings.readerPageSize])
@@ -737,6 +786,18 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         >
           <i><Globe size={14} /></i> Voir sur Linguee
         </button>
+        <button
+          type="button"
+          className="word-context-item"
+          onClick={() => {
+            setWikiWord(wikiLookup(wordContextMenu.raw))
+            setWikiDefaultTab('cambridge')
+            setWikiOpen(true)
+            setWordContextMenu(null)
+          }}
+        >
+          <i><Volume2 size={14} /></i> Voir sur Cambridge
+        </button>
         <div className="word-context-sep" />
         {!wordContextMenu.isSaved ? (
           <button
@@ -770,7 +831,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       </div>
     )}
 
-    <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={() => setWikiArmed(!wikiArmed)} />
+    <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={toggleWiki} />
     {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} initialTab={wikiDefaultTab} onClose={() => setWikiOpen(false)} />}
 
     {focusOpen && <FocusReader state={state} resource={resource} ui={ui} onClose={closeFocus} onSaveWord={onSaveWord} onDeleteWord={onDeleteWord} />}
@@ -786,115 +847,333 @@ function WikiFab({ label, armed, onToggle }: { label: string; armed: boolean; on
 }
 
 /** Moderate bottom-right window embedding the dictionary page of the selected word. */
-function WikiPanel({ word, language, initialTab = 'wiktionary', onClose }: { word: string; language: Language; initialTab?: 'wiktionary' | 'linguee'; onClose: () => void }) {
-  const [tab, setTab] = useState<'wiktionary' | 'linguee'>(initialTab)
+function WikiPanel({ word, language, initialTab, onClose }: {
+  word: string
+  language: Language
+  initialTab?: DictionaryTabId
+  onClose: () => void
+}) {
+  const [defaultTab, setDefaultTab] = useState<DictionaryTabId>(getSavedDefaultTab)
+  const [tabOrder, setTabOrder] = useState<DictionaryTabId[]>(getSavedTabOrder)
+  const [tab, setTab] = useState<DictionaryTabId>(() => initialTab ?? getSavedDefaultTab())
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    tabId: DictionaryTabId
+    x: number
+    y: number
+  } | null>(null)
+
   useEffect(() => {
-    setTab(initialTab)
+    if (initialTab) {
+      setTab(initialTab)
+    } else {
+      setTab(getSavedDefaultTab())
+    }
   }, [initialTab, word])
-  const src = tab === 'wiktionary' ? wikiUrl(language, word) : lingueeUrl(language, word)
-  return <div className="wiki-panel" onClick={(event) => event.stopPropagation()}>
-    <div className="wiki-head">
-      <div className="wiki-tabs" role="tablist">
-        <button role="tab" className={tab === 'wiktionary' ? 'active' : ''} onClick={() => setTab('wiktionary')}>Wiktionary</button>
-        <button role="tab" className={tab === 'linguee' ? 'active' : ''} onClick={() => setTab('linguee')}>Linguee</button>
+
+  useEffect(() => {
+    if (!tabContextMenu) return
+    const close = () => setTabContextMenu(null)
+    window.addEventListener('click', close)
+    window.addEventListener('contextmenu', close)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('contextmenu', close)
+    }
+  }, [tabContextMenu])
+
+  const tabConfig = DICTIONARY_TABS[tab] || DICTIONARY_TABS.wiktionary
+  const src = tabConfig.getUrl(language, word)
+
+  const handleTabContextMenu = (e: React.MouseEvent, tabId: DictionaryTabId) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setTabContextMenu({
+      tabId,
+      x: e.clientX,
+      y: e.clientY,
+    })
+  }
+
+  const makeDefault = (tabId: DictionaryTabId) => {
+    setDefaultTab(tabId)
+    localStorage.setItem('vivre-dict-default-tab', tabId)
+    setTab(tabId)
+    setTabContextMenu(null)
+  }
+
+  const moveLeft = (tabId: DictionaryTabId) => {
+    const idx = tabOrder.indexOf(tabId)
+    if (idx > 0) {
+      const newOrder = [...tabOrder]
+      const temp = newOrder[idx - 1]
+      newOrder[idx - 1] = newOrder[idx]
+      newOrder[idx] = temp
+      setTabOrder(newOrder)
+      localStorage.setItem('vivre-dict-tab-order', JSON.stringify(newOrder))
+    }
+    setTabContextMenu(null)
+  }
+
+  const moveRight = (tabId: DictionaryTabId) => {
+    const idx = tabOrder.indexOf(tabId)
+    if (idx < tabOrder.length - 1) {
+      const newOrder = [...tabOrder]
+      const temp = newOrder[idx + 1]
+      newOrder[idx + 1] = newOrder[idx]
+      newOrder[idx] = temp
+      setTabOrder(newOrder)
+      localStorage.setItem('vivre-dict-tab-order', JSON.stringify(newOrder))
+    }
+    setTabContextMenu(null)
+  }
+
+  return (
+    <div className="wiki-panel" onClick={(event) => event.stopPropagation()}>
+      <div className="wiki-head">
+        <div className="wiki-tabs" role="tablist">
+          {tabOrder.map((id) => (
+            <button
+              key={id}
+              role="tab"
+              className={tab === id ? 'active' : ''}
+              onClick={() => setTab(id)}
+              onContextMenu={(e) => handleTabContextMenu(e, id)}
+              title={id === defaultTab ? `${DICTIONARY_TABS[id]?.label} (Par défaut)` : DICTIONARY_TABS[id]?.label}
+            >
+              {DICTIONARY_TABS[id]?.label || id}
+            </button>
+          ))}
+        </div>
+        <button className="card-x" onClick={onClose} aria-label="Fermer"><X size={16} /></button>
       </div>
-      <button className="card-x" onClick={onClose} aria-label="Fermer"><X size={16} /></button>
+
+      <iframe
+        key={`${tab}:${language}:${word}`}
+        title={`${tab} — ${word}`}
+        src={src}
+        className="wiki-frame"
+      />
+
+      {tabContextMenu && (
+        <div
+          className="word-context-menu wiki-tab-context-menu"
+          style={{
+            left: Math.min(window.innerWidth - 230, tabContextMenu.x),
+            top: Math.min(window.innerHeight - 160, tabContextMenu.y),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="word-context-item"
+            onClick={() => makeDefault(tabContextMenu.tabId)}
+          >
+            <i><Star size={14} fill={defaultTab === tabContextMenu.tabId ? 'currentColor' : 'none'} /></i>
+            <span>Dictionnaire par défaut {defaultTab === tabContextMenu.tabId ? '✓' : ''}</span>
+          </button>
+          <button
+            type="button"
+            className="word-context-item"
+            disabled={tabOrder.indexOf(tabContextMenu.tabId) === 0}
+            style={tabOrder.indexOf(tabContextMenu.tabId) === 0 ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+            onClick={() => moveLeft(tabContextMenu.tabId)}
+          >
+            <i><ArrowLeft size={14} /></i>
+            <span>Déplacer vers la gauche</span>
+          </button>
+          <button
+            type="button"
+            className="word-context-item"
+            disabled={tabOrder.indexOf(tabContextMenu.tabId) === tabOrder.length - 1}
+            style={tabOrder.indexOf(tabContextMenu.tabId) === tabOrder.length - 1 ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+            onClick={() => moveRight(tabContextMenu.tabId)}
+          >
+            <i><ArrowRight size={14} /></i>
+            <span>Déplacer vers la droite</span>
+          </button>
+        </div>
+      )}
     </div>
-    <iframe key={`${tab}:${language}:${word}`} title={`${tab} — ${word}`} src={src} className="wiki-frame" />
-  </div>
+  )
 }
 
 /**
- * Helper to apply markdown formatting (bold, italic, underline) with toggle support.
+ * Convert markdown to HTML for rich contentEditable fields.
  */
-function applyMarkdownFormat(
-  element: HTMLInputElement | HTMLTextAreaElement,
-  type: 'bold' | 'italic' | 'underline',
-  setValue: (val: string) => void,
-) {
-  const val = element.value
-  const start = element.selectionStart ?? 0
-  const end = element.selectionEnd ?? 0
-  const selected = val.slice(start, end)
+function markdownToHtml(md: string): string {
+  if (!md) return ''
 
-  let nextVal = val
-  let newStart = start
-  let newEnd = end
+  let escaped = md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 
-  if (type === 'bold') {
-    if (selected.startsWith('**') && selected.endsWith('**') && selected.length >= 4) {
-      const inner = selected.slice(2, -2)
-      nextVal = val.slice(0, start) + inner + val.slice(end)
-      newStart = start
-      newEnd = start + inner.length
-    } else if (start >= 2 && val.slice(start - 2, start) === '**' && val.slice(end, end + 2) === '**') {
-      nextVal = val.slice(0, start - 2) + selected + val.slice(end + 2)
-      newStart = start - 2
-      newEnd = end - 2
-    } else if (start === end) {
-      nextVal = val.slice(0, start) + '****' + val.slice(end)
-      newStart = start + 2
-      newEnd = start + 2
-    } else {
-      nextVal = val.slice(0, start) + '**' + selected + '**' + val.slice(end)
-      newStart = start + 2
-      newEnd = end + 2
+  escaped = escaped
+    .replace(/&lt;u&gt;/gi, '<u>')
+    .replace(/&lt;\/u&gt;/gi, '</u>')
+    .replace(/&lt;ins&gt;/gi, '<u>')
+    .replace(/&lt;\/ins&gt;/gi, '</u>')
+
+  escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  escaped = escaped.replace(/__([^_]+)__/g, '<strong>$1</strong>')
+  escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>')
+  escaped = escaped.replace(/_([^_]+)_/g, '<em>$1</em>')
+  escaped = escaped.replace(/\n/g, '<br>')
+
+  return escaped
+}
+
+/**
+ * Serialize rich contentEditable HTML back to clean markdown.
+ */
+function htmlToMarkdown(html: string): string {
+  if (!html) return ''
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html')
+
+  function traverse(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || ''
     }
-  } else if (type === 'italic') {
-    if (selected.startsWith('*') && selected.endsWith('*') && !selected.startsWith('**') && selected.length >= 2) {
-      const inner = selected.slice(1, -1)
-      nextVal = val.slice(0, start) + inner + val.slice(end)
-      newStart = start
-      newEnd = start + inner.length
-    } else if (
-      start >= 1 &&
-      val.slice(start - 1, start) === '*' &&
-      val.slice(end, end + 1) === '*' &&
-      (start < 2 || val.slice(start - 2, start) !== '**') &&
-      val.slice(end, end + 2) !== '**'
-    ) {
-      nextVal = val.slice(0, start - 1) + selected + val.slice(end + 1)
-      newStart = start - 1
-      newEnd = end - 1
-    } else if (start === end) {
-      nextVal = val.slice(0, start) + '**' + val.slice(end)
-      newStart = start + 1
-      newEnd = start + 1
-    } else {
-      nextVal = val.slice(0, start) + '*' + selected + '*' + val.slice(end)
-      newStart = start + 1
-      newEnd = end + 1
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement
+      const tag = el.tagName.toLowerCase()
+
+      let inner = ''
+      el.childNodes.forEach((child) => {
+        inner += traverse(child)
+      })
+
+      if (tag === 'br') return '\n'
+      if (tag === 'strong' || tag === 'b') {
+        const clean = inner.trim()
+        if (!clean) return inner
+        return `**${clean}**`
+      }
+      if (tag === 'em' || tag === 'i') {
+        const clean = inner.trim()
+        if (!clean) return inner
+        return `*${clean}*`
+      }
+      if (tag === 'u' || tag === 'ins') {
+        const clean = inner.trim()
+        if (!clean) return inner
+        return `<u>${clean}</u>`
+      }
+      if (tag === 'div' || tag === 'p') {
+        if (!inner || inner === '\n') return '\n'
+        return `\n${inner}`
+      }
+
+      return inner
     }
-  } else if (type === 'underline') {
-    if (selected.toLowerCase().startsWith('<u>') && selected.toLowerCase().endsWith('</u>') && selected.length >= 7) {
-      const inner = selected.slice(3, -4)
-      nextVal = val.slice(0, start) + inner + val.slice(end)
-      newStart = start
-      newEnd = start + inner.length
-    } else if (
-      start >= 3 &&
-      val.slice(start - 3, start).toLowerCase() === '<u>' &&
-      val.slice(end, end + 4).toLowerCase() === '</u>'
-    ) {
-      nextVal = val.slice(0, start - 3) + selected + val.slice(end + 4)
-      newStart = start - 3
-      newEnd = end - 3
-    } else if (start === end) {
-      nextVal = val.slice(0, start) + '<u></u>' + val.slice(end)
-      newStart = start + 3
-      newEnd = start + 3
-    } else {
-      nextVal = val.slice(0, start) + '<u>' + selected + '</u>' + val.slice(end)
-      newStart = start + 3
-      newEnd = end + 3
+    return ''
+  }
+
+  let result = traverse(doc.body)
+  result = result.replace(/^\n+/, '').replace(/\n+$/, '')
+  return result
+}
+
+/**
+ * Rich editable field rendering bold, italic, and underline directly in-place.
+ */
+function RichInputField({
+  value,
+  placeholder,
+  multiline = false,
+  className,
+  onChange,
+}: {
+  value: string
+  placeholder?: string
+  multiline?: boolean
+  className?: string
+  onChange: (value: string) => void
+}) {
+  const editorRef = useRef<HTMLDivElement>(null)
+  const lastEmittedRef = useRef(value)
+  const isComposingRef = useRef(false)
+
+  useEffect(() => {
+    if (editorRef.current) {
+      const currentMd = htmlToMarkdown(editorRef.current.innerHTML)
+      if (value !== currentMd && value !== lastEmittedRef.current) {
+        editorRef.current.innerHTML = markdownToHtml(value)
+        lastEmittedRef.current = value
+      }
+    }
+  }, [value])
+
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = markdownToHtml(value)
+      lastEmittedRef.current = value
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleInput = () => {
+    if (!editorRef.current || isComposingRef.current) return
+    const md = htmlToMarkdown(editorRef.current.innerHTML)
+    lastEmittedRef.current = md
+    onChange(md)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.metaKey || e.ctrlKey) {
+      const key = e.key.toLowerCase()
+      if (key === 'b') {
+        e.preventDefault()
+        document.execCommand('bold', false)
+        handleInput()
+        return
+      }
+      if (key === 'i') {
+        e.preventDefault()
+        document.execCommand('italic', false)
+        handleInput()
+        return
+      }
+      if (key === 'u') {
+        e.preventDefault()
+        document.execCommand('underline', false)
+        handleInput()
+        return
+      }
+    }
+
+    if (!multiline && e.key === 'Enter') {
+      e.preventDefault()
     }
   }
 
-  setValue(nextVal)
-  requestAnimationFrame(() => {
-    element.focus()
-    element.setSelectionRange(newStart, newEnd)
-  })
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const text = e.clipboardData.getData('text/plain')
+    const clean = multiline ? text : text.replace(/[\r\n]+/g, ' ')
+    document.execCommand('insertText', false, clean)
+    handleInput()
+  }
+
+  const isEmpty = !value || value.trim() === ''
+
+  return (
+    <div
+      ref={editorRef}
+      contentEditable
+      role="textbox"
+      aria-multiline={multiline}
+      data-placeholder={placeholder}
+      data-empty={isEmpty ? 'true' : undefined}
+      className={className}
+      onInput={handleInput}
+      onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
+      onCompositionStart={() => { isComposingRef.current = true }}
+      onCompositionEnd={() => { isComposingRef.current = false; handleInput() }}
+    />
+  )
 }
 
 /**
@@ -1013,28 +1292,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
 
   const removeTag = (value: string) => { setTags(tags.filter((item) => item !== value)); setSaved(false) }
 
-  const handleMarkdownKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
-    setter: (val: string) => void,
-  ) => {
-    if (e.metaKey || e.ctrlKey) {
-      const key = e.key.toLowerCase()
-      if (key === 'b') {
-        e.preventDefault()
-        applyMarkdownFormat(e.currentTarget, 'bold', setter)
-        setSaved(false)
-      } else if (key === 'i') {
-        e.preventDefault()
-        applyMarkdownFormat(e.currentTarget, 'italic', setter)
-        setSaved(false)
-      } else if (key === 'u') {
-        e.preventDefault()
-        applyMarkdownFormat(e.currentTarget, 'underline', setter)
-        setSaved(false)
-      }
-    }
-  }
-
   const submit = () => {
     if (!word.trim()) return
     onSave({ raw: word.trim(), translation: translation.trim(), parent: parent.trim(), pronunciation: pronunciation.trim(), knowledge, tags })
@@ -1112,21 +1369,21 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     </div>
 
     <div className="wp-field">
-      <input
+      <RichInputField
         value={pronunciation}
         placeholder={t.pronunciationLabel}
-        onChange={(event) => { setPronunciation(event.target.value); setSaved(false) }}
-        onKeyDown={(event) => handleMarkdownKeyDown(event, setPronunciation)}
+        className="wp-rich-input"
+        onChange={(val) => { setPronunciation(val); setSaved(false) }}
       />
     </div>
 
     <div className="wp-field">
-      <textarea
-        rows={3}
+      <RichInputField
         value={translation}
         placeholder={t.translationLabel}
-        onChange={(event) => { setTranslation(event.target.value); setSaved(false) }}
-        onKeyDown={(event) => handleMarkdownKeyDown(event, setTranslation)}
+        multiline
+        className="wp-rich-textarea"
+        onChange={(val) => { setTranslation(val); setSaved(false) }}
       />
     </div>
 
@@ -1175,10 +1432,11 @@ function TagInput({ allTags, existingTags, onAdd, onRemove, label }: {
   label: string
 }) {
   const [input, setInput] = useState('')
+  const [dismissedSuggestion, setDismissedSuggestion] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const query = input.trim().toLowerCase()
-  const match = (query && allTags.length > 0)
+  const match = (!dismissedSuggestion && query && allTags.length > 0)
     ? allTags.find((t) => t.toLowerCase().startsWith(query) && !existingTags.some((ex) => ex.toLowerCase() === t.toLowerCase()))
     : undefined
 
@@ -1191,6 +1449,7 @@ function TagInput({ allTags, existingTags, onAdd, onRemove, label }: {
     if (finalTag) {
       onAdd(finalTag)
       setInput('')
+      setDismissedSuggestion(false)
     }
   }
 
@@ -1203,8 +1462,19 @@ function TagInput({ allTags, existingTags, onAdd, onRemove, label }: {
         e.preventDefault()
         setInput(match)
       }
+    } else if (e.key === 'Backspace' || e.key === 'Delete') {
+      if (ghostSuffix && !dismissedSuggestion) {
+        e.preventDefault()
+        setDismissedSuggestion(true)
+      }
     } else if (e.key === 'Escape') {
-      setInput('')
+      if (ghostSuffix && !dismissedSuggestion) {
+        e.preventDefault()
+        setDismissedSuggestion(true)
+      } else {
+        setInput('')
+        setDismissedSuggestion(false)
+      }
     }
   }
 
@@ -1220,7 +1490,10 @@ function TagInput({ allTags, existingTags, onAdd, onRemove, label }: {
           className="wp-tag-input-field"
           value={input}
           placeholder={existingTags.length === 0 ? label : '+ Tag'}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value)
+            setDismissedSuggestion(false)
+          }}
           onKeyDown={handleKeyDown}
           onBlur={() => {
             if (input.trim()) {
@@ -1290,6 +1563,30 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
     setWikiWord(wikiLookup(raw))
   }
 
+  const toggleWiki = () => {
+    if (wikiOpen || wikiArmed) {
+      setWikiOpen(false)
+      setWikiArmed(false)
+    } else {
+      setWikiArmed(true)
+      setWikiOpen(false)
+    }
+  }
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const typing = Boolean(target?.closest('input, textarea, [contenteditable="true"]'))
+      if (typing || event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.key.toLowerCase() === 'w') {
+        event.preventDefault()
+        toggleWiki()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [wikiOpen, wikiArmed])
+
   return <div className="focus-reader" onClick={() => { setSelected(null); if (wikiArmed) setWikiArmed(false) }}>
     <header className="focus-top">
       <strong className="focus-title">{resource.title}</strong>
@@ -1333,7 +1630,7 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
       </aside>
     </div>
 
-    <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={() => setWikiArmed(!wikiArmed)} />
+    <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={toggleWiki} />
     {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} onClose={() => setWikiOpen(false)} />}
   </div>
 }
