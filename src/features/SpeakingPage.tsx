@@ -4,6 +4,7 @@ import { GLOBAL_CATEGORIES, GlobalTopicCategory, NicheTopic, getPromptText } fro
 import { useCamera } from './speaking/CameraContext'
 import { TeleprompterOverlay } from './speaking/TeleprompterOverlay'
 import { SpeakingWorkspace } from './speaking/SpeakingWorkspace'
+import { QuickWordLookup } from './speaking/QuickWordLookup'
 import {
   Camera,
   CameraOff,
@@ -22,6 +23,7 @@ import {
   Minimize2,
   BookOpen,
   Sparkles,
+  Languages,
 } from 'lucide-react'
 
 type SpeakingPageProps = {
@@ -83,7 +85,7 @@ const L = {
   },
 } as const
 
-export function SpeakingPage({ ui, language }: SpeakingPageProps) {
+export function SpeakingPage({ ui, language, api }: SpeakingPageProps) {
   const t = L[ui]
   const {
     stream,
@@ -121,6 +123,7 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
   } = useCamera()
 
   const [showTopicPicker, setShowTopicPicker] = useState(false)
+  const [showQuickLookup, setShowQuickLookup] = useState(false)
   const [inPickerCategory, setInPickerCategory] = useState<GlobalTopicCategory | null>(null)
   const [pendingNiche, setPendingNiche] = useState<NicheTopic | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -220,6 +223,16 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
         >
           {cameraDisabled ? <CameraOff size={16} /> : <Camera size={16} />}
         </button>
+        <button
+          className={`device-btn ${showQuickLookup ? 'active' : ''}`}
+          onClick={() => {
+            setShowQuickLookup(!showQuickLookup)
+            setShowTopicPicker(false)
+          }}
+          title={ui === 'fr' ? 'Dictionnaire & Traduction' : 'Dictionary & Translation'}
+        >
+          <Languages size={16} />
+        </button>
       </div>
 
       {/* Center: Record button / Live timer */}
@@ -294,6 +307,7 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
             className="hud-topic-trigger-btn"
             onClick={() => {
               setShowTopicPicker(!showTopicPicker)
+              setShowQuickLookup(false)
               setPendingNiche(null)
               setInPickerCategory(null)
             }}
@@ -517,6 +531,14 @@ export function SpeakingPage({ ui, language }: SpeakingPageProps) {
                 /* Standalone Bottom Bar when Prompter is not shown */
                 renderControls(false)
               )}
+
+              {/* Quick Word & Phrase Lookup Drawer (Minimalist / Bottom-Left) */}
+              <QuickWordLookup
+                isOpen={showQuickLookup}
+                onClose={() => setShowQuickLookup(false)}
+                language={language}
+                api={api}
+              />
             </div>
           )}
         </div>

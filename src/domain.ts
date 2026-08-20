@@ -116,6 +116,10 @@ export type ApiSettings = {
   elevenLabsVoice: string
   fishKey: string
   fishReferenceId: string
+  /** DeepL API key (Free or Pro) */
+  deepLKey?: string
+  /** DeepL target translation language (e.g. EN-US, EN-GB, ES, DE, IT...) */
+  deepLTargetLang?: string
 }
 
 export type CustomTool = {

@@ -51,6 +51,8 @@ export const defaultSettings: UserSettings = {
     elevenLabsVoice: '21m00Tcm4TlvDq8ikWAM',
     fishKey: '',
     fishReferenceId: '',
+    deepLKey: '',
+    deepLTargetLang: 'EN-US',
   },
 }
 

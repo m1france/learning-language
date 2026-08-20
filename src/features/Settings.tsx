@@ -480,6 +480,27 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
             </select></label>}
           </div>
           <div className="connection-card">
+            <div><h3>DeepL (Traduction & Dictionnaire)</h3><p>Utilisé pour la recherche rapide et la traduction en direct durant tes sessions de parole.</p></div>
+            <label>Clé API DeepL <small>Free (termine par :fx) ou Pro</small><input type="password" value={draft.api.deepLKey || ''} onChange={(event) => updateApi('deepLKey', event.target.value)} placeholder="ex. 00000000-0000-0000-0000-000000000000:fx" autoComplete="off" /></label>
+            <label>Langue de traduction cible
+              <select value={draft.api.deepLTargetLang || 'EN-US'} onChange={(event) => updateApi('deepLTargetLang', event.target.value)}>
+                <option value="EN-US">Anglais américain (EN-US)</option>
+                <option value="EN-GB">Anglais britannique (EN-GB)</option>
+                <option value="ES">Espagnol (ES)</option>
+                <option value="DE">Allemand (DE)</option>
+                <option value="IT">Italien (IT)</option>
+                <option value="PT-PT">Portugais européen (PT-PT)</option>
+                <option value="PT-BR">Portugais brésilien (PT-BR)</option>
+                <option value="NL">Néerlandais (NL)</option>
+                <option value="PL">Polonais (PL)</option>
+                <option value="RU">Russe (RU)</option>
+                <option value="JA">Japonais (JA)</option>
+                <option value="ZH">Chinois simplifié (ZH)</option>
+              </select>
+            </label>
+            <p className="field-hint">Obtiens une clé gratuite sur <code>deepl.com/pro-api</code>. Si vide, un service de secours est utilisé.</p>
+          </div>
+          <div className="connection-card">
             <div><h3>Clés API (optionnel)</h3><p>Utilisées uniquement pour les fonctions IA et la recherche d’images.</p></div>
             <label>Clé OpenRouter<input type="password" value={draft.api.openRouterKey} onChange={(event) => updateApi('openRouterKey', event.target.value)} placeholder="sk-or-…" autoComplete="off" /></label>
             <label>Clé OpenAI <small>optionnel, transcription Whisper</small><input type="password" value={draft.api.openAiKey} onChange={(event) => updateApi('openAiKey', event.target.value)} placeholder="sk-…" autoComplete="off" /></label>
