@@ -30,6 +30,16 @@ type SpeakingPageProps = {
   ui: 'fr' | 'en'
   language: Language
   api: ApiSettings
+  customPrompterText?: string | null
+  onSaveWord?: (args: {
+    raw: string
+    sentence: string
+    language: Language
+    translation: string
+    parent: string
+    pronunciation: string
+    tags?: string[]
+  }) => void
 }
 
 const L = {
@@ -85,7 +95,7 @@ const L = {
   },
 } as const
 
-export function SpeakingPage({ ui, language, api }: SpeakingPageProps) {
+export function SpeakingPage({ ui, language, api, customPrompterText, onSaveWord }: SpeakingPageProps) {
   const t = L[ui]
   const {
     stream,
@@ -130,6 +140,13 @@ export function SpeakingPage({ ui, language, api }: SpeakingPageProps) {
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const studioContainerRef = useRef<HTMLDivElement>(null)
+
+  // If customPrompterText is passed, enable prompter on start
+  useEffect(() => {
+    if (customPrompterText && customPrompterText.trim()) {
+      setShowPrompter(true)
+    }
+  }, [customPrompterText, setShowPrompter])
 
   // Attach active stream to video element
   useEffect(() => {
@@ -519,9 +536,9 @@ export function SpeakingPage({ ui, language, api }: SpeakingPageProps) {
               )}
 
               {/* Minimalist Transparent Prompter Integrated with Controls */}
-              {showPrompter && selectedNiche ? (
+              {showPrompter && (selectedNiche || customPrompterText) ? (
                 <TeleprompterOverlay
-                  text={getPromptText(selectedNiche, language)}
+                  text={customPrompterText || (selectedNiche ? getPromptText(selectedNiche, language) : '')}
                   opacity={overlayOpacity}
                   onClose={() => setShowPrompter(false)}
                 >
@@ -538,6 +555,7 @@ export function SpeakingPage({ ui, language, api }: SpeakingPageProps) {
                 onClose={() => setShowQuickLookup(false)}
                 language={language}
                 api={api}
+                onSaveWord={onSaveWord}
               />
             </div>
           )}

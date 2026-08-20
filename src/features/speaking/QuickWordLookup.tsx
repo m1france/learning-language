@@ -6,6 +6,8 @@ import {
   X,
   ExternalLink,
   Loader2,
+  BookmarkPlus,
+  Check,
 } from 'lucide-react'
 
 type TabType = 'deepl' | 'linguee' | 'cambridge'
@@ -15,13 +17,23 @@ type QuickWordLookupProps = {
   onClose: () => void
   language: Language
   api: ApiSettings
+  onSaveWord?: (args: {
+    raw: string
+    sentence: string
+    language: Language
+    translation: string
+    parent: string
+    pronunciation: string
+    tags?: string[]
+  }) => void
 }
 
-export function QuickWordLookup({ isOpen, onClose, language, api }: QuickWordLookupProps) {
+export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: QuickWordLookupProps) {
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('deepl')
   const [translation, setTranslation] = useState<DeepLTranslationResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isSaved, setIsSaved] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceTimerRef = useRef<number | null>(null)
@@ -81,7 +93,22 @@ export function QuickWordLookup({ isOpen, onClose, language, api }: QuickWordLoo
   const handleClear = () => {
     setQuery('')
     setTranslation(null)
+    setIsSaved(false)
     inputRef.current?.focus()
+  }
+
+  const handleSaveToVault = () => {
+    if (!onSaveWord || !query.trim() || !translation?.translatedText) return
+    onSaveWord({
+      raw: query.trim(),
+      sentence: '',
+      language,
+      translation: translation.translatedText,
+      parent: '',
+      pronunciation: '',
+      tags: ['oral', 'deepl'],
+    })
+    setIsSaved(true)
   }
 
   const cleanWord = query.trim().replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '')
@@ -155,8 +182,21 @@ export function QuickWordLookup({ isOpen, onClose, language, api }: QuickWordLoo
                     <span>Traduction en cours…</span>
                   </div>
                 ) : (
-                  <div className="quick-dict-translated-text">
-                    {translation?.translatedText || 'Traduction…'}
+                  <div className="quick-dict-translated-wrap">
+                    <div className="quick-dict-translated-text">
+                      {translation?.translatedText || 'Traduction…'}
+                    </div>
+                    {onSaveWord && translation?.translatedText && (
+                      <button
+                        type="button"
+                        className={`quick-dict-save-btn ${isSaved ? 'saved' : ''}`}
+                        onClick={handleSaveToVault}
+                        title="Enregistrer ce mot dans mon vocabulaire"
+                      >
+                        {isSaved ? <Check size={12} /> : <BookmarkPlus size={12} />}
+                        <span>{isSaved ? 'Enregistré' : 'Ajouter au vocabulaire'}</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </>

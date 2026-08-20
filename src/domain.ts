@@ -72,15 +72,24 @@ export type LearnedWord = {
   createdAt: string
 }
 
+export type WritingMode = 'reactivation' | 'guided' | 'sprint' | 'free'
+
 export type WritingEntry = {
   id: string
+  title: string
   date: string
+  mode: WritingMode
   promptWords: string[]
   wordsUsed: string[]
   content: string
   published: boolean
   cosignCount: number
   coSigned: boolean
+  tags?: string[]
+  wordCount: number
+  timeSpentSeconds?: number
+  topicId?: string
+  topicTitle?: string
   createdAt: string
   updatedAt: string
 }

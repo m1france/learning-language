@@ -6,6 +6,7 @@ import { importFromFile, importFromUrl, paragraphsToResource } from './importer'
 import { Reader, Cover } from './features/Reader'
 import { LearningFocus } from './features/LearningFocus'
 import { SpeakingPage } from './features/SpeakingPage'
+import { WritingPage } from './features/writing/WritingPage'
 import { CameraProvider } from './features/speaking/CameraContext'
 import { FloatingMiniCam } from './features/speaking/FloatingMiniCam'
 import { LifePage } from './features/LifePage'
@@ -68,6 +69,7 @@ export default function App() {
   const [readerId, setReaderId] = useState<string | null>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
   const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem('vivre-side-collapsed') === '1')
+  const [speakingPrompterText, setSpeakingPrompterText] = useState<string | null>(null)
 
   const toggleSide = () => {
     const next = !sideCollapsed
@@ -118,8 +120,26 @@ export default function App() {
             <>
               {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}
               {page === 'reading' && <ReadingLibrary state={state} t={t} onOpen={(resource) => setReaderId(resource.id)} onAdd={(resource) => change(upsertResource(state, resource))} onChange={change} />}
-              {page === 'speaking' && <SpeakingPage ui={baseUi(ui)} language={state.settings.learningLanguage} api={state.settings.api} />}
-              {page === 'writing' && <Writing t={t} />}
+              {page === 'speaking' && (
+                <SpeakingPage
+                  ui={baseUi(ui)}
+                  language={state.settings.learningLanguage}
+                  api={state.settings.api}
+                  customPrompterText={speakingPrompterText}
+                  onSaveWord={(args) => change(upsertWordDetails(state, args))}
+                />
+              )}
+              {page === 'writing' && (
+                <WritingPage
+                  state={state}
+                  onChange={change}
+                  ui={ui}
+                  onNavigateToSpeaking={(text) => {
+                    setSpeakingPrompterText(text)
+                    go('speaking')
+                  }}
+                />
+              )}
               {page === 'life' && <LifePage ui={baseUi(ui)} state={state} onChange={change} />}
               {page === 'settings' && <Settings settings={state.settings} state={state}
                 onSave={(settings) => change({ ...state, settings })}
@@ -234,9 +254,7 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
   const [type, setType] = useState('all')
   const [difficulty, setDifficulty] = useState<Difficulty | 'all'>('all')
   const [adding, setAdding] = useState(false)
-  const [reorderMode, setReorderMode] = useState(false)
   const [draggedId, setDraggedId] = useState<string | null>(null)
-  const [dragOverId, setDragOverId] = useState<string | null>(null)
   const isDraggingRef = useRef(false)
   const [menuTarget, setMenuTarget] = useState<ResourceContextTarget | null>(null)
   const [editingResource, setEditingResource] = useState<Resource | null>(null)
@@ -271,22 +289,16 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
     e.target.value = ''
   }
 
-  const handleDropOnResource = (targetId: string) => {
-    if (!draggedId || draggedId === targetId) {
-      setDraggedId(null)
-      setDragOverId(null)
-      return
-    }
+  const handleDragOverResource = (targetId: string) => {
+    if (!draggedId || draggedId === targetId) return
     const fromIndex = state.resources.findIndex((r) => r.id === draggedId)
     const toIndex = state.resources.findIndex((r) => r.id === targetId)
-    if (fromIndex !== -1 && toIndex !== -1) {
+    if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
       const next = [...state.resources]
       const [moved] = next.splice(fromIndex, 1)
       next.splice(toIndex, 0, moved)
       onChange({ ...state, resources: next })
     }
-    setDraggedId(null)
-    setDragOverId(null)
   }
 
   return <div className="page library-page">
@@ -300,26 +312,16 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
     {hasResources && <section className="filter-row">
       <div className="segmented">{types.map((item) => <button className={type === item ? 'selected' : ''} onClick={() => setType(item)} key={item}>{item === 'all' ? t.all : labelFor(item)}</button>)}</div>
       <div className="filter-right-group">
-        <button
-          type="button"
-          className={`reorder-toggle-btn ${reorderMode ? 'active' : ''}`}
-          onClick={() => setReorderMode(!reorderMode)}
-          title={reorderMode ? 'Terminer le tri' : 'Trier et réorganiser les ressources'}
-          aria-label="Trier les ressources"
-        >
-          <ArrowUpDown size={16} />
-        </button>
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty | 'all')}><option value="all">{t.allLevels}</option>{(['beginner', 'intermediate', 'advanced', 'native'] as Difficulty[]).map((level) => <option value={level} key={level}>{t.difficulty[level]}</option>)}</select>
       </div>
     </section>}
     {hasResources
-      ? <section className={`resource-grid ${reorderMode ? 'reorder-mode' : ''}`}>
+      ? <section className="resource-grid">
         {filtered.map((resource) => {
           const isBeingDragged = draggedId === resource.id
-          const isTargetOver = dragOverId === resource.id
           return (
             <button
-              className={`resource-card ${isBeingDragged ? 'dragging' : ''} ${isTargetOver ? 'drag-over' : ''}`}
+              className={`resource-card ${isBeingDragged ? 'dragging' : ''}`}
               draggable
               onDragStart={(e) => {
                 isDraggingRef.current = true
@@ -333,24 +335,15 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
               }}
               onDragEnter={(e) => {
                 e.preventDefault()
-                if (draggedId && draggedId !== resource.id) {
-                  setDragOverId(resource.id)
-                }
-              }}
-              onDragLeave={(e) => {
-                if (e.currentTarget.contains(e.relatedTarget as Node)) return
-                if (dragOverId === resource.id) {
-                  setDragOverId(null)
-                }
+                handleDragOverResource(resource.id)
               }}
               onDrop={(e) => {
                 e.preventDefault()
-                handleDropOnResource(resource.id)
+                setDraggedId(null)
                 setTimeout(() => { isDraggingRef.current = false }, 50)
               }}
               onDragEnd={() => {
                 setDraggedId(null)
-                setDragOverId(null)
                 setTimeout(() => { isDraggingRef.current = false }, 50)
               }}
               onClick={() => {
@@ -489,10 +482,4 @@ function AddResource({ t, state, close, onAdd, onChange }: { t: UI; state: AppSt
       {status !== 'failed' && !showPaste && <button className="text-button paste-link" onClick={() => setShowPaste(true)}>{t.pasteLink}</button>}
     </div>
   </div>
-}
-
-function Writing({ t }: { t: UI }) {
-  const [text, setText] = useState(''); const [published, setPublished] = useState(false)
-  const used = prompts.filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(text))
-  return <div className="page writing-page"><header className="page-header"><div><p className="eyebrow">{t.writing.toUpperCase()} · {t.today.toUpperCase()}</p><h1>{t.dailyPrompt}</h1><p className="subhead">{t.writingSub}</p></div><span className="quiet-badge">{t.writingBadge}</span></header><section className="word-bricks">{prompts.map((word, index) => <span className={used.includes(word) ? 'used' : ''} key={word}><b>{String(index + 1).padStart(2, '0')}</b>{word}</span>)}</section><section className="writing-workspace"><div className="editor"><textarea value={text} onChange={(event) => setText(event.target.value)} placeholder={t.editorPlaceholder} /><footer><span>{text.trim() ? text.trim().split(/\s+/).length : 0} {t.wordsCounter}</span><strong>{used.length}/5 {t.wordGoal}</strong></footer></div><aside className="writing-aside"><span className="eyebrow">{t.nudge}</span><h3>{t.nudgeTitle}</h3><p>{t.nudgeBody}</p><button className="outline full">{t.save}</button><button className="primary full" disabled={used.length < 5} onClick={() => setPublished(true)}>{t.publish} <ArrowRight size={16} /></button>{published && <div className="published-note"><Check size={14} /> {t.published}</div>}</aside></section>{published && <section className="wall-preview"><p className="eyebrow">{t.wallToday}</p><h2>{t.wallTitle}</h2><p>{text || t.wallFallback}</p><button>{t.cosign} <span>12</span></button></section>}</div>
 }
