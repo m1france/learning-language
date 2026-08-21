@@ -90,7 +90,13 @@ export default function App() {
   const change = (next: AppState) => setState(next)
   const setUiLanguage = (uiLanguage: UiLanguage) => change({ ...state, settings: { ...state.settings, uiLanguage } })
 
-  const go = (next: Page) => { setReaderId(null); setPage(next) }
+  const go = (next: Page) => {
+    setReaderId(null)
+    if (next !== 'speaking') {
+      setSpeakingPrompterText(null)
+    }
+    setPage(next)
+  }
 
   return (
     <CameraProvider language={state.settings.learningLanguage}>
@@ -138,6 +144,7 @@ export default function App() {
                   language={state.settings.learningLanguage}
                   api={state.settings.api}
                   customPrompterText={speakingPrompterText}
+                  onConsumePrompterText={() => setSpeakingPrompterText(null)}
                   existingTags={Array.from(new Set(state.words.flatMap((w) => w.tags || [])))}
                   onAiTaskChange={setIsAiTaskRunning}
                   onSaveWord={(args) => change(upsertWordDetails(state, args))}

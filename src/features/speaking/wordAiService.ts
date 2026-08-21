@@ -199,3 +199,40 @@ Return ONLY a JSON object with this exact structure (no other markdown or commen
     tags: [],
   }
 }
+
+/** Tests the main AI Agent connection by sending a lightweight prompt. */
+export async function testAgentConnection(
+  api: ApiSettings,
+): Promise<{ ok: boolean; model: string; error?: string }> {
+  const config = getAgentConfig(api)
+  if (!config || !config.key) {
+    return { ok: false, model: '', error: 'Aucune clé API renseignée pour ce fournisseur' }
+  }
+  try {
+    const response = await fetch(config.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.key}`,
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+        'X-Title': 'Language Learning App',
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [{ role: 'user', content: 'Say "OK" in one single word.' }],
+        max_tokens: 10,
+        temperature: 0.1,
+      }),
+    })
+    if (!response.ok) {
+      const err = await response.text().catch(() => '')
+      return { ok: false, model: config.model, error: `HTTP ${response.status}: ${err.slice(0, 180)}` }
+    }
+    const data = await response.json()
+    const reply = data.choices?.[0]?.message?.content?.trim() || 'OK'
+    return { ok: true, model: config.model, error: reply ? undefined : 'Réponse vide' }
+  } catch (caught) {
+    return { ok: false, model: config.model, error: caught instanceof Error ? caught.message : 'Erreur réseau' }
+  }
+}
+

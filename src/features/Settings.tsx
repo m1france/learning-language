@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { UI_LANGUAGES } from '../i18n'
-import { listVoices, speak } from '../ai'
+import { listVoices, speak, testOpenRouterTts } from '../ai'
+import { testAgentConnection } from './speaking/wordAiService'
+import { testDeepLConnection } from './speaking/deeplService'
+import { renderPhoneticFormatted } from './vocabulary/phoneticUtils'
 import { addCustomTag, addMarking, DEFAULT_MARKINGS, DEFAULT_TEACHER_SHORTCUTS, deleteCustomTag, deleteMarking, knownTags, renameCustomTag, renameMarking, reorderMarkings, setMarkingColor } from '../store'
 import {
   User,
@@ -22,6 +25,10 @@ import {
   Keyboard,
   RotateCcw,
   Volume2,
+  Play,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react'
 
 type SettingsProps = {
@@ -119,10 +126,27 @@ const AGENT_PROVIDERS: {
 
 const TTS_PROVIDERS: { id: UserSettings['api']['ttsProvider']; name: string; detail: string }[] = [
   { id: 'google', name: 'Voix naturelle (gratuit)', detail: 'Voix Google de bonne qualité, sans clé ni compte. Recommandé pour démarrer.' },
+  { id: 'openrouter', name: 'OpenRouter (modèle audio / TTS)', detail: 'Synthèse vocale IA de haute fidélité via OpenRouter (GPT-4o Mini TTS, TTS-1, Deepgram Flux…).' },
   { id: 'elevenlabs', name: 'ElevenLabs', detail: 'Voix IA haut de gamme. Colle ta clé API ElevenLabs ci-dessous.' },
   { id: 'fish', name: 'Fish Audio', detail: 'S2.1 et autres modèles Fish, avec ta clé API Fish Audio directe.' },
-  { id: 'openrouter', name: 'OpenRouter (modèle audio)', detail: 'Un modèle compatible sortie audio via ta clé OpenRouter (ex. openai/gpt-4o-audio-preview).' },
   { id: 'browser', name: 'Voix du navigateur', detail: 'Fonctionne hors ligne, qualité variable selon l’appareil.' },
+]
+
+const OPENROUTER_TTS_PRESETS = [
+  { id: 'openai/gpt-4o-mini-tts-2025-12-15', label: 'GPT-4o Mini TTS (Recommandé)', desc: 'Ultra-rapide, naturel & économique' },
+  { id: 'openai/tts-1', label: 'OpenAI TTS-1', desc: 'Modèle standard OpenAI' },
+  { id: 'openai/tts-1-hd', label: 'OpenAI TTS-1 HD', desc: 'Haute fidélité sonore' },
+  { id: 'deepgram/flux-tts', label: 'Deepgram Flux TTS', desc: 'Voix expressive' },
+  { id: 'openai/gpt-4o-audio-preview', label: 'GPT-4o Audio Preview', desc: 'Modèle multimodal audio' },
+]
+
+const OPENROUTER_VOICES = [
+  { id: 'alloy', label: 'Alloy (Neutre & clair)' },
+  { id: 'echo', label: 'Echo (Masculin posé)' },
+  { id: 'fable', label: 'Fable (Expressif & dynamique)' },
+  { id: 'onyx', label: 'Onyx (Grave & chaleureux)' },
+  { id: 'nova', label: 'Nova (Féminin énergique)' },
+  { id: 'shimmer', label: 'Shimmer (Clair & doux)' },
 ]
 
 export function Settings({ settings, state, onSave, onChangeState, onResetData }: SettingsProps) {
@@ -142,6 +166,85 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
   const [editingMarkValue, setEditingMarkValue] = useState('')
 
   const [recordingTool, setRecordingTool] = useState<string | null>(null)
+
+  // Testing states
+  const [testingAgent, setTestingAgent] = useState(false)
+  const [agentTestStatus, setAgentTestStatus] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const [testingTts, setTestingTts] = useState(false)
+  const [ttsTestStatus, setTtsTestStatus] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const [testingDeepL, setTestingDeepL] = useState(false)
+  const [deepLTestStatus, setDeepLTestStatus] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const handleTestAgent = async () => {
+    setTestingAgent(true)
+    setAgentTestStatus(null)
+    try {
+      const res = await testAgentConnection(draft.api)
+      if (res.ok) {
+        setAgentTestStatus({ ok: true, message: `Connexion réussie au modèle "${res.model}" !` })
+      } else {
+        setAgentTestStatus({ ok: false, message: `Échec : ${res.error || 'Erreur inconnue'}` })
+      }
+    } catch (e) {
+      setAgentTestStatus({ ok: false, message: `Erreur : ${e instanceof Error ? e.message : 'Erreur réseau'}` })
+    } finally {
+      setTestingAgent(false)
+    }
+  }
+
+  const handleTestTts = async () => {
+    setTestingTts(true)
+    setTtsTestStatus(null)
+    try {
+      if (draft.api.ttsProvider === 'openrouter') {
+        const res = await testOpenRouterTts(draft.api, 'Hello! This is a test of OpenRouter voice synthesis.')
+        if (res.ok) {
+          setTtsTestStatus({
+            ok: true,
+            message: `Voix OpenRouter opérationnelle (${draft.api.ttsModel || 'openai/gpt-4o-mini-tts-2025-12-15'} - ${draft.api.ttsVoice || 'alloy'}) !`,
+          })
+        } else {
+          setTtsTestStatus({ ok: false, message: `Erreur OpenRouter : ${res.error || 'Échec de synthèse'}` })
+        }
+      } else {
+        const res = await speak('Hello! This is a test of the speech engine.', draft.learningLanguage, draft.api)
+        if (res.error) {
+          setTtsTestStatus({ ok: false, message: `Moteur ${res.engine} (avec avertissement) : ${res.error}` })
+        } else {
+          setTtsTestStatus({ ok: true, message: `Synthèse vocale réussie via le moteur : ${res.engine}` })
+        }
+      }
+    } catch (e) {
+      setTtsTestStatus({ ok: false, message: `Erreur : ${e instanceof Error ? e.message : 'Échec'}` })
+    } finally {
+      setTestingTts(false)
+    }
+  }
+
+  const handleTestDeepL = async () => {
+    setTestingDeepL(true)
+    setDeepLTestStatus(null)
+    try {
+      const res = await testDeepLConnection(draft.api.deepLKey || '')
+      if (res.ok) {
+        setDeepLTestStatus({
+          ok: true,
+          message: `API DeepL opérationnelle ! Traduction : "Bonjour" → "${res.translation}"`,
+        })
+      } else {
+        setDeepLTestStatus({
+          ok: false,
+          message: `${res.error || 'Échec de connexion DeepL'}`,
+        })
+      }
+    } catch (e) {
+      setDeepLTestStatus({ ok: false, message: `Erreur : ${e instanceof Error ? e.message : 'Échec'}` })
+    } finally {
+      setTestingDeepL(false)
+    }
+  }
 
   const allTags = knownTags(state, draft.learningLanguage)
   const allMarkings = state.markings && state.markings.length > 0 ? state.markings : DEFAULT_MARKINGS
@@ -569,7 +672,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                           <div className="tag-word-main">
                             <strong className="tag-word-text">{word.word}</strong>
                             {word.phonetic && (
-                              <span className="tag-word-ipa">{word.phonetic}</span>
+                              <span className="tag-word-ipa">{renderPhoneticFormatted(word.phonetic)}</span>
                             )}
                             <button
                               type="button"
@@ -600,12 +703,13 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
         </>}
 
         {tab === 'connections' && <>
-          <SettingHeading title="Connexions" detail="Les clés restent dans ce navigateur. Laisse vide pour utiliser les solutions gratuites." />
+          <SettingHeading title="Connexions & IA" detail="Les clés restent strictement dans ce navigateur. Tu peux tester chaque service en direct." />
           
+          {/* CARTE 1 : AGENT PRINCIPAL (RÉFLEXION TEXTUELLE) */}
           <div className="connection-card">
             <div>
-              <h3>Choix modèle Agent principal</h3>
-              <p>Sélectionne le fournisseur d'IA qui pilotera les fonctionnalités intelligentes (analyse de mots, aide à l'apprentissage).</p>
+              <h3>1. Modèle Agent Principal (Analyse & Réflexion)</h3>
+              <p>Pilote l'analyse linguistique de mots, la décomposition grammaticale et les explications. <em>(Modèle textuel pur — ne nécessite aucune fonction audio).</em></p>
             </div>
 
             <div className="preset-grid">
@@ -621,6 +725,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                       if (!draft.api.agentModel || AGENT_PROVIDERS.some((p) => p.defaultModel === draft.api.agentModel)) {
                         updateApi('agentModel', provider.defaultModel)
                       }
+                      setAgentTestStatus(null)
                     }}
                   >
                     <strong>{provider.name}</strong>
@@ -639,7 +744,10 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                     <input
                       type="password"
                       value={(draft.api[activeProvider.keyField] as string) || ''}
-                      onChange={(event) => updateApi(activeProvider.keyField, event.target.value)}
+                      onChange={(event) => {
+                        updateApi(activeProvider.keyField, event.target.value)
+                        setAgentTestStatus(null)
+                      }}
                       placeholder={activeProvider.keyPlaceholder}
                       autoComplete="off"
                     />
@@ -647,47 +755,183 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                   {activeProvider.keyHint && <p className="field-hint">{activeProvider.keyHint}</p>}
 
                   <label>
-                    Modèle souhaité
+                    Modèle Agent souhaité
                     <input
                       value={draft.api.agentModel || ''}
-                      onChange={(event) => updateApi('agentModel', event.target.value)}
+                      onChange={(event) => {
+                        updateApi('agentModel', event.target.value)
+                        setAgentTestStatus(null)
+                      }}
                       placeholder={activeProvider.defaultModel}
                     />
                   </label>
                   <p className="field-hint">Exemples : <code>{activeProvider.examples}</code></p>
+
+                  <div className="connection-test-row">
+                    <button
+                      type="button"
+                      className="connection-test-btn"
+                      onClick={handleTestAgent}
+                      disabled={testingAgent || !(draft.api[activeProvider.keyField] as string)?.trim()}
+                      title="Envoie une requête de test rapide pour vérifier la validité de la clé et du modèle"
+                    >
+                      {testingAgent ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+                      <span>{testingAgent ? 'Test en cours…' : 'Tester la connexion Agent'}</span>
+                    </button>
+
+                    {agentTestStatus && (
+                      <div className={`connection-status-badge ${agentTestStatus.ok ? 'success' : 'error'}`}>
+                        {agentTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                        <span>{agentTestStatus.message}</span>
+                      </div>
+                    )}
+                  </div>
                 </>
               )
             })()}
           </div>
 
+          {/* CARTE 2 : SYNTHÈSE VOCALE (TTS) */}
           <div className="connection-card">
-            <div><h3>Voix (TTS)</h3><p>Choisis le fournisseur qui lit les textes à voix haute, puis colle la clé correspondante si besoin.</p></div>
-            <div className="preset-grid">
-              {TTS_PROVIDERS.map((provider) => <button key={provider.id} className={draft.api.ttsProvider === provider.id ? 'preset-card selected' : 'preset-card'} onClick={() => updateApi('ttsProvider', provider.id)}>
-                <strong>{provider.name}</strong><p>{provider.detail}</p>
-              </button>)}
+            <div>
+              <h3>2. Synthèse Vocale / TTS (Lecture Audio)</h3>
+              <p>Moteur dédié qui lit les mots et phrases à voix haute avec prononciation naturelle.</p>
             </div>
+            <div className="preset-grid">
+              {TTS_PROVIDERS.map((provider) => (
+                <button
+                  key={provider.id}
+                  type="button"
+                  className={draft.api.ttsProvider === provider.id ? 'preset-card selected' : 'preset-card'}
+                  onClick={() => {
+                    updateApi('ttsProvider', provider.id)
+                    setTtsTestStatus(null)
+                  }}
+                >
+                  <strong>{provider.name}</strong>
+                  <p>{provider.detail}</p>
+                </button>
+              ))}
+            </div>
+
+            {draft.api.ttsProvider === 'openrouter' && <>
+              <label>
+                Clé API OpenRouter (TTS)
+                <input
+                  type="password"
+                  value={draft.api.openRouterKey || ''}
+                  onChange={(event) => {
+                    updateApi('openRouterKey', event.target.value)
+                    setTtsTestStatus(null)
+                  }}
+                  placeholder="sk-or-v1-…"
+                  autoComplete="off"
+                />
+              </label>
+              <p className="field-hint">Partagée avec l'agent principal OpenRouter, ou spécifique pour la voix.</p>
+
+              <label>
+                Modèle TTS OpenRouter
+                <input
+                  value={draft.api.ttsModel || ''}
+                  onChange={(event) => {
+                    updateApi('ttsModel', event.target.value)
+                    setTtsTestStatus(null)
+                  }}
+                  placeholder="openai/gpt-4o-mini-tts-2025-12-15"
+                />
+              </label>
+
+              <div className="model-preset-pills">
+                {OPENROUTER_TTS_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`model-preset-pill ${draft.api.ttsModel === preset.id ? 'active' : ''}`}
+                    onClick={() => {
+                      updateApi('ttsModel', preset.id)
+                      setTtsTestStatus(null)
+                    }}
+                    title={preset.desc}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+
+              <label>
+                Voix OpenRouter
+                <select
+                  value={draft.api.ttsVoice || 'alloy'}
+                  onChange={(event) => {
+                    updateApi('ttsVoice', event.target.value)
+                    setTtsTestStatus(null)
+                  }}
+                >
+                  {OPENROUTER_VOICES.map((v) => (
+                    <option key={v.id} value={v.id}>{v.label}</option>
+                  ))}
+                </select>
+              </label>
+            </>}
+
             {draft.api.ttsProvider === 'elevenlabs' && <>
               <label>Clé API ElevenLabs<input type="password" value={draft.api.elevenLabsKey} onChange={(event) => updateApi('elevenLabsKey', event.target.value)} placeholder="sk_…" autoComplete="off" /></label>
               <label>ID de voix <small>ex. 21m00Tcm4TlvDq8ikWAM (Rachel)</small><input value={draft.api.elevenLabsVoice} onChange={(event) => updateApi('elevenLabsVoice', event.target.value)} /></label>
             </>}
+
             {draft.api.ttsProvider === 'fish' && <>
               <label>Clé API Fish Audio<input type="password" value={draft.api.fishKey} onChange={(event) => updateApi('fishKey', event.target.value)} placeholder="Clé api.fish.audio" autoComplete="off" /></label>
               <label>ID de voix / modèle <small>optionnel — reference_id</small><input value={draft.api.fishReferenceId} onChange={(event) => updateApi('fishReferenceId', event.target.value)} placeholder="Laisser vide pour la voix S2 par défaut" /></label>
             </>}
-            {draft.api.ttsProvider === 'openrouter' && <>
-              <label>Modèle audio OpenRouter<input value={draft.api.ttsModel} onChange={(event) => updateApi('ttsModel', event.target.value)} placeholder="openai/gpt-4o-audio-preview" /></label>
-              <p className="field-hint">Nécessite ta clé OpenRouter (renseignée dans la carte Agent principal ci-dessus) et un modèle qui accepte la sortie audio.</p>
-            </>}
-            {draft.api.ttsProvider === 'browser' && voices.length > 0 && <label>Voix préférée<select value={draft.api.ttsVoice} onChange={(event) => updateApi('ttsVoice', event.target.value)}>
-              <option value="">Automatique (la plus naturelle)</option>
-              {voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} ({voice.lang})</option>)}
-            </select></label>}
+
+            {draft.api.ttsProvider === 'browser' && voices.length > 0 && (
+              <label>Voix préférée<select value={draft.api.ttsVoice} onChange={(event) => updateApi('ttsVoice', event.target.value)}>
+                <option value="">Automatique (la plus naturelle)</option>
+                {voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} ({voice.lang})</option>)}
+              </select></label>
+            )}
+
+            <div className="connection-test-row">
+              <button
+                type="button"
+                className="connection-test-btn"
+                onClick={handleTestTts}
+                disabled={testingTts || (draft.api.ttsProvider === 'openrouter' && !draft.api.openRouterKey?.trim())}
+                title="Génère et joue un court extrait audio en direct"
+              >
+                {testingTts ? <Loader2 size={13} className="spin" /> : <Volume2 size={13} />}
+                <span>{testingTts ? 'Génération audio…' : 'Tester la synthèse vocale (TTS)'}</span>
+              </button>
+
+              {ttsTestStatus && (
+                <div className={`connection-status-badge ${ttsTestStatus.ok ? 'success' : 'error'}`}>
+                  {ttsTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                  <span>{ttsTestStatus.message}</span>
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* CARTE 3 : DEEPL */}
           <div className="connection-card">
-            <div><h3>DeepL (Traduction & Dictionnaire)</h3><p>Utilisé pour la recherche rapide et la traduction en direct durant tes sessions de parole.</p></div>
-            <label>Clé API DeepL <small>Free (termine par :fx) ou Pro</small><input type="password" value={draft.api.deepLKey || ''} onChange={(event) => updateApi('deepLKey', event.target.value)} placeholder="ex. 00000000-0000-0000-0000-000000000000:fx" autoComplete="off" /></label>
+            <div>
+              <h3>3. DeepL (Traduction & Dictionnaire en direct)</h3>
+              <p>Utilisé pour la traduction instantanée et la recherche de vocabulaire durant tes sessions de parole.</p>
+            </div>
+            <label>
+              Clé API DeepL <small>Free (termine par :fx) ou Pro</small>
+              <input
+                type="password"
+                value={draft.api.deepLKey || ''}
+                onChange={(event) => {
+                  updateApi('deepLKey', event.target.value)
+                  setDeepLTestStatus(null)
+                }}
+                placeholder="ex. 00000000-0000-0000-0000-000000000000:fx"
+                autoComplete="off"
+              />
+            </label>
             <label>Langue de traduction cible
               <select value={draft.api.deepLTargetLang || 'EN-US'} onChange={(event) => updateApi('deepLTargetLang', event.target.value)}>
                 <option value="EN-US">Anglais américain (EN-US)</option>
@@ -704,7 +948,27 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                 <option value="ZH">Chinois simplifié (ZH)</option>
               </select>
             </label>
-            <p className="field-hint">Obtiens une clé gratuite sur <code>deepl.com/pro-api</code>. Si vide, un service de secours est utilisé.</p>
+            <p className="field-hint">Obtiens une clé gratuite sur <code>deepl.com/pro-api</code>. Si vide ou indisponible, l'Agent IA ou un service de secours est utilisé.</p>
+
+            <div className="connection-test-row">
+              <button
+                type="button"
+                className="connection-test-btn"
+                onClick={handleTestDeepL}
+                disabled={testingDeepL || !draft.api.deepLKey?.trim()}
+                title="Vérifie la clé DeepL avec une traduction d'exemple"
+              >
+                {testingDeepL ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
+                <span>{testingDeepL ? 'Test en cours…' : 'Tester la clé DeepL'}</span>
+              </button>
+
+              {deepLTestStatus && (
+                <div className={`connection-status-badge ${deepLTestStatus.ok ? 'success' : 'error'}`}>
+                  {deepLTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                  <span>{deepLTestStatus.message}</span>
+                </div>
+              )}
+            </div>
           </div>
         </>}
 

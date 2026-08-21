@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import type { ApiSettings, Language, LearnedWord } from '../../domain'
 import { speak } from '../../ai'
 import { Check, Volume2, Info, RefreshCw, X, Sparkles } from 'lucide-react'
+import { renderPhoneticFormatted } from '../vocabulary/phoneticUtils'
 
 type WordBricksTrayProps = {
   words: string[]
@@ -189,7 +190,7 @@ export function WordBricksTray({
                   <div className="word-brick-popover-head">
                     <strong>{word}</strong>
                     {detail?.phonetic && (
-                      <span className="phonetic">[{renderPhoneticMarkdown(detail.phonetic)}]</span>
+                      <span className="phonetic">{renderPhoneticFormatted(detail.phonetic)}</span>
                     )}
                     <button
                       className="popover-close"

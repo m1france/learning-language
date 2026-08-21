@@ -33,6 +33,7 @@ type SpeakingPageProps = {
   language: Language
   api: ApiSettings
   customPrompterText?: string | null
+  onConsumePrompterText?: () => void
   existingTags?: string[]
   onAiTaskChange?: (running: boolean) => void
   onSaveWord?: (args: {
@@ -104,6 +105,7 @@ export function SpeakingPage({
   language,
   api,
   customPrompterText,
+  onConsumePrompterText,
   existingTags = [],
   onAiTaskChange,
   onSaveWord,
@@ -220,15 +222,16 @@ export function SpeakingPage({
   const videoRef = useRef<HTMLVideoElement>(null)
   const studioContainerRef = useRef<HTMLDivElement>(null)
 
-  // If customPrompterText is passed, enable prompter and auto-start camera
+  // If customPrompterText is passed (from Writing "Pratiquer à l'oral"), enable prompter, auto-start camera, and consume once
   useEffect(() => {
     if (customPrompterText && customPrompterText.trim()) {
       setShowPrompter(true)
       if (!cameraActive) {
         void requestMediaAccess()
       }
+      onConsumePrompterText?.()
     }
-  }, [customPrompterText, setShowPrompter, cameraActive, requestMediaAccess])
+  }, [customPrompterText, setShowPrompter, cameraActive, requestMediaAccess, onConsumePrompterText])
 
   // Attach active stream to video element
   useEffect(() => {

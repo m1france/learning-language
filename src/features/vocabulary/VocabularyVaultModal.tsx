@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import type { AppState, Language, LearnedWord, WordRelationType } from '../../domain'
 import { ObsidianWordGraph } from './ObsidianWordGraph'
+import { renderPhoneticFormatted } from './phoneticUtils'
 import { speak } from '../../ai'
 import { downloadAnkiExport } from './ankiExporter'
 import {
@@ -13,12 +14,9 @@ import {
   X,
   Sparkles,
   Download,
-  Share2,
-  Check,
-  Tag,
   Layers,
   Layout,
-  Filter,
+  Check,
 } from 'lucide-react'
 
 type VocabularyVaultModalProps = {
@@ -39,13 +37,117 @@ type VocabularyVaultModalProps = {
   onClose: () => void
 }
 
-const KNOWLEDGE_COLORS: Record<number, string> = {
-  1: '#ef4444',
-  2: '#f97316',
-  3: '#eab308',
-  4: '#3b82f6',
-  5: '#8b5cf6',
-  6: '#10b981',
+const KNOWLEDGE_COLORS = ['#dc2626', '#ea580c', '#d97706', '#65a30d', '#16a34a']
+
+/** Input de tag avec autocomplétion inline (identique à la page Lire). */
+function TagInput({
+  allTags,
+  existingTags,
+  onAdd,
+  onRemove,
+  label,
+}: {
+  allTags: string[]
+  existingTags: string[]
+  onAdd: (tag: string) => void
+  onRemove: (tag: string) => void
+  label: string
+}) {
+  const [input, setInput] = useState('')
+  const [dismissedSuggestion, setDismissedSuggestion] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const query = input.trim().toLowerCase()
+  const match =
+    !dismissedSuggestion && query && allTags.length > 0
+      ? allTags.find(
+          (t) =>
+            t.toLowerCase().startsWith(query) &&
+            !existingTags.some((ex) => ex.toLowerCase() === t.toLowerCase()),
+        )
+      : undefined
+
+  const ghostSuffix =
+    match && input && match.toLowerCase().startsWith(input.toLowerCase())
+      ? match.slice(input.length)
+      : ''
+
+  const handleCommit = (tagToCommit?: string) => {
+    const finalTag = tagToCommit || match || input.trim()
+    if (finalTag) {
+      onAdd(finalTag)
+      setInput('')
+      setDismissedSuggestion(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleCommit()
+    } else if (e.key === 'ArrowRight' || e.key === 'Tab') {
+      if (match) {
+        e.preventDefault()
+        setInput(match)
+      }
+    } else if (e.key === 'Backspace' || e.key === 'Delete') {
+      if (ghostSuffix && !dismissedSuggestion) {
+        e.preventDefault()
+        setDismissedSuggestion(true)
+      }
+    } else if (e.key === 'Escape') {
+      if (ghostSuffix && !dismissedSuggestion) {
+        e.preventDefault()
+        setDismissedSuggestion(true)
+      } else {
+        setInput('')
+        setDismissedSuggestion(false)
+      }
+    }
+  }
+
+  return (
+    <div className="wp-tag-line-row">
+      <div className="wp-tag-input-box">
+        <div className="wp-tag-ghost-text" aria-hidden="true">
+          <span className="wp-tag-ghost-typed">{input}</span>
+          <span className="wp-tag-ghost-suffix">{ghostSuffix}</span>
+        </div>
+        <input
+          ref={inputRef}
+          className="wp-tag-input-field"
+          value={input}
+          placeholder={existingTags.length === 0 ? label : '+ Tag'}
+          onChange={(e) => {
+            setInput(e.target.value)
+            setDismissedSuggestion(false)
+          }}
+          onKeyDown={handleKeyDown}
+          onBlur={() => {
+            if (input.trim()) {
+              handleCommit()
+            }
+          }}
+        />
+      </div>
+      {existingTags.length > 0 && (
+        <div className="wp-tag-text-list">
+          {existingTags.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="wp-tag-text-item"
+              title="Cliquer pour supprimer"
+              aria-label={`Supprimer ${item}`}
+              onClick={() => onRemove(item)}
+            >
+              {item} <X size={10} style={{ marginLeft: 2, opacity: 0.7 }} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function VocabularyVaultModal({
@@ -63,16 +165,13 @@ export function VocabularyVaultModal({
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [speakingWord, setSpeakingWord] = useState<string | null>(null)
 
-  // Form State
+  // Form State (matching Reader popup fields)
   const [formRaw, setFormRaw] = useState('')
   const [formTranslation, setFormTranslation] = useState('')
   const [formPronunciation, setFormPronunciation] = useState('')
   const [formParent, setFormParent] = useState('')
-  const [formRelationType, setFormRelationType] = useState<WordRelationType>('derivative')
-  const [formKnowledge, setFormKnowledge] = useState<number>(3)
-  const [formSentence, setFormSentence] = useState('')
+  const [formKnowledge, setFormKnowledge] = useState<number | undefined>(1)
   const [formTags, setFormTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState('')
 
   // Filter words by language
   const words = useMemo(
@@ -107,11 +206,8 @@ export function VocabularyVaultModal({
     setFormTranslation('')
     setFormPronunciation('')
     setFormParent('')
-    setFormRelationType('derivative')
-    setFormKnowledge(3)
-    setFormSentence('')
+    setFormKnowledge(1)
     setFormTags([])
-    setTagInput('')
     setEditingWord(null)
     setIsAddingNew(true)
   }
@@ -121,27 +217,21 @@ export function VocabularyVaultModal({
     setFormTranslation(word.translation || '')
     setFormPronunciation(word.phonetic || '')
     setFormParent(word.parent || '')
-    setFormRelationType(word.relationType || 'derivative')
-    setFormKnowledge(word.knowledge ?? 3)
-    setFormSentence(word.contextSentence || '')
+    setFormKnowledge(word.knowledge ?? 1)
     setFormTags(word.tags || [])
-    setTagInput('')
     setEditingWord(word)
     setIsAddingNew(true)
   }
 
-  const handleSaveForm = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSaveForm = () => {
     if (!formRaw.trim()) return
 
     onSaveWord({
       raw: formRaw.trim(),
       translation: formTranslation.trim(),
-      pronunciation: formPronunciation.trim(),
+      pronunciation: formPronunciation.trim() || undefined,
       parent: formParent.trim() || undefined,
-      relationType: formParent.trim() ? formRelationType : undefined,
       knowledge: formKnowledge,
-      sentence: formSentence.trim() || undefined,
       tags: formTags.length > 0 ? formTags : undefined,
       language,
     })
@@ -171,43 +261,32 @@ export function VocabularyVaultModal({
     }
   }
 
-  const handleAddTag = () => {
-    const clean = tagInput.trim().replace(/^#/, '')
-    if (clean && !formTags.includes(clean)) {
-      setFormTags([...formTags, clean])
-      setTagInput('')
-    }
-  }
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setFormTags(formTags.filter((t) => t !== tagToRemove))
-  }
-
   return (
-    <div className="vocab-vault-backdrop" onClick={onClose}>
+    <div className="vocab-vault-overlay" onClick={onClose}>
       <div className="vocab-vault-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Modal Header */}
+        {/* Header Bar */}
         <header className="vocab-vault-header">
-          <div className="header-title-box">
-            <div className="header-icon-badge">
-              <BookOpen size={18} />
+          <div className="vault-header-title-area">
+            <div className="vault-header-icon">
+              <BookOpen size={20} />
             </div>
             <div>
-              <h2>Mon Vocabulaire Enregistré</h2>
-              <p className="vault-sub">
-                {words.length} mots enregistrés · Graphe de connexions lexicales style Obsidian
+              <div className="vault-title-row">
+                <h2>Mon Vocabulaire Enregistré</h2>
+                <span className="count-pill">{words.length} mots</span>
+              </div>
+              <p className="vault-subtitle">
+                Graphe de connexions lexicales & révision active
               </p>
             </div>
           </div>
 
           <div className="vault-top-actions">
-            {/* View Mode Switcher */}
             <div className="segmented-sm">
               <button
                 type="button"
                 className={viewLayout === 'split' ? 'active' : ''}
                 onClick={() => setViewLayout('split')}
-                title="Vue Mixte (Graphe & Liste)"
               >
                 <Layout size={13} />
                 <span>Mixte</span>
@@ -216,7 +295,6 @@ export function VocabularyVaultModal({
                 type="button"
                 className={viewLayout === 'graph' ? 'active' : ''}
                 onClick={() => setViewLayout('graph')}
-                title="Graphe Obsidian seul"
               >
                 <Sparkles size={13} />
                 <span>Graphe</span>
@@ -225,7 +303,6 @@ export function VocabularyVaultModal({
                 type="button"
                 className={viewLayout === 'list' ? 'active' : ''}
                 onClick={() => setViewLayout('list')}
-                title="Liste seule"
               >
                 <Layers size={13} />
                 <span>Liste</span>
@@ -247,8 +324,8 @@ export function VocabularyVaultModal({
               <span>Nouveau mot</span>
             </button>
 
-            <button type="button" className="close-btn" onClick={onClose} title="Fermer">
-              <X size={18} />
+            <button type="button" className="vault-modal-close-btn" onClick={onClose} title="Fermer">
+              <X size={16} />
             </button>
           </div>
         </header>
@@ -273,7 +350,7 @@ export function VocabularyVaultModal({
           {allTags.length > 0 && (
             <div className="tags-filter-row">
               <span className="tag-filter-label">
-                <Tag size={12} /> Tags :
+                Tags :
               </span>
               <button
                 type="button"
@@ -298,7 +375,6 @@ export function VocabularyVaultModal({
 
         {/* Main Content Workspace */}
         <div className={`vocab-vault-workspace layout-${viewLayout}`}>
-          {/* Obsidian Graph Encart (shown in split and graph mode) */}
           {(viewLayout === 'split' || viewLayout === 'graph') && (
             <div className="vault-graph-panel">
               <div className="panel-title-bar">
@@ -313,20 +389,14 @@ export function VocabularyVaultModal({
 
               <div className="graph-embed-container">
                 <ObsidianWordGraph
-                  words={words}
+                  words={filteredWords}
                   selectedWordId={selectedWord?.normalized || selectedWord?.word.toLowerCase().trim()}
-                  onSelectWord={(w) => {
-                    setSelectedWord(w)
-                    if (viewLayout === 'split') {
-                      // auto scroll to word if in list
-                    }
-                  }}
+                  onSelectWord={setSelectedWord}
                 />
               </div>
             </div>
           )}
 
-          {/* Words List Panel (shown in split and list mode) */}
           {(viewLayout === 'split' || viewLayout === 'list') && (
             <div className="vault-list-panel">
               <div className="panel-title-bar">
@@ -345,7 +415,7 @@ export function VocabularyVaultModal({
                   <div className="words-cards-list">
                     {filteredWords.map((w) => {
                       const isSelected = selectedWord?.id === w.id
-                      const kColor = KNOWLEDGE_COLORS[w.knowledge ?? 1] || '#8b5cf6'
+                      const kColor = w.knowledge === 6 ? '#16a34a' : (w.knowledge ? KNOWLEDGE_COLORS[w.knowledge - 1] : '#8b5cf6')
 
                       return (
                         <div
@@ -356,17 +426,15 @@ export function VocabularyVaultModal({
                           <div className="word-item-main">
                             <div className="word-header-line">
                               <strong className="word-title">{w.word}</strong>
-                              {w.phonetic && <span className="word-ipa">[{w.phonetic}]</span>}
+                              {w.phonetic && <span className="word-ipa">{renderPhoneticFormatted(w.phonetic)}</span>}
                               <span
                                 className="knowledge-indicator-dot"
                                 style={{ background: kColor }}
-                                title={`Niveau de maîtrise : ${w.knowledge ?? 1} / 5`}
+                                title={w.knowledge === 6 ? 'Connu par cœur' : `Niveau de maîtrise : ${w.knowledge ?? 1} / 5`}
                               />
                             </div>
 
-                            {w.translation && (
-                              <p className="word-translation-text">{w.translation}</p>
-                            )}
+                            {w.translation && <p className="word-translation-text">{w.translation}</p>}
 
                             {w.parent && (
                               <span className="word-root-badge">Racine : {w.parent}</span>
@@ -381,9 +449,7 @@ export function VocabularyVaultModal({
                             {w.tags && w.tags.length > 0 && (
                               <div className="word-tags-row">
                                 {w.tags.map((t) => (
-                                  <span key={t} className="tag-pill-sm">
-                                    #{t}
-                                  </span>
+                                  <span key={t} className="word-tag-pill">#{t}</span>
                                 ))}
                               </div>
                             )}
@@ -392,15 +458,15 @@ export function VocabularyVaultModal({
                           <div className="word-item-actions">
                             <button
                               type="button"
-                              className={`action-btn-sm ${speakingWord === w.word ? 'playing' : ''}`}
-                              onClick={(e) => void handleSpeak(e, w.word)}
-                              title="Prononciation"
+                              className="icon-action-btn"
+                              onClick={(e) => handleSpeak(e, w.word)}
+                              title="Écouter la prononciation"
                             >
-                              <Volume2 size={13} />
+                              <Volume2 size={14} className={speakingWord === w.word ? 'spinning' : ''} />
                             </button>
                             <button
                               type="button"
-                              className="action-btn-sm"
+                              className="icon-action-btn"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 openEditForm(w)
@@ -411,7 +477,7 @@ export function VocabularyVaultModal({
                             </button>
                             <button
                               type="button"
-                              className="action-btn-sm delete"
+                              className="icon-action-btn danger"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleDelete(w)
@@ -431,165 +497,135 @@ export function VocabularyVaultModal({
           )}
         </div>
 
-        {/* Add / Edit Word Modal Form Drawer */}
+        {/* Add / Edit Word Modal Popup matching Reader Word Card */}
         {isAddingNew && (
           <div className="vocab-form-drawer-overlay" onClick={() => setIsAddingNew(false)}>
-            <div className="vocab-form-drawer" onClick={(e) => e.stopPropagation()}>
-              <div className="drawer-header">
-                <h3>{editingWord ? 'Modifier le mot' : 'Ajouter un mot au vocabulaire'}</h3>
-                <button className="close-btn" onClick={() => setIsAddingNew(false)}>
+            <div className="vocab-word-panel-card" onClick={(e) => e.stopPropagation()}>
+              <div className="word-panel-top-bar">
+                <h3>{editingWord ? 'Modifier le mot' : 'Enregistrer un mot'}</h3>
+                <button
+                  type="button"
+                  className="vault-modal-close-btn"
+                  onClick={() => setIsAddingNew(false)}
+                  title="Fermer"
+                >
                   <X size={16} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveForm} className="drawer-form">
-                <div className="form-group">
-                  <label>Mot dans la langue apprise *</label>
-                  <input
-                    type="text"
-                    required
-                    autoFocus
-                    placeholder="Ex: ubiquitous, wanderlust..."
-                    value={formRaw}
-                    onChange={(e) => setFormRaw(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Traduction française *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: omniprésent, soif de voyage..."
-                    value={formTranslation}
-                    onChange={(e) => setFormTranslation(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-row-2">
-                  <div className="form-group">
-                    <label>Prononciation / API</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: /juːˈbɪk.wə.təs/"
-                      value={formPronunciation}
-                      onChange={(e) => setFormPronunciation(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Niveau de maîtrise (1 à 6)</label>
-                    <select
-                      value={formKnowledge}
-                      onChange={(e) => setFormKnowledge(Number(e.target.value))}
-                    >
-                      <option value={1}>1 - Nouveau / Découvert</option>
-                      <option value={2}>2 - Reconnaissance vague</option>
-                      <option value={3}>3 - Compréhension passive</option>
-                      <option value={4}>4 - Usage spontané</option>
-                      <option value={5}>5 - Maîtrise parfaite</option>
-                      <option value={6}>6 - Connu par cœur</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-row-2">
-                  <div className="form-group">
-                    <label>Mot racine / Famille lexicale</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: notice, act, joy..."
-                      value={formParent}
-                      onChange={(e) => setFormParent(e.target.value)}
-                    />
-                  </div>
-
-                  {formParent && (
-                    <div className="form-group">
-                      <label>Type de relation</label>
-                      <select
-                        value={formRelationType}
-                        onChange={(e) => setFormRelationType(e.target.value as WordRelationType)}
-                      >
-                        <option value="derivative">Dérivé morphologique</option>
-                        <option value="compound">Mot composé</option>
-                        <option value="expression">Expression liée</option>
-                        <option value="synonym">Synonyme</option>
-                        <option value="antonym">Antonyme</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <label>Phrase d'exemple / Contexte</label>
-                  <textarea
-                    rows={2}
-                    placeholder="Ex: Smartphones have become ubiquitous in modern society."
-                    value={formSentence}
-                    onChange={(e) => setFormSentence(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Tags & Catégories</label>
-                  <div className="tags-input-box">
-                    <div className="tags-chips-list">
-                      {formTags.map((t) => (
-                        <span key={t} className="tag-edit-chip">
-                          #{t}
-                          <button type="button" onClick={() => handleRemoveTag(t)}>
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    <div className="tag-input-row">
-                      <input
-                        type="text"
-                        placeholder="Nouveau tag (Appuyer sur Entrée)..."
-                        value={tagInput}
-                        onChange={(e) => setTagInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            handleAddTag()
-                          }
-                        }}
-                      />
-                      <button type="button" className="outline btn-xs" onClick={handleAddTag}>
-                        + Ajouter
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="drawer-footer">
-                  {editingWord && (
+              {/* 1. Knowledge Rating Header (1 to 5 + Known by heart Check) */}
+              <div className="wp-field">
+                <div className="wp-knowledge">
+                  {[1, 2, 3, 4, 5].map((n) => (
                     <button
+                      key={n}
                       type="button"
-                      className="danger-btn outline"
-                      onClick={() => handleDelete(editingWord)}
+                      className={formKnowledge === n ? 'kl-btn active' : 'kl-btn'}
+                      style={{ ['--kl' as string]: KNOWLEDGE_COLORS[n - 1] }}
+                      onClick={() => setFormKnowledge(formKnowledge === n ? undefined : n)}
                     >
-                      <Trash2 size={14} />
-                      <span>Supprimer</span>
+                      {n}
                     </button>
-                  )}
-                  <div className="footer-right">
-                    <button
-                      type="button"
-                      className="outline"
-                      onClick={() => setIsAddingNew(false)}
-                    >
-                      Annuler
-                    </button>
-                    <button type="submit" className="primary">
-                      <Check size={14} />
-                      <span>{editingWord ? 'Enregistrer les modifications' : 'Ajouter le mot'}</span>
-                    </button>
-                  </div>
+                  ))}
+                  <button
+                    type="button"
+                    className={formKnowledge === 6 ? 'kl-btn known active' : 'kl-btn known'}
+                    title="Connu par cœur"
+                    aria-label="Connu par cœur"
+                    onClick={() => setFormKnowledge(formKnowledge === 6 ? undefined : 6)}
+                  >
+                    <Check size={14} />
+                  </button>
                 </div>
-              </form>
+              </div>
+
+              {/* 2. Word Input */}
+              <div className="wp-field">
+                <span>Mot</span>
+                <input
+                  type="text"
+                  value={formRaw}
+                  placeholder="Mot à enregistrer"
+                  autoFocus
+                  onChange={(e) => setFormRaw(e.target.value)}
+                />
+              </div>
+
+              {/* 3. Reference Word (Parent / Lemma) */}
+              <div className="wp-field">
+                <span>Mot de référence</span>
+                <input
+                  type="text"
+                  value={formParent}
+                  placeholder="Mot de référence"
+                  onChange={(e) => setFormParent(e.target.value)}
+                />
+              </div>
+
+              {/* 4. Pronunciation */}
+              <div className="wp-field">
+                <span>Prononciation</span>
+                <input
+                  type="text"
+                  value={formPronunciation}
+                  placeholder="Prononciation"
+                  onChange={(e) => setFormPronunciation(e.target.value)}
+                />
+              </div>
+
+              {/* 5. Translation */}
+              <div className="wp-field">
+                <span>Traduction</span>
+                <textarea
+                  value={formTranslation}
+                  placeholder="Traduction"
+                  rows={2}
+                  onChange={(e) => setFormTranslation(e.target.value)}
+                />
+              </div>
+
+              {/* 6. Tags */}
+              <div className="wp-field">
+                <TagInput
+                  allTags={allTags}
+                  existingTags={formTags}
+                  onAdd={(t) => {
+                    const clean = t.trim().replace(/^#/, '')
+                    if (clean && !formTags.includes(clean)) {
+                      setFormTags([...formTags, clean])
+                    }
+                  }}
+                  onRemove={(t) => setFormTags(formTags.filter((x) => x !== t))}
+                  label="Tags"
+                />
+              </div>
+
+              {/* 7. Save / Delete actions */}
+              <div className="wp-footer" style={{ marginTop: 4 }}>
+                <button
+                  type="button"
+                  className="wp-save-btn-full primary"
+                  disabled={!formRaw.trim()}
+                  onClick={handleSaveForm}
+                >
+                  <span className="wp-save-btn-label">
+                    {editingWord ? <><Check size={14} /> Enregistrer les modifications</> : <><Plus size={14} /> Enregistrer le mot</>}
+                  </span>
+                  {formRaw.trim() && <em className="wp-save-btn-word">{formRaw.trim()}</em>}
+                </button>
+
+                {editingWord && (
+                  <button
+                    type="button"
+                    className="danger-btn outline"
+                    style={{ marginTop: 8, width: '100%', justifyContent: 'center', borderRadius: 8, padding: '7px 12px', fontSize: 12 }}
+                    onClick={() => handleDelete(editingWord)}
+                  >
+                    <Trash2 size={13} />
+                    <span>Supprimer ce mot</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}

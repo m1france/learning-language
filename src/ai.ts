@@ -83,44 +83,124 @@ async function speakWithFish(text: string, api: ApiSettings): Promise<{ ok: bool
   }
 }
 
-async function speakWithOpenRouter(text: string, api: ApiSettings): Promise<{ ok: boolean; error?: string }> {
-  if (!api.openRouterKey) return { ok: false, error: 'pas de clé OpenRouter' }
-  const model = api.ttsModel?.trim() || 'openai/gpt-4o-audio-preview'
-  try {
-    const isFishAudio = model.toLowerCase().includes('fish')
-    const requestBody: Record<string, unknown> = {
-      model,
-      messages: [{ role: 'user', content: text }],
-    }
-    if (!isFishAudio) {
-      requestBody.modalities = ['audio', 'text']
-      requestBody.audio = { voice: 'alloy', format: 'mp3' }
-    }
-    const response = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api.openRouterKey.trim()}` },
-      body: JSON.stringify(requestBody),
-    })
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '')
-      return { ok: false, error: `HTTP ${response.status}${detail ? ` — ${detail.slice(0, 160)}` : ''}` }
-    }
-    const data = await response.json()
-    const choice = data.choices?.[0]
-    const base64 =
-      choice?.message?.audio?.data ||
-      choice?.audio ||
-      (typeof choice?.message?.content === 'string' && choice.message.content.startsWith('data:audio')
-        ? choice.message.content.split(',')[1]
-        : undefined)
-    if (!base64) return { ok: false, error: 'le modèle n’a pas renvoyé d’audio' }
-    audioElement?.pause()
-    audioElement = new Audio(`data:audio/mp3;base64,${base64}`)
-    await audioElement.play()
-    return { ok: true }
-  } catch (caught) {
-    return { ok: false, error: caught instanceof Error ? caught.message : 'erreur réseau' }
+async function speakWithOpenRouter(
+  text: string,
+  api: ApiSettings,
+  _lang: Language = 'en',
+): Promise<{ ok: boolean; error?: string }> {
+  const key = (api.openRouterKey || '').trim()
+  if (!key) return { ok: false, error: 'Pas de clé OpenRouter renseignée' }
+  const model = (api.ttsModel || '').trim() || 'openai/gpt-4o-mini-tts-2025-12-15'
+  const voice = (api.ttsVoice || '').trim() || 'alloy'
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${key}`,
+    'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+    'X-Title': 'Language Learning App',
   }
+
+  const isChatAudio = /audio-preview|omni|chat/i.test(model)
+
+  const callSpeechEndpoint = async (): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/audio/speech', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model,
+          input: text,
+          voice,
+          response_format: 'mp3',
+        }),
+      })
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '')
+        return {
+          ok: false,
+          error: `HTTP ${response.status} (Speech API): ${errorText ? errorText.slice(0, 180) : response.statusText}`,
+        }
+      }
+      const blob = await response.blob()
+      if (!blob || blob.size === 0) {
+        return { ok: false, error: 'Fichier audio vide retourné par OpenRouter Speech' }
+      }
+      await playBlob(blob)
+      return { ok: true }
+    } catch (caught) {
+      return { ok: false, error: caught instanceof Error ? caught.message : 'Erreur réseau OpenRouter Speech' }
+    }
+  }
+
+  const callChatEndpoint = async (): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const isFish = model.toLowerCase().includes('fish')
+      const requestBody: Record<string, unknown> = {
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a pure text-to-speech audio reader. You must strictly speak the exact user text aloud in natural pronunciation without any additional words, explanations, introductions or conversational filler.',
+          },
+          { role: 'user', content: text },
+        ],
+      }
+      if (!isFish) {
+        requestBody.modalities = ['audio', 'text']
+        requestBody.audio = { voice, format: 'mp3' }
+      }
+      const response = await fetch(OPENROUTER_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+      })
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '')
+        return {
+          ok: false,
+          error: `HTTP ${response.status} (Chat Audio): ${detail ? detail.slice(0, 180) : response.statusText}`,
+        }
+      }
+      const data = await response.json()
+      const choice = data.choices?.[0]
+      const base64 =
+        choice?.message?.audio?.data ||
+        choice?.audio ||
+        (typeof choice?.message?.content === 'string' && choice.message.content.startsWith('data:audio')
+          ? choice.message.content.split(',')[1]
+          : undefined)
+      if (!base64) return { ok: false, error: 'Le modèle Chat OpenRouter n’a pas renvoyé de données audio' }
+      audioElement?.pause()
+      audioElement = new Audio(`data:audio/mp3;base64,${base64}`)
+      await audioElement.play()
+      return { ok: true }
+    } catch (caught) {
+      return { ok: false, error: caught instanceof Error ? caught.message : 'Erreur réseau OpenRouter Chat' }
+    }
+  }
+
+  if (isChatAudio) {
+    const res = await callChatEndpoint()
+    if (res.ok) return res
+    const fallbackRes = await callSpeechEndpoint()
+    if (fallbackRes.ok) return fallbackRes
+    return res
+  } else {
+    const res = await callSpeechEndpoint()
+    if (res.ok) return res
+    const fallbackRes = await callChatEndpoint()
+    if (fallbackRes.ok) return fallbackRes
+    return res
+  }
+}
+
+/** Directly test OpenRouter voice synthesis without falling back. */
+export async function testOpenRouterTts(
+  api: ApiSettings,
+  sampleText: string = 'Hello! This is a test of OpenRouter voice synthesis.',
+): Promise<{ ok: boolean; error?: string }> {
+  stopSpeaking()
+  return await speakWithOpenRouter(sampleText, api, 'en')
 }
 
 export function stopSpeaking() {
@@ -185,25 +265,43 @@ function speakWithGoogle(text: string, lang: Language): Promise<boolean> {
 export async function speak(text: string, lang: Language, api: ApiSettings): Promise<SpeakResult> {
   stopSpeaking()
   const errors: string[] = []
-  if (api.ttsProvider === 'openrouter' && api.openRouterKey) {
-    const attempt = await speakWithOpenRouter(text, api)
+  if (api.ttsProvider === 'openrouter') {
+    const attempt = await speakWithOpenRouter(text, api, lang)
     if (attempt.ok) return { engine: 'openrouter' }
+    console.warn('[TTS OpenRouter failed]:', attempt.error)
     errors.push(`OpenRouter: ${attempt.error}`)
-  }
-  if (api.ttsProvider === 'elevenlabs') {
+  } else if (api.ttsProvider === 'elevenlabs') {
     const attempt = await speakWithElevenLabs(text, api)
     if (attempt.ok) return { engine: 'elevenlabs' }
+    console.warn('[TTS ElevenLabs failed]:', attempt.error)
     errors.push(`ElevenLabs: ${attempt.error}`)
-  }
-  if (api.ttsProvider === 'fish') {
+  } else if (api.ttsProvider === 'fish') {
     const attempt = await speakWithFish(text, api)
     if (attempt.ok) return { engine: 'fish' }
+    console.warn('[TTS Fish Audio failed]:', attempt.error)
     errors.push(`Fish Audio: ${attempt.error}`)
   }
-  if (api.ttsProvider !== 'browser') {
-    if (await speakWithGoogle(text, lang)) return { engine: 'google', error: errors.join(' · ') || undefined }
-    errors.push('voix Google indisponible')
+
+  // If the user explicitly chose browser TTS, use SpeechSynthesis directly
+  if (api.ttsProvider === 'browser') {
+    if (typeof speechSynthesis === 'undefined') return { engine: 'none', error: 'Synthèse vocale du navigateur indisponible' }
+    const utterance = new SpeechSynthesisUtterance(text)
+    const voice = bestVoice(lang, api.ttsVoice || undefined)
+    if (voice) utterance.voice = voice
+    utterance.lang = lang === 'en' ? 'en-US' : 'fr-FR'
+    utterance.rate = 0.92
+    utterance.pitch = 1
+    speechSynthesis.speak(utterance)
+    return { engine: 'browser' }
   }
+
+  // Fallback to Google Translate TTS
+  if (await speakWithGoogle(text, lang)) {
+    return { engine: 'google', error: errors.join(' · ') || undefined }
+  }
+  errors.push('voix Google indisponible')
+
+  // Final fallback to browser SpeechSynthesis
   if (typeof speechSynthesis === 'undefined') return { engine: 'none', error: errors.join(' · ') }
   const utterance = new SpeechSynthesisUtterance(text)
   const voice = bestVoice(lang, api.ttsVoice || undefined)

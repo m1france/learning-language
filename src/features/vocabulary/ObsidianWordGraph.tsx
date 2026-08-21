@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react'
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import type { LearnedWord } from '../../domain'
 import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Minimize2, Search, Sparkles } from 'lucide-react'
+import { renderPhoneticFormatted } from './phoneticUtils'
 
 type Node = {
   id: string
@@ -21,7 +22,7 @@ type Node = {
 type Edge = {
   source: string
   target: string
-  type: 'parent' | 'family' | 'tag'
+  type: 'parent' | 'family'
   label?: string
 }
 
@@ -33,12 +34,12 @@ type ObsidianWordGraphProps = {
 }
 
 const KNOWLEDGE_COLORS: Record<number, string> = {
-  1: '#ef4444', // Red
-  2: '#f97316', // Orange
-  3: '#eab308', // Yellow
-  4: '#3b82f6', // Blue
-  5: '#8b5cf6', // Violet
-  6: '#10b981', // Emerald
+  1: '#e11d48', // Rose / Red
+  2: '#ea580c', // Orange
+  3: '#d97706', // Amber
+  4: '#2563eb', // Royal Blue
+  5: '#7c3aed', // Purple
+  6: '#059669', // Emerald
 }
 
 export function ObsidianWordGraph({
@@ -55,20 +56,21 @@ export function ObsidianWordGraph({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [physicsActive, setPhysicsActive] = useState(true)
 
-  // Camera transform state
-  const cameraRef = useRef({ x: 0, y: 0, scale: 1 })
+  // Camera transform state with target for smooth progressive zoom & pan (lerp)
+  const cameraRef = useRef({ x: 0, y: 0, scale: compact ? 0.85 : 1 })
+  const targetCameraRef = useRef({ x: 0, y: 0, scale: compact ? 0.85 : 1 })
   const isDraggingCameraRef = useRef(false)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const draggedNodeRef = useRef<Node | null>(null)
 
-  // Build nodes and edges
+  // Build nodes and strictly link roots / derivatives (NO tag-based links)
   const { nodes, edges, nodeMap } = useMemo(() => {
     const nodeMap = new Map<string, Node>()
     const nList: Node[] = []
     const eList: Edge[] = []
     const edgeSet = new Set<string>()
 
-    const addEdge = (src: string, tgt: string, type: 'parent' | 'family' | 'tag', label?: string) => {
+    const addEdge = (src: string, tgt: string, type: 'parent' | 'family', label?: string) => {
       if (src === tgt) return
       const key = src < tgt ? `${src}---${tgt}` : `${tgt}---${src}`
       if (!edgeSet.has(key)) {
@@ -83,9 +85,9 @@ export function ObsidianWordGraph({
       if (nodeMap.has(id)) return
 
       const angle = (i / Math.max(1, words.length)) * Math.PI * 2
-      const radiusDist = 80 + Math.sqrt(i) * 35 + (Math.random() * 40 - 20)
+      const radiusDist = 80 + Math.sqrt(i) * 45 + (Math.random() * 30 - 15)
       const k = w.knowledge ?? 1
-      const color = KNOWLEDGE_COLORS[k] || '#8b5cf6'
+      const color = KNOWLEDGE_COLORS[k] || '#7c3aed'
 
       const node: Node = {
         id,
@@ -97,9 +99,9 @@ export function ObsidianWordGraph({
         tags: w.tags || [],
         x: Math.cos(angle) * radiusDist,
         y: Math.sin(angle) * radiusDist,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        radius: Math.max(5, 4 + Math.min(10, (w.tags?.length || 0) * 1.5 + (w.parent ? 3 : 0))),
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        radius: Math.max(6, 5 + Math.min(8, (w.parent ? 3 : 1))),
         color,
       }
 
@@ -118,7 +120,7 @@ export function ObsidianWordGraph({
       }
     })
 
-    // 3. Connect words with same parent
+    // 3. Connect words with same parent/lemma (lexical family siblings)
     const parentGroups = new Map<string, string[]>()
     words.forEach((w) => {
       if (w.parent) {
@@ -135,31 +137,17 @@ export function ObsidianWordGraph({
       }
     })
 
-    // 4. Connect words sharing specific tags
-    const tagGroups = new Map<string, string[]>()
-    words.forEach((w) => {
-      (w.tags || []).forEach((t) => {
-        if (!tagGroups.has(t)) tagGroups.set(t, [])
-        tagGroups.get(t)!.push(w.normalized || w.word.toLowerCase().trim())
-      })
-    })
-    tagGroups.forEach((taggedWords) => {
-      if (taggedWords.length > 1 && taggedWords.length <= 8) {
-        for (let i = 0; i < taggedWords.length - 1; i++) {
-          addEdge(taggedWords[i], taggedWords[i + 1], 'tag')
-        }
-      }
-    })
+    // Tag-based links are strictly omitted to prevent arbitrary cluttered edges
 
     return { nodes: nList, edges: eList, nodeMap }
   }, [words])
 
-  // Reset Camera
-  const resetCamera = () => {
-    cameraRef.current = { x: 0, y: 0, scale: compact ? 0.85 : 1 }
-  }
+  // Reset Camera with smooth animation
+  const resetCamera = useCallback(() => {
+    targetCameraRef.current = { x: 0, y: 0, scale: compact ? 0.85 : 1 }
+  }, [compact])
 
-  // Handle Canvas Drawing and Physics Loop
+  // Canvas Drawing and Physics Loop
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -181,17 +169,16 @@ export function ObsidianWordGraph({
     handleResize()
     window.addEventListener('resize', handleResize)
 
-    // Physics Simulation step
+    // Physics Simulation with Obsidian impulse & anti-overlap force
     const stepPhysics = () => {
       if (!physicsActive) return
 
-      const repulsion = 450
-      const springLength = 70
-      const springK = 0.04
-      const centerGravity = 0.008
-      const damping = 0.85
+      const springLength = 110
+      const springK = 0.035
+      const centerGravity = 0.003
+      const damping = 0.86
 
-      // 1. Repulsion between nodes
+      // 1. Repulsion + Strong short-range anti-overlap impulse (Obsidian-like)
       for (let i = 0; i < nodes.length; i++) {
         const n1 = nodes[i]
         for (let j = i + 1; j < nodes.length; j++) {
@@ -200,8 +187,23 @@ export function ObsidianWordGraph({
           const dy = n2.y - n1.y
           const distSq = dx * dx + dy * dy || 1
           const dist = Math.sqrt(distSq)
-          if (dist < 320) {
-            const force = repulsion / distSq
+
+          // Short-range anti-collision / label spacing impulse
+          const minGap = n1.radius + n2.radius + 38
+          if (dist < minGap) {
+            const overlap = (minGap - dist) / minGap
+            const impulse = overlap * overlap * 1.8
+            const fx = (dx / dist) * impulse
+            const fy = (dy / dist) * impulse
+            n1.vx -= fx
+            n1.vy -= fy
+            n2.vx += fx
+            n2.vy += fy
+          }
+
+          // General distance repulsion
+          if (dist < 400) {
+            const force = 950 / distSq
             const fx = (dx / dist) * force
             const fy = (dy / dist) * force
             n1.vx -= fx
@@ -212,7 +214,7 @@ export function ObsidianWordGraph({
         }
       }
 
-      // 2. Spring attraction on edges
+      // 2. Spring attraction on lexical parent / family edges
       edges.forEach((edge) => {
         const n1 = nodeMap.get(edge.source)
         const n2 = nodeMap.get(edge.target)
@@ -232,7 +234,7 @@ export function ObsidianWordGraph({
         n2.vy -= fy
       })
 
-      // 3. Center gravity and update positions
+      // 3. Center gravity and damping
       nodes.forEach((n) => {
         if (n === draggedNodeRef.current) return
 
@@ -247,9 +249,17 @@ export function ObsidianWordGraph({
       })
     }
 
-    // Render step
+    // Render loop
     const render = () => {
       stepPhysics()
+
+      // Smooth camera interpolation (lerp)
+      const cam = cameraRef.current
+      const targetCam = targetCameraRef.current
+      const lerpFactor = 0.16
+      cam.x += (targetCam.x - cam.x) * lerpFactor
+      cam.y += (targetCam.y - cam.y) * lerpFactor
+      cam.scale += (targetCam.scale - cam.scale) * lerpFactor
 
       const dpr = window.devicePixelRatio || 1
       const width = canvas.width / dpr
@@ -259,13 +269,13 @@ export function ObsidianWordGraph({
       ctx.scale(dpr, dpr)
       ctx.clearRect(0, 0, width, height)
 
-      // Background
-      ctx.fillStyle = '#0f1117'
+      // Warm beige / cream paper background (Obsidian Light feel)
+      ctx.fillStyle = '#faf8f5'
       ctx.fillRect(0, 0, width, height)
 
-      // Subtle grid dots (Obsidian feel)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)'
-      const gridStep = 40
+      // Subtle warm dot grid
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.045)'
+      const gridStep = 36
       for (let gx = 0; gx < width; gx += gridStep) {
         for (let gy = 0; gy < height; gy += gridStep) {
           ctx.beginPath()
@@ -275,7 +285,6 @@ export function ObsidianWordGraph({
       }
 
       // Apply camera pan & zoom
-      const cam = cameraRef.current
       ctx.save()
       ctx.translate(width / 2 + cam.x, height / 2 + cam.y)
       ctx.scale(cam.scale, cam.scale)
@@ -284,7 +293,7 @@ export function ObsidianWordGraph({
       const hoveredId = hoveredNode?.id
       const selectedId = selectedWordId
 
-      // Draw Edges
+      // Draw Edges (Clean, distinct contrast for light background)
       edges.forEach((edge) => {
         const n1 = nodeMap.get(edge.source)
         const n2 = nodeMap.get(edge.target)
@@ -301,13 +310,13 @@ export function ObsidianWordGraph({
         ctx.lineTo(n2.x, n2.y)
 
         if (isHighlighted) {
-          ctx.strokeStyle = '#a855f7'
-          ctx.lineWidth = 1.8
-          ctx.shadowColor = '#a855f7'
-          ctx.shadowBlur = 8
+          ctx.strokeStyle = '#7c3aed'
+          ctx.lineWidth = 2.2
+          ctx.shadowColor = 'rgba(124, 58, 237, 0.35)'
+          ctx.shadowBlur = 6
         } else {
-          ctx.strokeStyle = edge.type === 'parent' ? 'rgba(168, 85, 247, 0.28)' : 'rgba(255, 255, 255, 0.12)'
-          ctx.lineWidth = edge.type === 'parent' ? 1.2 : 0.8
+          ctx.strokeStyle = edge.type === 'parent' ? 'rgba(124, 58, 237, 0.35)' : 'rgba(100, 116, 139, 0.28)'
+          ctx.lineWidth = edge.type === 'parent' ? 1.4 : 1.0
           ctx.shadowBlur = 0
         }
         ctx.stroke()
@@ -324,13 +333,13 @@ export function ObsidianWordGraph({
         ctx.arc(node.x, node.y, node.radius + (isHovered || isSelected ? 3 : 0), 0, Math.PI * 2)
 
         if (isMatchSearch) {
-          ctx.fillStyle = '#22d3ee'
-          ctx.shadowColor = '#22d3ee'
-          ctx.shadowBlur = 15
+          ctx.fillStyle = '#0284c7'
+          ctx.shadowColor = 'rgba(2, 132, 199, 0.4)'
+          ctx.shadowBlur = 10
         } else if (isHovered || isSelected) {
-          ctx.fillStyle = '#f43f5e'
-          ctx.shadowColor = '#f43f5e'
-          ctx.shadowBlur = 16
+          ctx.fillStyle = '#e11d48'
+          ctx.shadowColor = 'rgba(225, 29, 72, 0.45)'
+          ctx.shadowBlur = 12
         } else {
           ctx.fillStyle = node.color
           ctx.shadowBlur = 0
@@ -339,22 +348,32 @@ export function ObsidianWordGraph({
         ctx.fill()
         ctx.shadowBlur = 0
 
-        // Outer ring for selected or hovered
+        // Outer focus ring for selected or hovered nodes
         if (isHovered || isSelected || isMatchSearch) {
-          ctx.strokeStyle = '#ffffff'
-          ctx.lineWidth = 1.5
+          ctx.strokeStyle = isHovered || isSelected ? '#e11d48' : '#0284c7'
+          ctx.lineWidth = 1.8
           ctx.beginPath()
           ctx.arc(node.x, node.y, node.radius + 5, 0, Math.PI * 2)
           ctx.stroke()
         }
 
-        // Draw label text
-        const showLabel = cam.scale > 0.65 || isHovered || isSelected || isMatchSearch || node.radius > 7
+        // Draw node text label with light outline for maximum readability
+        const showLabel = cam.scale > 0.55 || isHovered || isSelected || isMatchSearch || node.radius > 7
         if (showLabel) {
-          ctx.font = `${isHovered || isSelected ? 'bold 12px' : '10px'} -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
-          ctx.fillStyle = isHovered || isSelected ? '#ffffff' : isMatchSearch ? '#22d3ee' : 'rgba(255, 255, 255, 0.75)'
+          const fontSize = isHovered || isSelected ? 12 : 11
+          ctx.font = `${isHovered || isSelected ? 'bold ' : '500 '}${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
           ctx.textAlign = 'center'
-          ctx.fillText(node.word, node.x, node.y + node.radius + 12)
+
+          const textY = node.y + node.radius + 13
+          
+          // Light halo contour to guarantee legibility on light beige background
+          ctx.strokeStyle = '#faf8f5'
+          ctx.lineWidth = 3.5
+          ctx.strokeText(node.word, node.x, textY)
+
+          // Foreground text
+          ctx.fillStyle = isHovered || isSelected ? '#0f172a' : isMatchSearch ? '#0284c7' : '#334155'
+          ctx.fillText(node.word, node.x, textY)
         }
       })
 
@@ -372,7 +391,7 @@ export function ObsidianWordGraph({
     }
   }, [nodes, edges, nodeMap, physicsActive, hoveredNode, selectedWordId, searchQuery, compact])
 
-  // Mouse / Pointer Events on Canvas
+  // Mouse / Pointer Events
   const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return { worldX: 0, worldY: 0, clientX: 0, clientY: 0 }
@@ -394,13 +413,12 @@ export function ObsidianWordGraph({
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const { worldX, worldY, clientX, clientY } = getCanvasCoords(e)
 
-    // Check if clicked a node
     let hit: Node | null = null
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i]
       const dx = worldX - n.x
       const dy = worldY - n.y
-      if (dx * dx + dy * dy <= (n.radius + 4) * (n.radius + 4)) {
+      if (dx * dx + dy * dy <= (n.radius + 6) * (n.radius + 6)) {
         hit = n
         break
       }
@@ -412,7 +430,7 @@ export function ObsidianWordGraph({
       hit.vy = 0
     } else {
       isDraggingCameraRef.current = true
-      dragStartRef.current = { x: clientX - cameraRef.current.x, y: clientY - cameraRef.current.y }
+      dragStartRef.current = { x: clientX - targetCameraRef.current.x, y: clientY - targetCameraRef.current.y }
     }
   }
 
@@ -428,18 +446,17 @@ export function ObsidianWordGraph({
     }
 
     if (isDraggingCameraRef.current) {
-      cameraRef.current.x = clientX - dragStartRef.current.x
-      cameraRef.current.y = clientY - dragStartRef.current.y
+      targetCameraRef.current.x = clientX - dragStartRef.current.x
+      targetCameraRef.current.y = clientY - dragStartRef.current.y
       return
     }
 
-    // Check hover
     let hit: Node | null = null
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i]
       const dx = worldX - n.x
       const dy = worldY - n.y
-      if (dx * dx + dy * dy <= (n.radius + 6) * (n.radius + 6)) {
+      if (dx * dx + dy * dy <= (n.radius + 7) * (n.radius + 7)) {
         hit = n
         break
       }
@@ -460,11 +477,12 @@ export function ObsidianWordGraph({
     isDraggingCameraRef.current = false
   }
 
+  // Smooth progressive zoom on wheel
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault()
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9
-    const nextScale = Math.max(0.2, Math.min(3.0, cameraRef.current.scale * zoomFactor))
-    cameraRef.current.scale = nextScale
+    const zoomFactor = Math.pow(1.0015, -e.deltaY)
+    const nextScale = Math.max(0.2, Math.min(3.5, targetCameraRef.current.scale * zoomFactor))
+    targetCameraRef.current.scale = nextScale
   }
 
   return (
@@ -478,7 +496,7 @@ export function ObsidianWordGraph({
           <Search size={13} className="search-icon" />
           <input
             type="text"
-            placeholder="Rechercher un mot dans le graphe..."
+            placeholder="Rechercher un mot..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -500,7 +518,9 @@ export function ObsidianWordGraph({
           <button
             type="button"
             className="graph-btn"
-            onClick={() => (cameraRef.current.scale = Math.min(3, cameraRef.current.scale * 1.25))}
+            onClick={() => {
+              targetCameraRef.current.scale = Math.min(3.5, targetCameraRef.current.scale * 1.3)
+            }}
             title="Zoom avant"
           >
             <ZoomIn size={14} />
@@ -508,7 +528,9 @@ export function ObsidianWordGraph({
           <button
             type="button"
             className="graph-btn"
-            onClick={() => (cameraRef.current.scale = Math.max(0.2, cameraRef.current.scale * 0.8))}
+            onClick={() => {
+              targetCameraRef.current.scale = Math.max(0.2, targetCameraRef.current.scale * 0.7)
+            }}
             title="Zoom arrière"
           >
             <ZoomOut size={14} />
@@ -542,7 +564,9 @@ export function ObsidianWordGraph({
         <div className="graph-node-tooltip">
           <div className="tooltip-head">
             <strong>{hoveredNode.word}</strong>
-            {hoveredNode.phonetic && <span className="phonetic">[{hoveredNode.phonetic}]</span>}
+            {hoveredNode.phonetic && (
+              <span className="phonetic">{renderPhoneticFormatted(hoveredNode.phonetic)}</span>
+            )}
           </div>
           {hoveredNode.translation && (
             <p className="tooltip-trans">{hoveredNode.translation}</p>
@@ -564,3 +588,4 @@ export function ObsidianWordGraph({
     </div>
   )
 }
+

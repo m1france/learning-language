@@ -92,7 +92,7 @@ export function QuickWordLookup({
       setIsLoading(true)
       const targetLang = api.deepLTargetLang || (language === 'fr' ? 'EN-US' : 'FR')
       try {
-        const result = await translateText(trimmed, api.deepLKey, targetLang, 'FR')
+        const result = await translateText(trimmed, api, targetLang, 'FR')
         setTranslation(result)
       } catch (err) {
         console.error('[QuickWordLookup] Translation error:', err)
@@ -100,7 +100,7 @@ export function QuickWordLookup({
         setIsLoading(false)
       }
     },
-    [api.deepLKey, api.deepLTargetLang, language],
+    [api, language],
   )
 
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -118,8 +118,9 @@ export function QuickWordLookup({
       return
     }
 
+    // Debounce translation lookup
     debounceTimerRef.current = window.setTimeout(() => {
-      void handleTranslate(val)
+      handleTranslate(val)
     }, 280)
   }
 
@@ -130,15 +131,15 @@ export function QuickWordLookup({
     inputRef.current?.focus()
   }
 
-  const handleWordClick = (
+  const handleWordTokenClick = (
     word: string,
-    event: React.MouseEvent<HTMLElement>,
-    lang: Language,
+    event: React.MouseEvent,
+    wordLang: Language,
     contextSentence: string,
   ) => {
     event.stopPropagation()
-    const targetElement = event.currentTarget
-    const rect = targetElement.getBoundingClientRect()
+    const target = event.currentTarget as HTMLElement
+    const rect = target.getBoundingClientRect()
     const drawerRect = drawerRef.current?.getBoundingClientRect()
 
     // Calculate relative coordinates inside drawer
@@ -155,13 +156,13 @@ export function QuickWordLookup({
       word,
       top,
       left,
-      lang,
+      lang: wordLang,
       contextSentence,
     })
   }
 
   // Action 1: Pronounce word immediately and close menu
-  const handlePronounceWord = (e: React.MouseEvent) => {
+  const handlePronounce = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!activeWordMenu?.word) return
     const wordToSpeak = activeWordMenu.word
@@ -171,25 +172,28 @@ export function QuickWordLookup({
   }
 
   // Action 2: Trigger AI analysis in background and close menu immediately
-  const handleSaveWordWithAi = (e: React.MouseEvent) => {
+  const handleSaveWord = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!activeWordMenu?.word || !onRequestStageWord) return
-    const currentMenu = { ...activeWordMenu }
-    setActiveWordMenu(null)
-    onRequestStageWord({
-      word: currentMenu.word,
-      targetLang: currentMenu.lang,
-      contextSentence: currentMenu.contextSentence,
+    const stagedReq: StageWordRequest = {
+      word: activeWordMenu.word,
+      targetLang: activeWordMenu.lang,
+      contextSentence: activeWordMenu.contextSentence,
       fallbackTranslation: translation?.translatedText,
-    })
+    }
+    setActiveWordMenu(null)
+    onRequestStageWord(stagedReq)
   }
 
   const cleanWord = query.trim().replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '')
+
+  // Linguee iframe URL
   const lingueeUrl = `https://www.linguee.com/french-english/translation/${encodeURIComponent(cleanWord || 'bonjour')}.html`
 
-  const openCambridgePopup = (wordToOpen: string = cleanWord) => {
-    const target = wordToOpen || 'hello'
-    const url = `https://dictionary.cambridge.org/dictionary/french-english/${encodeURIComponent(target.toLowerCase())}`
+  // Cambridge popup URL
+  const openCambridgePopup = (wordToSearch: string = cleanWord) => {
+    const term = (wordToSearch || 'hello').toLowerCase()
+    const url = `https://dictionary.cambridge.org/dictionary/french-english/${encodeURIComponent(term)}`
     const width = 760
     const height = 820
     const left = Math.max(0, (window.screenX ?? 0) + window.innerWidth - width - 40)
@@ -202,24 +206,24 @@ export function QuickWordLookup({
   }
 
   /** Render text broken down into individually clickable word tokens */
-  const renderWordTokens = (text: string, textLang: Language) => {
-    const parts = text.split(/(\s+)/)
-    return parts.map((part, idx) => {
-      if (/^\s+$/.test(part)) {
-        return <React.Fragment key={idx}>{part}</React.Fragment>
+  const renderWordTokens = (text: string, wordLang: Language) => {
+    const tokens = text.split(/(\s+)/)
+    return tokens.map((token, idx) => {
+      if (/^\s+$/.test(token)) {
+        return <React.Fragment key={idx}>{token}</React.Fragment>
       }
-      const clean = part.replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '')
-      if (!clean) {
-        return <React.Fragment key={idx}>{part}</React.Fragment>
+      const stripped = token.replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '')
+      if (!stripped) {
+        return <React.Fragment key={idx}>{token}</React.Fragment>
       }
       return (
         <span
           key={idx}
           className="quick-dict-word-token"
-          onClick={(e) => handleWordClick(clean, e, textLang, text)}
-          title={`Cliquer pour prononcer ou enregistrer "${clean}"`}
+          onClick={(e) => handleWordTokenClick(stripped, e, wordLang, text)}
+          title={`Cliquer pour prononcer ou enregistrer "${stripped}"`}
         >
-          {part}
+          {token}
         </span>
       )
     })
@@ -296,6 +300,13 @@ export function QuickWordLookup({
                         'Traduction…'
                       )}
                     </div>
+                    {translation && (
+                      <div className="quick-dict-provider-tag">
+                        {translation.provider === 'deepl' && '✓ DeepL officiel'}
+                        {translation.provider === 'ai' && '✦ Agent IA'}
+                        {translation.provider === 'fallback' && '○ Secours auto'}
+                      </div>
+                    )}
                   </div>
                 )}
               </>
@@ -365,7 +376,7 @@ export function QuickWordLookup({
               <button
                 type="button"
                 className="word-popover-btn"
-                onClick={handlePronounceWord}
+                onClick={handlePronounce}
                 title="Prononcer le mot avec la voix configurée"
               >
                 <Volume2 size={15} className="popover-icon" />
@@ -375,7 +386,7 @@ export function QuickWordLookup({
               <button
                 type="button"
                 className="word-popover-btn primary"
-                onClick={handleSaveWordWithAi}
+                onClick={handleSaveWord}
                 title="Analyser par IA et ajouter aux mots à revoir"
               >
                 <Sparkles size={15} className="popover-icon" />
