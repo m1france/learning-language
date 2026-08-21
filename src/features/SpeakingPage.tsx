@@ -220,12 +220,15 @@ export function SpeakingPage({
   const videoRef = useRef<HTMLVideoElement>(null)
   const studioContainerRef = useRef<HTMLDivElement>(null)
 
-  // If customPrompterText is passed, enable prompter on start
+  // If customPrompterText is passed, enable prompter and auto-start camera
   useEffect(() => {
     if (customPrompterText && customPrompterText.trim()) {
       setShowPrompter(true)
+      if (!cameraActive) {
+        void requestMediaAccess()
+      }
     }
-  }, [customPrompterText, setShowPrompter])
+  }, [customPrompterText, setShowPrompter, cameraActive, requestMediaAccess])
 
   // Attach active stream to video element
   useEffect(() => {

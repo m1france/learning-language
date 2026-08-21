@@ -160,13 +160,7 @@ export function WritingPromptSelector({
       {/* Top Header */}
       <div className="selector-hero">
         <div className="selector-hero-text">
-          <p className="eyebrow">
-            <PenTool size={14} /> ATELIER D'ÉCRITURE & PRODUCTION ACTIVE
-          </p>
           <h1>Choisis ton mode d'écriture</h1>
-          <p className="subhead">
-            Transforme ton vocabulaire passif en réflexes spontanés par l'écriture ciblée et le journaling.
-          </p>
         </div>
         <button className="history-link-btn" onClick={onOpenHistory}>
           <BookOpen size={16} />
@@ -186,29 +180,12 @@ export function WritingPromptSelector({
             <Target size={20} />
           </div>
           <div className="mode-meta">
-            <h3>Atelier de Réactivation</h3>
+            <h3>Étudier les mots appris</h3>
             <p>Intègre 3 à 10 mots enregistrés dans une histoire ou un texte cohérent.</p>
           </div>
-          <div className="mode-tag">Idéal SRS & Rétention</div>
         </button>
 
-        {/* Mode 2: Journaling Guidé */}
-        <button
-          type="button"
-          className={`writing-mode-card ${selectedMode === 'guided' ? 'active' : ''}`}
-          onClick={() => setSelectedMode('guided')}
-        >
-          <div className="mode-icon-badge gold">
-            <Compass size={20} />
-          </div>
-          <div className="mode-meta">
-            <h3>Journaling & Thématiques</h3>
-            <p>Réponds à des questions structurées connectées aux sujets du studio vocal.</p>
-          </div>
-          <div className="mode-tag">Idéal Expression</div>
-        </button>
-
-        {/* Mode 3: Sprint Contre-la-Montre */}
+        {/* Mode 2: Sprint Chronométré */}
         <button
           type="button"
           className={`writing-mode-card ${selectedMode === 'sprint' ? 'active' : ''}`}
@@ -218,13 +195,12 @@ export function WritingPromptSelector({
             <Zap size={20} />
           </div>
           <div className="mode-meta">
-            <h3>Sprint d'Écriture</h3>
+            <h3>Chronométré</h3>
             <p>Écris sans t'arrêter pendant 3 à 10 min pour débloquer la pensée directe.</p>
           </div>
-          <div className="mode-tag">Fluidité & Vitesse</div>
         </button>
 
-        {/* Mode 4: Essai Libre */}
+        {/* Mode 3: Écriture Libre */}
         <button
           type="button"
           className={`writing-mode-card ${selectedMode === 'free' ? 'active' : ''}`}
@@ -234,10 +210,9 @@ export function WritingPromptSelector({
             <PenTool size={20} />
           </div>
           <div className="mode-meta">
-            <h3>Essai Libre & Notes</h3>
+            <h3>Écriture libre</h3>
             <p>Page blanche avec statistiques de mots et tiroir de vocabulaire à portée de main.</p>
           </div>
-          <div className="mode-tag">Liberté Totale</div>
         </button>
       </div>
 
@@ -300,7 +275,7 @@ export function WritingPromptSelector({
                     onClick={() => handleFilterChange('due')}
                     title="Mots récemment découverts ou à réviser"
                   >
-                    À réviser (SRS)
+                    À réviser
                   </button>
                   {state.resources.length > 0 && (
                     <button
@@ -386,56 +361,6 @@ export function WritingPromptSelector({
           </div>
         )}
 
-        {/* CONFIG 2: GUIDED JOURNALING */}
-        {selectedMode === 'guided' && (
-          <div className="config-guided">
-            <h4>Choisir un thème de réflexion</h4>
-            <p>Ces thèmes sont synchronisés avec le studio de parole face caméra.</p>
-
-            {/* Category tabs */}
-            <div className="topic-categories-row">
-              {GLOBAL_CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  className={`topic-cat-btn ${selectedCategory.id === cat.id ? 'active' : ''}`}
-                  onClick={() => {
-                    setSelectedCategory(cat)
-                    setSelectedTopic(cat.subtopics[0])
-                  }}
-                >
-                  <span className="cat-icon">{cat.icon}</span>
-                  <span>{learningLang === 'fr' ? cat.title : cat.titleEn}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Subtopics list */}
-            <div className="subtopics-cards-grid">
-              {selectedCategory.subtopics.map((sub) => {
-                const isCurrent = selectedTopic.id === sub.id
-                return (
-                  <div
-                    key={sub.id}
-                    className={`subtopic-card ${isCurrent ? 'selected' : ''}`}
-                    onClick={() => setSelectedTopic(sub)}
-                  >
-                    <div className="subtopic-card-top">
-                      <span className="badge-pill">{sub.badge}</span>
-                      {isCurrent && <Check size={14} className="check-mark" />}
-                    </div>
-                    <h5>{learningLang === 'fr' ? sub.title : sub.titleEn}</h5>
-                    <ul className="subtopic-angles">
-                      {(learningLang === 'fr' ? sub.angles : sub.anglesEn).slice(0, 2).map((a, i) => (
-                        <li key={i}>• {a}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
 
         {/* CONFIG 3: SPRINT */}
         {selectedMode === 'sprint' && (

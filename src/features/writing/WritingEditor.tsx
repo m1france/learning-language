@@ -245,7 +245,13 @@ export function WritingEditor({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Titre de la session..."
             />
-            <span className="mode-pill-badge">{config.mode.toUpperCase()}</span>
+            <span className="mode-pill-badge">
+              {config.mode === 'reactivation'
+                ? 'ÉTUDIER LES MOTS'
+                : config.mode === 'sprint'
+                ? 'CHRONOMÉTRÉ'
+                : 'ÉCRITURE LIBRE'}
+            </span>
           </div>
         </div>
 

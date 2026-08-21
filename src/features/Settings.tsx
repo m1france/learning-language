@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { UI_LANGUAGES } from '../i18n'
-import { listVoices } from '../ai'
+import { listVoices, speak } from '../ai'
 import { addCustomTag, addMarking, DEFAULT_MARKINGS, DEFAULT_TEACHER_SHORTCUTS, deleteCustomTag, deleteMarking, knownTags, renameCustomTag, renameMarking, reorderMarkings, setMarkingColor } from '../store'
 import {
   User,
@@ -21,6 +21,7 @@ import {
   Sparkles,
   Keyboard,
   RotateCcw,
+  Volume2,
 } from 'lucide-react'
 
 type SettingsProps = {
@@ -133,6 +134,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
   const [newTag, setNewTag] = useState('')
   const [editingTag, setEditingTag] = useState<string | null>(null)
   const [editingTagValue, setEditingTagValue] = useState('')
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
 
   const [newMarkingLabel, setNewMarkingLabel] = useState('')
   const [newMarkingColor, setNewMarkingColor] = useState('#2563eb')
@@ -278,20 +280,29 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
           <SettingHeading title="Gestion et ordre des marquages" detail="Personnalise tes marquages, modifie leurs couleurs, renomme-les et change leur ordre d’affichage dans le lecteur." />
           <div className="settings-markings-section">
             <div className="markings-add-bar">
-              <input
-                type="text"
-                placeholder="Nouveau marquage (ex. Proposition, Connecteur, Idiome...)"
-                value={newMarkingLabel}
-                onChange={(event) => setNewMarkingLabel(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter') handleAddMarking() }}
-              />
-              <input
-                type="color"
-                value={newMarkingColor}
-                onChange={(event) => setNewMarkingColor(event.target.value)}
-                style={{ width: 40, height: 38, borderRadius: 8, border: '1px solid var(--line)', cursor: 'pointer', padding: 2, background: 'var(--white)' }}
-                title="Choisir la couleur"
-              />
+              <div className="marking-add-input-wrap">
+                <input
+                  type="text"
+                  placeholder="Nouveau marquage (ex. Proposition, Connecteur, Idiome...)"
+                  value={newMarkingLabel}
+                  onChange={(event) => setNewMarkingLabel(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') handleAddMarking() }}
+                />
+                <input
+                  type="color"
+                  id="new-marking-color-picker"
+                  value={newMarkingColor}
+                  onChange={(event) => setNewMarkingColor(event.target.value)}
+                  style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+                />
+                <button
+                  type="button"
+                  className="marking-inline-color-dot"
+                  style={{ backgroundColor: newMarkingColor }}
+                  onClick={() => document.getElementById('new-marking-color-picker')?.click()}
+                  title="Choisir la couleur"
+                />
+              </div>
               <button className="primary" disabled={!newMarkingLabel.trim()} onClick={handleAddMarking}>
                 <Plus size={14} /> Ajouter
               </button>
@@ -304,27 +315,6 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                 return (
                   <div key={marking.id} className="marking-mgmt-card">
                     <div className="marking-card-left">
-                      <div className="marking-reorder-btns">
-                        <button
-                          type="button"
-                          className="marking-reorder-btn"
-                          title="Monter"
-                          disabled={index === 0}
-                          onClick={() => onChangeState(reorderMarkings(state, index, index - 1))}
-                        >
-                          <ChevronUp size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          className="marking-reorder-btn"
-                          title="Descendre"
-                          disabled={index === allMarkings.length - 1}
-                          onClick={() => onChangeState(reorderMarkings(state, index, index + 1))}
-                        >
-                          <ChevronDown size={13} />
-                        </button>
-                      </div>
-
                       <div className="marking-color-picker-wrap">
                         <input
                           type="color"
@@ -367,6 +357,24 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
 
                     {!isEditing && (
                       <div className="tag-mgmt-actions">
+                        <button
+                          type="button"
+                          className="tag-icon-btn"
+                          title="Monter"
+                          disabled={index === 0}
+                          onClick={() => onChangeState(reorderMarkings(state, index, index - 1))}
+                        >
+                          <ChevronUp size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          className="tag-icon-btn"
+                          title="Descendre"
+                          disabled={index === allMarkings.length - 1}
+                          onClick={() => onChangeState(reorderMarkings(state, index, index + 1))}
+                        >
+                          <ChevronDown size={13} />
+                        </button>
                         <button
                           className="tag-icon-btn"
                           title="Renommer le marquage"
@@ -441,7 +449,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
         </>}
 
         {tab === 'tags' && <>
-          <SettingHeading title="Gestion des tags" detail="Organise tes mots avec des tags personnalisés. Tu peux ajouter, renommer ou supprimer des tags existants." />
+          <SettingHeading title="Gestion des tags" detail="Organise tes mots avec des tags personnalisés. Tu peux ajouter, renommer ou supprimer des tags existants, et cliquer sur un tag pour voir les mots associés." />
           <div className="settings-tags-section">
             <div className="tags-add-bar">
               <input
@@ -465,9 +473,10 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                 allTags.map((tag) => {
                   const count = state.words.filter((w) => w.tags?.includes(tag) && w.language === draft.learningLanguage).length
                   const isEditing = editingTag === tag
+                  const isSelected = selectedTag === tag
 
                   return (
-                    <div key={tag} className="tag-mgmt-card">
+                    <div key={tag} className={`tag-mgmt-card ${isSelected ? 'selected' : ''}`}>
                       {isEditing ? (
                         <div className="tag-rename-box">
                           <input
@@ -483,7 +492,11 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                           <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingTag(null)}><X size={13} /></button>
                         </div>
                       ) : (
-                        <div className="tag-card-content">
+                        <div
+                          className="tag-card-content"
+                          onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                          title="Cliquer pour afficher les mots liés à ce tag"
+                        >
                           <span className="wp-tag-chip active">{tag}</span>
                           <span className="tag-word-count">{count} {count > 1 ? 'mots' : 'mot'}</span>
                         </div>
@@ -502,7 +515,10 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                             className="tag-icon-btn delete"
                             title="Supprimer le tag"
                             aria-label="Supprimer le tag"
-                            onClick={() => handleDeleteTag(tag)}
+                            onClick={() => {
+                              if (selectedTag === tag) setSelectedTag(null)
+                              handleDeleteTag(tag)
+                            }}
                           >
                             <Trash2 size={13} />
                           </button>
@@ -513,6 +529,73 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                 })
               )}
             </div>
+
+            {/* Display connected words when a tag is clicked */}
+            {selectedTag && (
+              <div className="tag-connected-words-card">
+                <div className="tag-connected-header">
+                  <div className="tag-connected-title">
+                    <Tag size={15} />
+                    <strong>Mots associés au tag #{selectedTag}</strong>
+                    <span className="tag-word-count-badge">
+                      {state.words.filter((w) => w.tags?.includes(selectedTag) && w.language === draft.learningLanguage).length}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="tag-icon-btn"
+                    onClick={() => setSelectedTag(null)}
+                    title="Fermer"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                {(() => {
+                  const wordsForTag = state.words.filter(
+                    (w) => w.tags?.includes(selectedTag) && w.language === draft.learningLanguage,
+                  )
+                  if (wordsForTag.length === 0) {
+                    return (
+                      <p className="tag-connected-empty">
+                        Aucun mot n'est associé à ce tag pour le moment dans cette langue.
+                      </p>
+                    )
+                  }
+                  return (
+                    <div className="tag-connected-words-grid">
+                      {wordsForTag.map((word) => (
+                        <div key={word.id || word.word} className="tag-connected-word-item">
+                          <div className="tag-word-main">
+                            <strong className="tag-word-text">{word.word}</strong>
+                            {word.phonetic && (
+                              <span className="tag-word-ipa">{word.phonetic}</span>
+                            )}
+                            <button
+                              type="button"
+                              className="tag-word-speak-btn"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void speak(word.word, draft.learningLanguage, draft.api)
+                              }}
+                              title="Prononcer le mot"
+                            >
+                              <Volume2 size={13} />
+                            </button>
+                          </div>
+                          {word.translation && (
+                            <span className="tag-word-translation">{word.translation}</span>
+                          )}
+                          {word.contextSentence && (
+                            <p className="tag-word-sentence">« {word.contextSentence} »</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
           </div>
         </>}
 

@@ -84,11 +84,10 @@ export const loadState = (): AppState | null => {
     const parsed = JSON.parse(raw) as Omit<AppState, 'version'> & { version: number }
     if ((parsed.version !== 2 && parsed.version !== 3) || !parsed.settings || !Array.isArray(parsed.resources)) return null
     const api = parsed.settings.api as Partial<ApiSettings> | undefined
-    // Migration : déduire ttsProvider de l'ancien réglage ttsModel (fish-audio ne produit pas d'audio via OpenRouter).
+    // Migration : déduire ttsProvider de l'ancien réglage ttsModel.
     if (api && !api.ttsProvider) {
       api.ttsProvider = api.ttsModel === 'browser' ? 'browser' : api.ttsModel === 'openai/gpt-4o-audio-preview' ? 'openrouter' : 'google'
     }
-    if (api?.ttsModel?.startsWith('fish-audio')) api.ttsModel = 'openai/gpt-4o-audio-preview'
     return {
       ...createState(parsed.settings),
       ...parsed,
@@ -258,12 +257,12 @@ export const resolveWordFamily = (
 /** Save or update a word the user annotated while reading (own translation, parent, pronunciation). */
 export const upsertWordDetails = (state: AppState, args: {
   raw: string
-  sentence: string
+  sentence?: string
   language: 'en' | 'fr'
   sourceResourceId?: string
   translation: string
-  parent: string
-  pronunciation: string
+  parent?: string
+  pronunciation?: string
   knowledge?: number
   tags?: string[]
   relationType?: WordRelationType
@@ -307,7 +306,7 @@ export const upsertWordDetails = (state: AppState, args: {
       partOfSpeech: args.partOfSpeech ?? '',
       knowledge: args.knowledge,
       definitions: args.translation ? [{ definition: '', translation: args.translation }] : [],
-      contextSentence: args.sentence,
+      contextSentence: args.sentence ?? '',
       sourceResourceId: args.sourceResourceId,
       sourceSkill: 'reading',
       status: 'learning',

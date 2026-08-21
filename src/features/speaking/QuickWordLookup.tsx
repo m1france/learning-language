@@ -203,11 +203,14 @@ export function QuickWordLookup({
 
   /** Render text broken down into individually clickable word tokens */
   const renderWordTokens = (text: string, textLang: Language) => {
-    const tokens = text.split(/([\s.,!?;:()"“”«»]+)/)
-    return tokens.map((token, idx) => {
-      const clean = token.replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '')
+    const parts = text.split(/(\s+)/)
+    return parts.map((part, idx) => {
+      if (/^\s+$/.test(part)) {
+        return <React.Fragment key={idx}>{part}</React.Fragment>
+      }
+      const clean = part.replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '')
       if (!clean) {
-        return <span key={idx}>{token}</span>
+        return <React.Fragment key={idx}>{part}</React.Fragment>
       }
       return (
         <span
@@ -216,7 +219,7 @@ export function QuickWordLookup({
           onClick={(e) => handleWordClick(clean, e, textLang, text)}
           title={`Cliquer pour prononcer ou enregistrer "${clean}"`}
         >
-          {token}
+          {part}
         </span>
       )
     })

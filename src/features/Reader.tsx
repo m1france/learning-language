@@ -1532,7 +1532,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
   }
 
   const actions = <div className="wp-actions">
-    {existing && <button className="wp-icon wp-icon-delete" title="Supprimer le mot enregistré" aria-label="Supprimer le mot enregistré" onClick={handleDelete}><Trash2 size={14} /></button>}
+    {existing && !viewing && <button className="wp-icon wp-icon-delete" title="Supprimer le mot enregistré" aria-label="Supprimer le mot enregistré" onClick={handleDelete}><Trash2 size={14} /></button>}
     {viewing && <button className="wp-icon wp-icon-edit" title={t.editWord} aria-label={t.editWord} onClick={() => setViewing(false)}><Pencil size={14} /></button>}
     <button className="wp-icon" aria-label="Fermer" onClick={onClose}><X size={15} /></button>
   </div>

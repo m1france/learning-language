@@ -85,24 +85,34 @@ async function speakWithFish(text: string, api: ApiSettings): Promise<{ ok: bool
 
 async function speakWithOpenRouter(text: string, api: ApiSettings): Promise<{ ok: boolean; error?: string }> {
   if (!api.openRouterKey) return { ok: false, error: 'pas de clé OpenRouter' }
-  if (!api.ttsModel) return { ok: false, error: 'aucun modèle TTS choisi' }
+  const model = api.ttsModel?.trim() || 'openai/gpt-4o-audio-preview'
   try {
+    const isFishAudio = model.toLowerCase().includes('fish')
+    const requestBody: Record<string, unknown> = {
+      model,
+      messages: [{ role: 'user', content: text }],
+    }
+    if (!isFishAudio) {
+      requestBody.modalities = ['audio', 'text']
+      requestBody.audio = { voice: 'alloy', format: 'mp3' }
+    }
     const response = await fetch(OPENROUTER_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api.openRouterKey}` },
-      body: JSON.stringify({
-        model: api.ttsModel,
-        messages: [{ role: 'user', content: text }],
-        modalities: ['audio', 'text'],
-        audio: { voice: 'alloy', format: 'mp3' },
-      }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api.openRouterKey.trim()}` },
+      body: JSON.stringify(requestBody),
     })
     if (!response.ok) {
       const detail = await response.text().catch(() => '')
       return { ok: false, error: `HTTP ${response.status}${detail ? ` — ${detail.slice(0, 160)}` : ''}` }
     }
-    const data = (await response.json()) as { choices?: { message?: { audio?: { data?: string } } }[] }
-    const base64 = data.choices?.[0]?.message?.audio?.data
+    const data = await response.json()
+    const choice = data.choices?.[0]
+    const base64 =
+      choice?.message?.audio?.data ||
+      choice?.audio ||
+      (typeof choice?.message?.content === 'string' && choice.message.content.startsWith('data:audio')
+        ? choice.message.content.split(',')[1]
+        : undefined)
     if (!base64) return { ok: false, error: 'le modèle n’a pas renvoyé d’audio' }
     audioElement?.pause()
     audioElement = new Audio(`data:audio/mp3;base64,${base64}`)

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import type { ApiSettings, Language, LearnedWord } from '../../domain'
 import { speak } from '../../ai'
 import { Check, Volume2, Info, RefreshCw, X, Sparkles } from 'lucide-react'
@@ -14,6 +14,37 @@ type WordBricksTrayProps = {
   compact?: boolean
 }
 
+/**
+ * Safely parses simple markdown like **bold**, *italic*, <u>underline</u>
+ */
+function renderPhoneticMarkdown(text?: string): React.ReactNode {
+  if (!text) return null
+  const regex = /(\*\*(?:[\s\S]+?)\*\*|__(?:[\s\S]+?)__|<u>[\s\S]*?<\/u>|\*(?:[^*]+?)\*|_(?:[^_]+?)_)/i
+  const parts = text.split(regex)
+
+  return parts.map((part, index) => {
+    const key = `ph-${index}`
+    if (!part) return null
+
+    if (
+      (part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
+      (part.startsWith('__') && part.endsWith('__') && part.length >= 4)
+    ) {
+      return <strong key={key}>{part.slice(2, -2)}</strong>
+    }
+    if (part.toLowerCase().startsWith('<u>') && part.toLowerCase().endsWith('</u>') && part.length >= 7) {
+      return <u key={key}>{part.slice(3, -4)}</u>
+    }
+    if (
+      (part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
+      (part.startsWith('_') && part.endsWith('_') && part.length >= 2)
+    ) {
+      return <em key={key}>{part.slice(1, -1)}</em>
+    }
+    return part
+  })
+}
+
 export function WordBricksTray({
   words,
   usedWords,
@@ -26,6 +57,24 @@ export function WordBricksTray({
 }: WordBricksTrayProps) {
   const [activeTooltipIndex, setActiveTooltipIndex] = useState<number | null>(null)
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null)
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleMouseEnter = (index: number) => {
+    if (leaveTimerRef.current) {
+      clearTimeout(leaveTimerRef.current)
+      leaveTimerRef.current = null
+    }
+    setActiveTooltipIndex(index)
+  }
+
+  const handleMouseLeave = () => {
+    if (leaveTimerRef.current) {
+      clearTimeout(leaveTimerRef.current)
+    }
+    leaveTimerRef.current = setTimeout(() => {
+      setActiveTooltipIndex(null)
+    }, 280)
+  }
 
   const handleSpeak = async (e: React.MouseEvent, word: string, index: number) => {
     e.stopPropagation()
@@ -64,6 +113,8 @@ export function WordBricksTray({
             <div
               key={`${word}-${index}`}
               className={`word-brick-card ${isUsed ? 'used' : 'pending'} ${isTooltipOpen ? 'active' : ''}`}
+              onMouseEnter={() => handleMouseEnter(index)}
+              onMouseLeave={handleMouseLeave}
               onClick={() => setActiveTooltipIndex(isTooltipOpen ? null : index)}
             >
               <div className="word-brick-left">
@@ -131,11 +182,15 @@ export function WordBricksTray({
               {isTooltipOpen && (
                 <div
                   className="word-brick-popover"
+                  onMouseEnter={() => handleMouseEnter(index)}
+                  onMouseLeave={handleMouseLeave}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="word-brick-popover-head">
                     <strong>{word}</strong>
-                    {detail?.phonetic && <span className="phonetic">[{detail.phonetic}]</span>}
+                    {detail?.phonetic && (
+                      <span className="phonetic">[{renderPhoneticMarkdown(detail.phonetic)}]</span>
+                    )}
                     <button
                       className="popover-close"
                       onClick={() => setActiveTooltipIndex(null)}

@@ -135,6 +135,36 @@ export function SpeakingWorkspace({
     triggerAutosave({ ratings: updated })
   }
 
+  // Global keyboard shortcuts for video playback when not typing
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement
+      const isTyping =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        (activeEl && (activeEl.getAttribute('contenteditable') === 'true' || activeEl.classList.contains('notion-speaking-content')))
+
+      if (!isTyping) {
+        if (e.key === 'Backspace' || e.key === ' ' || e.code === 'Space') {
+          e.preventDefault()
+          togglePlay()
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault()
+          const maxDur = duration || session.duration || 999999
+          const curr = videoRef.current?.currentTime ?? currentTime
+          seekTo(Math.min(maxDur, curr + 10))
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault()
+          const curr = videoRef.current?.currentTime ?? currentTime
+          seekTo(Math.max(0, curr - 10))
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [duration, session.duration, currentTime])
+
   const downloadMedia = () => {
     if (!session.mediaUrl) return
     const a = document.createElement('a')
@@ -303,11 +333,6 @@ export function SpeakingWorkspace({
         <section className="workspace-notes-pane">
           <div className="ws-notes-header-hint">
             <span className="hint-label">{ui === 'fr' ? 'Bloc-notes interactif' : 'Interactive notes'}</span>
-            <span className="hint-shortcuts">
-              {ui === 'fr'
-                ? 'Tape @ pour insérer un horodatage · Cmd+B · Cmd+I · # pour les titres'
-                : 'Type @ to insert timestamp · Cmd+B · Cmd+I · # for headings'}
-            </span>
           </div>
 
           {/* Unified Notion-Style WYSIWYG Document */}

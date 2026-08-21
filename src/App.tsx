@@ -11,6 +11,7 @@ import { CameraProvider } from './features/speaking/CameraContext'
 import { FloatingMiniCam } from './features/speaking/FloatingMiniCam'
 import { LifePage } from './features/LifePage'
 import { Settings } from './features/Settings'
+import { VocabularyVaultModal } from './features/vocabulary/VocabularyVaultModal'
 import { prompts } from './data'
 import { baseUi, copy, detectUiLanguage, UI_LANGUAGES } from './i18n'
 import { doveWhite } from './assets/doveWhite'
@@ -316,6 +317,7 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
   const [difficulty, setDifficulty] = useState<Difficulty | 'all'>('all')
   const [adding, setAdding] = useState(false)
   const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [vocabVaultOpen, setVocabVaultOpen] = useState(false)
   const isDraggingRef = useRef(false)
   const [menuTarget, setMenuTarget] = useState<ResourceContextTarget | null>(null)
   const [editingResource, setEditingResource] = useState<Resource | null>(null)
@@ -328,6 +330,11 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
   const labelFor = (typeId: string) => t.categories[typeId] ?? state.customCategories.find((category) => category.id === typeId)?.label ?? typeId
   const types = useMemo(() => ['all', ...new Set([...BUILTIN_CATEGORIES.filter((category) => state.resources.some((resource) => resource.type === category)), ...state.customCategories.map((category) => category.id)])], [state.resources, state.customCategories])
   const filtered = useMemo(() => state.resources.filter((resource) => (type === 'all' || resource.type === type) && (difficulty === 'all' || resource.difficulty === difficulty)), [state.resources, type, difficulty])
+
+  const learningWordsCount = useMemo(
+    () => (state.words ?? []).filter((w) => w.language === state.settings.learningLanguage).length,
+    [state.words, state.settings.learningLanguage],
+  )
 
   const handleAction = (action: ResourceAction, res: Resource) => {
     if (action === 'editContent') setEditingResource(res)
@@ -368,7 +375,18 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
       <div>
         <h1>{t.library}</h1>
       </div>
-      {hasResources && <button className="outline" onClick={() => setAdding(true)}><Plus size={15} /> {t.add}</button>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button
+          className="outline"
+          onClick={() => setVocabVaultOpen(true)}
+          title="Consulter tout mon vocabulaire et le graphe Obsidian"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+        >
+          <BookOpen size={15} />
+          <span>Vocabulaire ({learningWordsCount})</span>
+        </button>
+        {hasResources && <button className="outline" onClick={() => setAdding(true)}><Plus size={15} /> {t.add}</button>}
+      </div>
     </header>
     {hasResources && <section className="filter-row">
       <div className="segmented">{types.map((item) => <button className={type === item ? 'selected' : ''} onClick={() => setType(item)} key={item}>{item === 'all' ? t.all : labelFor(item)}</button>)}</div>
@@ -436,6 +454,15 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
     {renamingResource && <RenameModal resource={renamingResource} onSave={(updated) => onChange(upsertResource(state, updated))} onClose={() => setRenamingResource(null)} />}
     {deletingResource && <DeleteModal resource={deletingResource} onConfirm={(id) => onChange(deleteResource(state, id))} onClose={() => setDeletingResource(null)} />}
     {adding && <AddResource t={t} state={state} close={() => setAdding(false)} onAdd={(resource) => { onAdd(resource); setAdding(false) }} onChange={onChange} />}
+    {vocabVaultOpen && (
+      <VocabularyVaultModal
+        state={state}
+        language={state.settings.learningLanguage}
+        onSaveWord={(args) => onChange(upsertWordDetails(state, args))}
+        onDeleteWord={(raw, lang) => onChange(deleteWord(state, raw, lang))}
+        onClose={() => setVocabVaultOpen(false)}
+      />
+    )}
   </div>
 }
 
