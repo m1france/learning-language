@@ -319,6 +319,38 @@ export const upsertWordDetails = (state: AppState, args: {
   }
 }
 
+/** Reverse / reassign reference word for a word family */
+export const setWordAsReference = (
+  state: AppState,
+  newRootRaw: string,
+  formerRootRaw: string,
+  formerRelationType: WordRelationType,
+  language: Language
+): AppState => {
+  const normNewRoot = normalizeWord(newRootRaw)
+  const normFormerRoot = normalizeWord(formerRootRaw)
+  const updatedWords = state.words.map((w) => {
+    if (w.language !== language) return w
+    // If it's the former root, make it a child of the new root
+    if (w.normalized === normFormerRoot) {
+      return {
+        ...w,
+        parent: newRootRaw.trim(),
+        relationType: formerRelationType,
+      }
+    }
+    // If it was pointing to the former root, repoint it to the new root
+    if (w.parent && normalizeWord(w.parent) === normFormerRoot && w.normalized !== normNewRoot) {
+      return {
+        ...w,
+        parent: newRootRaw.trim(),
+      }
+    }
+    return w
+  })
+  return { ...state, words: updatedWords }
+}
+
 /** Delete a word from the user's learned/annotated words. */
 export const deleteWord = (state: AppState, rawOrNormalized: string, language: 'en' | 'fr'): AppState => {
   const norm = normalizeWord(rawOrNormalized)

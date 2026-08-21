@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, GrammarMarkStyle, GrammarMarkType, Language, LearnedWord, Resource, UiLanguage, WordMark, WordRelationType } from '../domain'
 import { normalizeWord } from '../domain'
-import { DEFAULT_MARKINGS, knownParents, knownTags, resolveWordFamily, type WordFamily } from '../store'
+import { DEFAULT_MARKINGS, knownParents, knownTags, resolveWordFamily, setWordAsReference, type WordFamily } from '../store'
 import { copy, readerCopy } from '../i18n'
 import { loadOriginals, modifiedCharIndices } from './LearningFocus'
 import { isGenericImportedAuthor } from '../App'
 import {
   ArrowLeft,
+  ArrowLeftRight,
   Maximize2,
   GraduationCap,
   ChevronLeft,
@@ -1431,6 +1432,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
   const findExisting = () => state.words.find((word) => word.normalized === normalizeWord(selected.raw) && word.language === language)
   const [word, setWord] = useState(() => cleanRaw(selected.raw))
   const [parent, setParent] = useState(() => findExisting()?.parent ?? '')
+  const [relationType, setRelationType] = useState<WordRelationType | undefined>(() => findExisting()?.relationType)
   const [pronunciation, setPronunciation] = useState(() => findExisting()?.phonetic ?? '')
   const [translation, setTranslation] = useState(() => findExisting()?.translation ?? findExisting()?.definitions[0]?.translation ?? '')
   const initialTags = () => {
@@ -1456,6 +1458,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     const existing = state.words.find((item) => item.normalized === normalizeWord(selected.raw) && item.language === language)
     setWord(cleanRaw(selected.raw))
     setParent(existing?.parent ?? '')
+    setRelationType(existing?.relationType ?? (existing?.parent ? 'derivative' : undefined))
     setPronunciation(existing?.phonetic ?? '')
     setTranslation(existing?.translation ?? existing?.definitions[0]?.translation ?? '')
     setTags(existing
@@ -1493,7 +1496,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
       raw: word.trim(),
       translation: translation.trim(),
       parent: parent.trim(),
-      relationType: existingWord?.relationType,
+      relationType: parent.trim() ? (relationType ?? existingWord?.relationType ?? 'derivative') : undefined,
       partOfSpeech: existingWord?.partOfSpeech,
       pronunciation: pronunciation.trim(),
       knowledge,
@@ -1514,6 +1517,31 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     {viewing && <button className="wp-icon wp-icon-edit" title={t.editWord} aria-label={t.editWord} onClick={() => setViewing(false)}><Pencil size={14} /></button>}
     <button className="wp-icon" aria-label="Fermer" onClick={onClose}><X size={15} /></button>
   </div>
+
+  const handleSaveReverse = (newDetails: WordDetails, formerRoot: string, formerRel: WordRelationType) => {
+    onSave(newDetails)
+    if (state) {
+      const updatedState = setWordAsReference(state, newDetails.raw, formerRoot, formerRel, language)
+      const formerWordObj = updatedState.words.find((w) => w.normalized === normalizeWord(formerRoot) && w.language === language)
+      if (formerWordObj) {
+        onSave({
+          raw: formerWordObj.word,
+          sentence: formerWordObj.contextSentence,
+          language: formerWordObj.language,
+          sourceResourceId: formerWordObj.sourceResourceId,
+          translation: formerWordObj.translation ?? '',
+          parent: formerWordObj.parent ?? '',
+          relationType: formerWordObj.relationType,
+          partOfSpeech: formerWordObj.partOfSpeech,
+          pronunciation: formerWordObj.phonetic ?? '',
+          knowledge: formerWordObj.knowledge,
+          tags: formerWordObj.tags,
+        })
+      }
+    }
+    setCreatingLinked(false)
+    setAccordionOpen(true)
+  }
 
   const view = <>
     <div className="wp-view-head">
@@ -1538,8 +1566,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
       >
         <span className="wp-accordion-line-left" />
         <span className="wp-accordion-title">
-          {family.totalLinkedCount <= 1 ? t.linkedWordsSingular : t.linkedWordsPlural}
-          {family.totalLinkedCount > 0 && <span className="wp-accordion-badge">{family.totalLinkedCount}</span>}
+          {family.totalLinkedCount <= 1 ? t.linkedWordsSingular : t.linkedWordsPlural} ({family.totalLinkedCount})
         </span>
         <span className="wp-accordion-line-right" />
         <span className={`wp-accordion-chevron ${accordionOpen ? 'open' : ''}`}>
@@ -1641,10 +1668,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
             </div>
           )}
 
-          {family.totalLinkedCount === 0 && (
-            <div className="wp-family-empty">{t.noLinkedWords}</div>
-          )}
-
           {/* Bouton discret Ajouter un mot lié */}
           <button
             type="button"
@@ -1686,6 +1709,28 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
           </div>}
         </>}
     </div>
+
+    {parent.trim() && (
+      <div className="wp-field">
+        <span>{t.relationTypeLabel}</span>
+        <div className="wp-relation-pills">
+          <button
+            type="button"
+            className={`wp-relation-pill ${relationType === 'grammatical_form' ? 'active' : ''}`}
+            onClick={() => { setRelationType('grammatical_form'); setSaved(false) }}
+          >
+            {t.relationGrammaticalForm}
+          </button>
+          <button
+            type="button"
+            className={`wp-relation-pill ${relationType === 'derivative' || !relationType ? 'active' : ''}`}
+            onClick={() => { setRelationType('derivative'); setSaved(false) }}
+          >
+            {t.relationDerivative}
+          </button>
+        </div>
+      </div>
+    )}
 
     <div className="wp-field">
       <RichInputField
@@ -1744,6 +1789,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
             setCreatingLinked(false)
             setAccordionOpen(true)
           }}
+          onSaveReverse={handleSaveReverse}
         />
       )}
     </div>
@@ -1784,6 +1830,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
             setCreatingLinked(false)
             setAccordionOpen(true)
           }}
+          onSaveReverse={handleSaveReverse}
         />
       )}
     </>
@@ -1803,6 +1850,7 @@ function CompanionWordPanel({
   top,
   onClose,
   onSave,
+  onSaveReverse,
 }: {
   ui: UiLanguage
   language: Language
@@ -1813,11 +1861,12 @@ function CompanionWordPanel({
   top?: number
   onClose: () => void
   onSave: (details: WordDetails) => void
+  onSaveReverse?: (newWordDetails: WordDetails, formerRootRaw: string, formerRelationType: WordRelationType) => void
 }) {
   const t = readerCopy[ui]
   const [newWord, setNewWord] = useState('')
   const [relationType, setRelationType] = useState<WordRelationType>('derivative')
-  const [partOfSpeech, setPartOfSpeech] = useState<string>('')
+  const [isReverse, setIsReverse] = useState(false)
   const [refWord, setRefWord] = useState(referenceWord)
   const [refTyping, setRefTyping] = useState(false)
   const [pronunciation, setPronunciation] = useState('')
@@ -1849,33 +1898,26 @@ function CompanionWordPanel({
 
   const submit = () => {
     if (!newWord.trim()) return
-    const finalTags = [...tags]
-    if (partOfSpeech && !finalTags.includes(partOfSpeech)) {
-      finalTags.push(partOfSpeech)
-    }
-    onSave({
+    const wordPayload: WordDetails = {
       raw: newWord.trim(),
       sentence: '',
       language,
       sourceResourceId: '',
       translation: translation.trim(),
-      parent: refWord.trim(),
-      relationType,
-      partOfSpeech: partOfSpeech.trim(),
+      parent: isReverse ? '' : refWord.trim(),
+      relationType: isReverse ? undefined : relationType,
+      partOfSpeech: '',
       pronunciation: pronunciation.trim(),
       knowledge,
-      tags: finalTags,
-    })
+      tags,
+    }
+    if (isReverse && onSaveReverse) {
+      onSaveReverse(wordPayload, referenceWord, relationType)
+    } else {
+      onSave(wordPayload)
+    }
     setSaved(true)
   }
-
-  const posChoices = [
-    { id: 'verbe', label: t.tags.verb },
-    { id: 'nom', label: t.tags.noun },
-    { id: 'adjectif', label: t.tags.adjective },
-    { id: 'adverbe', label: t.tags.adverb },
-    { id: 'expression', label: t.tags.expression },
-  ]
 
   const actions = (
     <div className="wp-actions">
@@ -1926,69 +1968,65 @@ function CompanionWordPanel({
         </div>
       </div>
 
-      {/* Champ 3 : Catégorie grammaticale (Part of speech) */}
+      {/* Champ 3 : Mot de référence avec icône reverse */}
       <div className="wp-field">
-        <span>{t.tagLabel} / Catégorie</span>
-        <div className="wp-pos-picker">
-          {posChoices.map((pos) => (
-            <button
-              key={pos.id}
-              type="button"
-              className={`wp-pos-pill-btn ${partOfSpeech === pos.id || partOfSpeech === pos.label ? 'active' : ''}`}
-              onClick={() => {
-                const nextPos = (partOfSpeech === pos.id || partOfSpeech === pos.label) ? '' : pos.id
-                setPartOfSpeech(nextPos)
-                setSaved(false)
-              }}
-            >
-              {pos.label}
-            </button>
-          ))}
+        <div className="wp-field-header-row">
+          <span>{t.referenceWordLabel}</span>
+          <button
+            type="button"
+            className={`wp-reverse-btn ${isReverse ? 'active' : ''}`}
+            title={t.setAsReferenceTooltip}
+            onClick={() => { setIsReverse((prev) => !prev); setSaved(false) }}
+          >
+            <ArrowLeftRight size={12} />
+          </button>
         </div>
-      </div>
 
-      {/* Champ 4 : Mot de référence */}
-      <div className="wp-field">
-        <span>{t.referenceWordLabel}</span>
-        {refWord && !refTyping ? (
-          <span className="wp-tag">
-            {refWord}
-            <button aria-label="Supprimer" onClick={() => { setRefWord(''); setRefTyping(true); setSaved(false) }}>
-              <X size={12} />
-            </button>
-          </span>
+        {isReverse ? (
+          <div className="wp-reverse-hint">
+            <strong>{newWord.trim() || t.wordLabel}</strong> deviendra le mot de référence, et <strong>{referenceWord}</strong> deviendra son mot lié ({relationType === 'grammatical_form' ? t.relationGrammaticalForm.toLowerCase() : t.relationDerivative.toLowerCase()}).
+          </div>
         ) : (
-          <>
-            <input
-              value={refWord}
-              placeholder={t.referenceWordLabel}
-              onChange={(e) => { setRefWord(e.target.value); setRefTyping(true); setSaved(false) }}
-              onFocus={() => setRefTyping(true)}
-              onBlur={() => { if (refWord.trim()) setRefWord(refWord.trim()); setRefTyping(false) }}
-              onKeyDown={(e) => { if (e.key === 'Enter') { setRefWord(refWord.trim()); setRefTyping(false) } }}
-            />
-            {suggestions.length > 0 && (
-              <div className="wp-suggest">
-                {suggestions.map((item) => (
-                  <button
-                    key={item}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setRefWord(item)
-                      setRefTyping(false)
-                      setSaved(false)
-                    }}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
+          refWord && !refTyping ? (
+            <span className="wp-tag">
+              {refWord}
+              <button aria-label="Supprimer" onClick={() => { setRefWord(''); setRefTyping(true); setSaved(false) }}>
+                <X size={12} />
+              </button>
+            </span>
+          ) : (
+            <>
+              <input
+                value={refWord}
+                placeholder={t.referenceWordLabel}
+                onChange={(e) => { setRefWord(e.target.value); setRefTyping(true); setSaved(false) }}
+                onFocus={() => setRefTyping(true)}
+                onBlur={() => { if (refWord.trim()) setRefWord(refWord.trim()); setRefTyping(false) }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { setRefWord(refWord.trim()); setRefTyping(false) } }}
+              />
+              {suggestions.length > 0 && (
+                <div className="wp-suggest">
+                  {suggestions.map((item) => (
+                    <button
+                      key={item}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        setRefWord(item)
+                        setRefTyping(false)
+                        setSaved(false)
+                      }}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )
         )}
       </div>
 
-      {/* Champ 5 : Traduction */}
+      {/* Champ 4 : Traduction */}
       <div className="wp-field">
         <RichInputField
           value={translation}
@@ -1999,7 +2037,7 @@ function CompanionWordPanel({
         />
       </div>
 
-      {/* Champ 6 : Prononciation */}
+      {/* Champ 5 : Prononciation */}
       <div className="wp-field">
         <RichInputField
           value={pronunciation}
@@ -2009,12 +2047,12 @@ function CompanionWordPanel({
         />
       </div>
 
-      {/* Champ 7 : Tags */}
+      {/* Champ 6 : Tags */}
       <div className="wp-field">
         <TagInput allTags={allTags} existingTags={tags} onAdd={addTag} onRemove={removeTag} label={t.tagLabel} />
       </div>
 
-      {/* Champ 8 : Niveau de connaissance */}
+      {/* Champ 7 : Niveau de connaissance */}
       <div className="wp-field">
         <div className="wp-knowledge">
           {[1, 2, 3, 4, 5].map((n) => (

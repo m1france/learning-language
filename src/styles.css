@@ -8292,9 +8292,7 @@ h2 {
 
 /* --- Accordéon Mots Liés & Famille Lexicale --- */
 .wp-accordion {
-  margin-top: 6px;
-  border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
-  padding-top: 10px;
+  margin-top: 2px;
 }
 
 .wp-accordion-header {
@@ -8325,28 +8323,15 @@ h2 {
 
 .wp-accordion-title {
   font-family: 'DM Mono', monospace;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .6px;
-  text-transform: uppercase;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-.wp-accordion-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--blue, #2563eb) 15%, var(--paper));
-  color: var(--blue, #2563eb);
   font-size: 9px;
-  font-weight: 700;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 400;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .wp-accordion-chevron {
@@ -8432,13 +8417,6 @@ h2 {
   font-style: italic;
 }
 
-.wp-family-empty {
-  font-size: 12px;
-  color: var(--muted);
-  font-style: italic;
-  padding: 4px 0;
-}
-
 .wp-add-linked-btn {
   display: inline-flex;
   align-items: center;
@@ -8493,6 +8471,48 @@ h2 {
   color: var(--ink);
 }
 
+.wp-field-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wp-reverse-btn {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--muted);
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s ease;
+}
+
+.wp-reverse-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.wp-reverse-btn.active {
+  background: var(--ink);
+  color: var(--white);
+  border-color: var(--ink);
+}
+
+.wp-reverse-hint {
+  font-size: 11px;
+  color: var(--blue, #2563eb);
+  background: color-mix(in srgb, var(--blue, #2563eb) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--blue, #2563eb) 25%, transparent);
+  border-radius: 6px;
+  padding: 5px 8px;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
 .wp-relation-pills {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -8522,34 +8542,6 @@ h2 {
   color: var(--ink);
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.wp-pos-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.wp-pos-pill-btn {
-  border: 1px solid var(--line);
-  background: var(--paper);
-  color: var(--muted);
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all .15s ease;
-}
-
-.wp-pos-pill-btn:hover {
-  border-color: var(--ink);
-  color: var(--ink);
-}
-
-.wp-pos-pill-btn.active {
-  background: var(--ink);
-  color: var(--white);
-  border-color: var(--ink);
 }
 
 .word-panel-wrapper.docked {
