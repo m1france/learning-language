@@ -293,17 +293,36 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   }
 
   useEffect(() => {
-    const closeMenu = () => {
+    const handleGlobalPointerDown = (e: Event) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('.mark-context-menu, .page-context-menu, .word-context-menu, .resource-context-menu')) {
+        return
+      }
       setContextMenu(null)
       setPageContextMenu(null)
       setResourceMenuTarget(null)
       setWordContextMenu(null)
     }
-    window.addEventListener('click', closeMenu)
-    window.addEventListener('scroll', closeMenu, true)
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContextMenu(null)
+        setPageContextMenu(null)
+        setResourceMenuTarget(null)
+        setWordContextMenu(null)
+      }
+    }
+
+    window.addEventListener('mousedown', handleGlobalPointerDown, true)
+    window.addEventListener('touchstart', handleGlobalPointerDown, true)
+    window.addEventListener('scroll', handleGlobalPointerDown, true)
+    window.addEventListener('keydown', handleKeyDown)
+
     return () => {
-      window.removeEventListener('click', closeMenu)
-      window.removeEventListener('scroll', closeMenu, true)
+      window.removeEventListener('mousedown', handleGlobalPointerDown, true)
+      window.removeEventListener('touchstart', handleGlobalPointerDown, true)
+      window.removeEventListener('scroll', handleGlobalPointerDown, true)
+      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
 
@@ -534,7 +553,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
   const handlePageContextMenu = (event: React.MouseEvent) => {
     const target = event.target as HTMLElement
-    if (target.closest('.mark-type, .mark-type-add, .mark-context-menu, .mark-inline-input, input, textarea, .word, .paragraph-edit, .chapter-title-input, .cover')) {
+    if (target.closest('.mark-type, .mark-type-add, .mark-context-menu, .mark-inline-input, input, textarea, .word, .paragraph-edit, .chapter-title-input, .cover, .word-panel, .word-panel-wrapper, .wp-companion-panel, .wiki-panel, .focus-side, .modal-backdrop, .modal-card, [contenteditable="true"]')) {
       return
     }
     event.preventDefault()
@@ -1089,7 +1108,7 @@ function WikiPanel({ word, language, initialTab, onClose }: {
   }, [tab, word, language])
 
   return (
-    <div className="wiki-panel" onClick={(event) => event.stopPropagation()}>
+    <div className="wiki-panel" onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.stopPropagation()}>
       <div className="wiki-head">
         <div className="wiki-tabs" role="tablist">
           {tabOrder.map((id) => (
@@ -1771,8 +1790,8 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
   </>
 
   if (docked) return (
-    <div className="word-panel-wrapper docked">
-      <div className="word-panel docked" onClick={(event) => event.stopPropagation()}>
+    <div className="word-panel-wrapper docked" onContextMenu={(event) => event.stopPropagation()}>
+      <div className="word-panel docked" onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.stopPropagation()}>
         {actions}
         {viewing ? view : form}
       </div>
@@ -1812,7 +1831,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
 
   return (
     <>
-      <aside className="word-panel floating" style={{ left, top, maxHeight: panelMaxHeight }} onClick={(event) => event.stopPropagation()}>
+      <aside className="word-panel floating" style={{ left, top, maxHeight: panelMaxHeight }} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.stopPropagation()}>
         {actions}
         {viewing ? view : form}
       </aside>
@@ -2097,7 +2116,7 @@ function CompanionWordPanel({
 
   if (docked) {
     return (
-      <div className="word-panel docked wp-companion-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="word-panel docked wp-companion-panel" onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
         {actions}
         {content}
       </div>
@@ -2117,6 +2136,7 @@ function CompanionWordPanel({
       className="word-panel floating wp-companion-panel"
       style={{ left: companionLeft, top: companionTop, maxHeight: panelMaxHeight }}
       onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.stopPropagation()}
     >
       {actions}
       {content}
