@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import type { AppState, GrammarMarkStyle, GrammarMarkType, Language, Resource, UiLanguage, WordMark } from '../domain'
+import type { AppState, GrammarMarkStyle, GrammarMarkType, Language, LearnedWord, Resource, UiLanguage, WordMark, WordRelationType } from '../domain'
 import { normalizeWord } from '../domain'
-import { DEFAULT_MARKINGS, knownParents, knownTags } from '../store'
+import { DEFAULT_MARKINGS, knownParents, knownTags, resolveWordFamily, type WordFamily } from '../store'
 import { copy, readerCopy } from '../i18n'
 import { loadOriginals, modifiedCharIndices } from './LearningFocus'
 import { isGenericImportedAuthor } from '../App'
@@ -11,6 +11,8 @@ import {
   GraduationCap,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Pencil,
   Trash2,
   RotateCcw,
@@ -53,9 +55,11 @@ type WordDetails = {
   raw: string
   sentence: string
   language: Language
-  sourceResourceId: string
+  sourceResourceId?: string
   translation: string
   parent: string
+  relationType?: WordRelationType
+  partOfSpeech?: string
   pronunciation: string
   knowledge?: number
   tags?: string[]
@@ -1407,7 +1411,19 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
   language: Language
   docked?: boolean
   onClose: () => void
-  onSave: (details: { raw: string; translation: string; parent: string; pronunciation: string; knowledge?: number; tags?: string[] }) => void
+  onSave: (details: {
+    raw: string
+    sentence?: string
+    language?: Language
+    sourceResourceId?: string
+    translation: string
+    parent: string
+    relationType?: WordRelationType
+    partOfSpeech?: string
+    pronunciation: string
+    knowledge?: number
+    tags?: string[]
+  }) => void
   onDeleteWord?: (raw: string) => void
   onOpenWord: (raw: string) => void
 }) {
@@ -1432,6 +1448,8 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
   const [saved, setSaved] = useState(false)
   const [parentTyping, setParentTyping] = useState(false)
   const [viewing, setViewing] = useState(() => Boolean(findExisting()))
+  const [accordionOpen, setAccordionOpen] = useState(false)
+  const [creatingLinked, setCreatingLinked] = useState(false)
 
   // Reset the form whenever another word is clicked.
   useEffect(() => {
@@ -1447,8 +1465,11 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     setSaved(false)
     setParentTyping(false)
     setViewing(Boolean(existing))
+    setCreatingLinked(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected.raw])
+
+  const family = useMemo(() => resolveWordFamily(state.words, word, language), [state.words, word, language])
 
   const parents = knownParents(state, language)
   const query = parent.trim().toLowerCase()
@@ -1467,7 +1488,17 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
 
   const submit = () => {
     if (!word.trim()) return
-    onSave({ raw: word.trim(), translation: translation.trim(), parent: parent.trim(), pronunciation: pronunciation.trim(), knowledge, tags })
+    const existingWord = findExisting()
+    onSave({
+      raw: word.trim(),
+      translation: translation.trim(),
+      parent: parent.trim(),
+      relationType: existingWord?.relationType,
+      partOfSpeech: existingWord?.partOfSpeech,
+      pronunciation: pronunciation.trim(),
+      knowledge,
+      tags,
+    })
     setSaved(true)
   }
 
@@ -1484,10 +1515,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     <button className="wp-icon" aria-label="Fermer" onClick={onClose}><X size={15} /></button>
   </div>
 
-  const parentEntry = parent ? state.words.find((item) => item.normalized === normalizeWord(parent) && item.language === language) : undefined
-  const linked = state.words.filter((item) => item.language === language && item.parent
-    && normalizeWord(item.parent) === normalizeWord(word) && item.normalized !== normalizeWord(word))
-
   const view = <>
     <div className="wp-view-head">
       <strong className="wp-view-word">{word}</strong>
@@ -1499,19 +1526,137 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
         : <span className="wp-dots" title={`${knowledge} / 5`}>{[1, 2, 3, 4, 5].map((n) => <i key={n}
           style={n <= knowledge ? { background: KNOWLEDGE_COLORS[knowledge - 1] } : undefined} />)}</span>}
     </div>}
-    {parent && <div className="wp-view-field"><span>{t.parentLabel}</span>
-      <div className="wp-parent-line">
-        <button className="wp-parent-tag" title={t.openLinkedWord} onClick={() => onOpenWord(parent)}>{parent}</button>
-        {(parentEntry?.tags ?? []).map((item) => <span key={item} className="wp-pos">{item}</span>)}
-        {parentEntry?.translation && <em className="wp-parent-translation">{renderSimpleMarkdown(parentEntry.translation)}</em>}
-      </div>
-    </div>}
     {pronunciation && <div className="wp-view-field"><span>{t.pronunciationLabel}</span><p className="wp-view-text">{renderSimpleMarkdown(pronunciation)}</p></div>}
     {translation && <div className="wp-view-field"><span>{t.translationLabel}</span><p className="wp-view-text">{renderSimpleMarkdown(translation)}</p></div>}
-    {linked.length > 0 && <div className="wp-view-field"><span>{t.linkedWordsLabel}</span>
-      <div className="wp-linked">{linked.map((item) => <button key={item.id} className="wp-parent-tag" title={t.openLinkedWord}
-        onClick={() => onOpenWord(item.word)}>{item.word}</button>)}</div>
-    </div>}
+
+    {/* Section Accordéon Mots Liés */}
+    <div className="wp-accordion">
+      <button
+        type="button"
+        className={`wp-accordion-header ${accordionOpen ? 'open' : ''}`}
+        onClick={() => setAccordionOpen((prev) => !prev)}
+      >
+        <span className="wp-accordion-line-left" />
+        <span className="wp-accordion-title">
+          {family.totalLinkedCount <= 1 ? t.linkedWordsSingular : t.linkedWordsPlural}
+          {family.totalLinkedCount > 0 && <span className="wp-accordion-badge">{family.totalLinkedCount}</span>}
+        </span>
+        <span className="wp-accordion-line-right" />
+        <span className={`wp-accordion-chevron ${accordionOpen ? 'open' : ''}`}>
+          <ChevronDown size={14} />
+        </span>
+      </button>
+
+      {accordionOpen && (
+        <div className="wp-accordion-body">
+          {/* 1. Mot de référence (si le mot actuel n'est pas la racine) */}
+          {family.rootWord && !family.isRoot && (
+            <div className="wp-family-section">
+              <div className="wp-family-section-title">{t.referenceWordLabel}</div>
+              <div className="wp-linked-row">
+                <button
+                  type="button"
+                  className="wp-parent-tag root-tag"
+                  title={t.openLinkedWord}
+                  onClick={() => onOpenWord(family.rootWord!.word)}
+                >
+                  {family.rootWord.word}
+                </button>
+                <div className="wp-linked-details">
+                  {family.rootWord.partOfSpeech && (
+                    <span className="wp-pos wp-pos-pill">{family.rootWord.partOfSpeech}</span>
+                  )}
+                  {(('tags' in family.rootWord && family.rootWord.tags) ? family.rootWord.tags : []).map((tg) => (
+                    <span key={tg} className="wp-pos">{tg}</span>
+                  ))}
+                  {family.rootWord.translation && (
+                    <em className="wp-linked-translation">{renderSimpleMarkdown(family.rootWord.translation)}</em>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Formes grammaticales */}
+          {family.grammaticalForms.length > 0 && (
+            <div className="wp-family-section">
+              <div className="wp-family-section-title">{t.grammaticalFormsLabel}</div>
+              <div className="wp-family-list">
+                {family.grammaticalForms.map((item) => (
+                  <div key={item.id} className="wp-linked-row">
+                    <button
+                      type="button"
+                      className="wp-parent-tag"
+                      title={t.openLinkedWord}
+                      onClick={() => onOpenWord(item.word)}
+                    >
+                      {item.word}
+                    </button>
+                    <div className="wp-linked-details">
+                      {item.partOfSpeech && (
+                        <span className="wp-pos wp-pos-pill">{item.partOfSpeech}</span>
+                      )}
+                      {(item.tags ?? []).map((tg) => (
+                        <span key={tg} className="wp-pos">{tg}</span>
+                      ))}
+                      {item.translation && (
+                        <em className="wp-linked-translation">{renderSimpleMarkdown(item.translation)}</em>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Mots dérivés */}
+          {family.derivatives.length > 0 && (
+            <div className="wp-family-section">
+              <div className="wp-family-section-title">{t.derivedWordsLabel}</div>
+              <div className="wp-family-list">
+                {family.derivatives.map((item) => (
+                  <div key={item.id} className="wp-linked-row">
+                    <button
+                      type="button"
+                      className="wp-parent-tag"
+                      title={t.openLinkedWord}
+                      onClick={() => onOpenWord(item.word)}
+                    >
+                      {item.word}
+                    </button>
+                    <div className="wp-linked-details">
+                      {item.partOfSpeech && (
+                        <span className="wp-pos wp-pos-pill">{item.partOfSpeech}</span>
+                      )}
+                      {(item.tags ?? []).map((tg) => (
+                        <span key={tg} className="wp-pos">{tg}</span>
+                      ))}
+                      {item.translation && (
+                        <em className="wp-linked-translation">{renderSimpleMarkdown(item.translation)}</em>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {family.totalLinkedCount === 0 && (
+            <div className="wp-family-empty">{t.noLinkedWords}</div>
+          )}
+
+          {/* Bouton discret Ajouter un mot lié */}
+          <button
+            type="button"
+            className="wp-add-linked-btn"
+            onClick={() => setCreatingLinked(true)}
+          >
+            <Plus size={13} />
+            <span>{t.addLinkedWord}</span>
+          </button>
+        </div>
+      )}
+    </div>
   </>
 
   const form = <>
@@ -1527,10 +1672,11 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     </div>
 
     <div className="wp-field">
+      <span>{t.referenceWordLabel}</span>
       {parent && !parentTyping
         ? <span className="wp-tag">{parent}<button aria-label="Supprimer" onClick={() => { setParent(''); setParentTyping(true); setSaved(false) }}><X size={12} /></button></span>
         : <>
-          <input value={parent} placeholder={t.parentLabel} autoFocus={parentTyping && !parent}
+          <input value={parent} placeholder={t.referenceWordLabel} autoFocus={parentTyping && !parent}
             onChange={(event) => { setParent(event.target.value); setParentTyping(true); setSaved(false) }}
             onFocus={() => setParentTyping(true)}
             onBlur={() => { if (parent.trim()) setParent(parent.trim()); setParentTyping(false) }}
@@ -1579,21 +1725,365 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     </div>
   </>
 
-  if (docked) return <div className="word-panel docked" onClick={(event) => event.stopPropagation()}>
-    {actions}
-    {viewing ? view : form}
-  </div>
+  if (docked) return (
+    <div className="word-panel-wrapper docked">
+      <div className="word-panel docked" onClick={(event) => event.stopPropagation()}>
+        {actions}
+        {viewing ? view : form}
+      </div>
+      {creatingLinked && (
+        <CompanionWordPanel
+          ui={ui}
+          language={language}
+          state={state}
+          referenceWord={family.rootWord?.word ?? word}
+          docked
+          onClose={() => setCreatingLinked(false)}
+          onSave={(details) => {
+            onSave(details)
+            setCreatingLinked(false)
+            setAccordionOpen(true)
+          }}
+        />
+      )}
+    </div>
+  )
 
   const panelWidth = 320
-  const panelMaxHeight = Math.min(520, window.innerHeight - 24)
+  const panelMaxHeight = Math.min(540, window.innerHeight - 24)
   const left = Math.max(12, Math.min((selected.x ?? 40) - 20, window.innerWidth - panelWidth - 12))
   let top = selected.y ?? 80
   if (top + panelMaxHeight > window.innerHeight - 12) top = Math.max(12, window.innerHeight - panelMaxHeight - 12)
 
-  return <aside className="word-panel floating" style={{ left, top, maxHeight: panelMaxHeight }} onClick={(event) => event.stopPropagation()}>
-    {actions}
-    {viewing ? view : form}
-  </aside>
+  const gap = 12
+  let companionLeft = left + panelWidth + gap
+  if (companionLeft + panelWidth > window.innerWidth - 12) {
+    companionLeft = left - panelWidth - gap
+  }
+  if (companionLeft < 12) {
+    companionLeft = Math.max(12, Math.min(window.innerWidth - panelWidth - 12, left + 40))
+  }
+
+  return (
+    <>
+      <aside className="word-panel floating" style={{ left, top, maxHeight: panelMaxHeight }} onClick={(event) => event.stopPropagation()}>
+        {actions}
+        {viewing ? view : form}
+      </aside>
+      {creatingLinked && (
+        <CompanionWordPanel
+          ui={ui}
+          language={language}
+          state={state}
+          referenceWord={family.rootWord?.word ?? word}
+          left={companionLeft}
+          top={top}
+          onClose={() => setCreatingLinked(false)}
+          onSave={(details) => {
+            onSave(details)
+            setCreatingLinked(false)
+            setAccordionOpen(true)
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+/**
+ * Secondary companion panel to create a linked word side-by-side with the active word.
+ */
+function CompanionWordPanel({
+  ui,
+  language,
+  state,
+  referenceWord,
+  docked,
+  left,
+  top,
+  onClose,
+  onSave,
+}: {
+  ui: UiLanguage
+  language: Language
+  state: AppState
+  referenceWord: string
+  docked?: boolean
+  left?: number
+  top?: number
+  onClose: () => void
+  onSave: (details: WordDetails) => void
+}) {
+  const t = readerCopy[ui]
+  const [newWord, setNewWord] = useState('')
+  const [relationType, setRelationType] = useState<WordRelationType>('derivative')
+  const [partOfSpeech, setPartOfSpeech] = useState<string>('')
+  const [refWord, setRefWord] = useState(referenceWord)
+  const [refTyping, setRefTyping] = useState(false)
+  const [pronunciation, setPronunciation] = useState('')
+  const [translation, setTranslation] = useState('')
+  const [tags, setTags] = useState<string[]>([])
+  const [knowledge, setKnowledge] = useState<number | undefined>(1)
+  const [saved, setSaved] = useState(false)
+
+  const allTags = knownTags(state, language)
+  const parents = knownParents(state, language)
+
+  const query = refWord.trim().toLowerCase()
+  const suggestions = refTyping && query
+    ? parents.filter((item) => item.toLowerCase().includes(query) && item !== refWord.trim()).slice(0, 6)
+    : []
+
+  const addTag = (value: string) => {
+    const cleaned = value.trim().replace(/,+$/, '')
+    if (cleaned && !tags.includes(cleaned)) {
+      setTags([...tags, cleaned])
+      setSaved(false)
+    }
+  }
+
+  const removeTag = (value: string) => {
+    setTags(tags.filter((item) => item !== value))
+    setSaved(false)
+  }
+
+  const submit = () => {
+    if (!newWord.trim()) return
+    const finalTags = [...tags]
+    if (partOfSpeech && !finalTags.includes(partOfSpeech)) {
+      finalTags.push(partOfSpeech)
+    }
+    onSave({
+      raw: newWord.trim(),
+      sentence: '',
+      language,
+      sourceResourceId: '',
+      translation: translation.trim(),
+      parent: refWord.trim(),
+      relationType,
+      partOfSpeech: partOfSpeech.trim(),
+      pronunciation: pronunciation.trim(),
+      knowledge,
+      tags: finalTags,
+    })
+    setSaved(true)
+  }
+
+  const posChoices = [
+    { id: 'verbe', label: t.tags.verb },
+    { id: 'nom', label: t.tags.noun },
+    { id: 'adjectif', label: t.tags.adjective },
+    { id: 'adverbe', label: t.tags.adverb },
+    { id: 'expression', label: t.tags.expression },
+  ]
+
+  const actions = (
+    <div className="wp-actions">
+      <button className="wp-icon" aria-label="Fermer" onClick={onClose}><X size={15} /></button>
+    </div>
+  )
+
+  const content = (
+    <>
+      <div className="wp-companion-header">
+        <strong className="wp-companion-title">{t.newLinkedWordTitle}</strong>
+      </div>
+
+      {/* Champ 1 : Mot saisissable en premier (autoFocus) */}
+      <div className="wp-field">
+        <span>{t.wordLabel}</span>
+        <input
+          value={newWord}
+          autoFocus
+          placeholder={t.wordLabel}
+          onChange={(e) => { setNewWord(e.target.value); setSaved(false) }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && newWord.trim()) {
+              e.preventDefault()
+            }
+          }}
+        />
+      </div>
+
+      {/* Champ 2 : Type de relation (Forme grammaticale vs Mot dérivé) */}
+      <div className="wp-field">
+        <span>{t.relationTypeLabel}</span>
+        <div className="wp-relation-pills">
+          <button
+            type="button"
+            className={`wp-relation-pill ${relationType === 'grammatical_form' ? 'active' : ''}`}
+            onClick={() => { setRelationType('grammatical_form'); setSaved(false) }}
+          >
+            {t.relationGrammaticalForm}
+          </button>
+          <button
+            type="button"
+            className={`wp-relation-pill ${relationType === 'derivative' ? 'active' : ''}`}
+            onClick={() => { setRelationType('derivative'); setSaved(false) }}
+          >
+            {t.relationDerivative}
+          </button>
+        </div>
+      </div>
+
+      {/* Champ 3 : Catégorie grammaticale (Part of speech) */}
+      <div className="wp-field">
+        <span>{t.tagLabel} / Catégorie</span>
+        <div className="wp-pos-picker">
+          {posChoices.map((pos) => (
+            <button
+              key={pos.id}
+              type="button"
+              className={`wp-pos-pill-btn ${partOfSpeech === pos.id || partOfSpeech === pos.label ? 'active' : ''}`}
+              onClick={() => {
+                const nextPos = (partOfSpeech === pos.id || partOfSpeech === pos.label) ? '' : pos.id
+                setPartOfSpeech(nextPos)
+                setSaved(false)
+              }}
+            >
+              {pos.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Champ 4 : Mot de référence */}
+      <div className="wp-field">
+        <span>{t.referenceWordLabel}</span>
+        {refWord && !refTyping ? (
+          <span className="wp-tag">
+            {refWord}
+            <button aria-label="Supprimer" onClick={() => { setRefWord(''); setRefTyping(true); setSaved(false) }}>
+              <X size={12} />
+            </button>
+          </span>
+        ) : (
+          <>
+            <input
+              value={refWord}
+              placeholder={t.referenceWordLabel}
+              onChange={(e) => { setRefWord(e.target.value); setRefTyping(true); setSaved(false) }}
+              onFocus={() => setRefTyping(true)}
+              onBlur={() => { if (refWord.trim()) setRefWord(refWord.trim()); setRefTyping(false) }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { setRefWord(refWord.trim()); setRefTyping(false) } }}
+            />
+            {suggestions.length > 0 && (
+              <div className="wp-suggest">
+                {suggestions.map((item) => (
+                  <button
+                    key={item}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setRefWord(item)
+                      setRefTyping(false)
+                      setSaved(false)
+                    }}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Champ 5 : Traduction */}
+      <div className="wp-field">
+        <RichInputField
+          value={translation}
+          placeholder={t.translationLabel}
+          multiline
+          className="wp-rich-textarea"
+          onChange={(val) => { setTranslation(val); setSaved(false) }}
+        />
+      </div>
+
+      {/* Champ 6 : Prononciation */}
+      <div className="wp-field">
+        <RichInputField
+          value={pronunciation}
+          placeholder={t.pronunciationLabel}
+          className="wp-rich-input"
+          onChange={(val) => { setPronunciation(val); setSaved(false) }}
+        />
+      </div>
+
+      {/* Champ 7 : Tags */}
+      <div className="wp-field">
+        <TagInput allTags={allTags} existingTags={tags} onAdd={addTag} onRemove={removeTag} label={t.tagLabel} />
+      </div>
+
+      {/* Champ 8 : Niveau de connaissance */}
+      <div className="wp-field">
+        <div className="wp-knowledge">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={knowledge === n ? 'kl-btn active' : 'kl-btn'}
+              style={{ ['--kl' as string]: KNOWLEDGE_COLORS[n - 1] }}
+              onClick={() => { setKnowledge(knowledge === n ? undefined : n); setSaved(false) }}
+            >
+              {n}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={knowledge === 6 ? 'kl-btn known active' : 'kl-btn known'}
+            title={t.knownByHeart}
+            aria-label={t.knownByHeart}
+            onClick={() => { setKnowledge(knowledge === 6 ? undefined : 6); setSaved(false) }}
+          >
+            <Check size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* Bouton d'enregistrement */}
+      <div className="wp-footer">
+        <button
+          type="button"
+          className={`wp-save-btn-full ${saved ? 'saved-deck' : 'primary'}`}
+          disabled={!newWord.trim()}
+          onClick={submit}
+        >
+          <span className="wp-save-btn-label">
+            {saved ? <><Check size={14} /> {t.savedWord.replace('✓', '').trim()}</> : <><Plus size={14} /> {t.saveWord}</>}
+          </span>
+          {newWord && <em className="wp-save-btn-word">{newWord}</em>}
+        </button>
+      </div>
+    </>
+  )
+
+  if (docked) {
+    return (
+      <div className="word-panel docked wp-companion-panel" onClick={(e) => e.stopPropagation()}>
+        {actions}
+        {content}
+      </div>
+    )
+  }
+
+  const panelWidth = 320
+  const panelMaxHeight = Math.min(540, window.innerHeight - 24)
+  const companionLeft = left !== undefined ? left : Math.max(12, window.innerWidth - panelWidth - 24)
+  let companionTop = top !== undefined ? top : 80
+  if (companionTop + panelMaxHeight > window.innerHeight - 12) {
+    companionTop = Math.max(12, window.innerHeight - panelMaxHeight - 12)
+  }
+
+  return (
+    <aside
+      className="word-panel floating wp-companion-panel"
+      style={{ left: companionLeft, top: companionTop, maxHeight: panelMaxHeight }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {actions}
+      {content}
+    </aside>
+  )
 }
 
 /** Input de tag avec autocomplétion inline (style Google) et liste des tags en texte brut à droite. */

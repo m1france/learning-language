@@ -45,6 +45,8 @@ export type DictionarySense = {
   example?: string
 }
 
+export type WordRelationType = 'grammatical_form' | 'derivative'
+
 export type LearnedWord = {
   id: string
   word: string
@@ -56,6 +58,8 @@ export type LearnedWord = {
   translation?: string
   /** Lemma / parent word chosen by the user (e.g. "avoir" for "ai"). */
   parent?: string
+  /** Type of relationship to the canonical / parent word: grammatical form (inflection) or derivative. */
+  relationType?: WordRelationType
   partOfSpeech: string
   /** Niveau de connaissance : 1 (découvert) à 5 (presque acquis), 6 = connu par cœur (plus de surlignage). */
   knowledge?: number

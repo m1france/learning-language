@@ -1,4 +1,4 @@
-import { type ApiSettings, type AppState, type Language, type MarkingDefinition, type Resource, type UserSettings, type WordMark, type WritingEntry, id, normalizeWord, todayKey } from './domain'
+import { type ApiSettings, type AppState, type Language, type LearnedWord, type MarkingDefinition, type Resource, type UserSettings, type WordMark, type WordRelationType, type WritingEntry, id, normalizeWord, todayKey } from './domain'
 
 const stateKey = 'vivre-la-langue:state:v2'
 
@@ -121,6 +121,138 @@ export const saveState = (state: AppState) => localStorage.setItem(stateKey, JSO
 
 export const resetState = () => localStorage.removeItem(stateKey)
 
+export type WordFamily = {
+  rootWord: LearnedWord | { word: string; normalized: string; isVirtual: boolean; translation?: string; partOfSpeech?: string; tags?: string[] } | null
+  isRoot: boolean
+  grammaticalForms: LearnedWord[]
+  derivatives: LearnedWord[]
+  totalLinkedCount: number
+}
+
+/** Part of speech ranking for derived words: Verb -> Noun -> Adjective -> Adverb -> Expression -> Other */
+export const posRank = (posOrTag: string): number => {
+  const norm = posOrTag.toLowerCase().trim()
+  if (/^(verb|verbe|v)$/i.test(norm) || norm.includes('verb')) return 1
+  if (/^(noun|nom|n|substantif)$/i.test(norm) || norm.includes('nom') || norm.includes('noun')) return 2
+  if (/^(adjective|adjectif|adj|a)$/i.test(norm) || norm.includes('adj')) return 3
+  if (/^(adverb|adverbe|adv)$/i.test(norm) || norm.includes('adv')) return 4
+  if (/^(expression|phrase|idiom|locution)$/i.test(norm) || norm.includes('expression')) return 5
+  return 6
+}
+
+export const getWordPosRank = (word: LearnedWord): number => {
+  if (word.partOfSpeech) return posRank(word.partOfSpeech)
+  if (word.tags && word.tags.length > 0) {
+    const minRank = Math.min(...word.tags.map(posRank))
+    if (minRank < 6) return minRank
+  }
+  return 6
+}
+
+export const resolveWordFamily = (
+  words: LearnedWord[],
+  currentRawOrNormalized: string,
+  language: Language
+): WordFamily => {
+  const normCurrent = normalizeWord(currentRawOrNormalized)
+  const currentWord = words.find((w) => w.normalized === normCurrent && w.language === language)
+
+  // 1. Find the canonical root of the family
+  let rootNormalized = normCurrent
+  let rootWordObj: LearnedWord | undefined = currentWord
+
+  // Trace up the parent chain (with visited set to prevent loops)
+  const visited = new Set<string>()
+  let walker = currentWord
+  while (walker && walker.parent) {
+    const parentNorm = normalizeWord(walker.parent)
+    if (!parentNorm || visited.has(parentNorm) || parentNorm === walker.normalized) break
+    visited.add(parentNorm)
+    const parentObj = words.find((w) => w.normalized === parentNorm && w.language === language)
+    rootNormalized = parentNorm
+    if (parentObj) {
+      rootWordObj = parentObj
+      walker = parentObj
+    } else {
+      rootWordObj = undefined
+      break
+    }
+  }
+
+  const isCurrentRoot = normCurrent === rootNormalized
+  let rootWord: WordFamily['rootWord'] = null
+
+  if (rootWordObj && rootWordObj.normalized === rootNormalized) {
+    rootWord = rootWordObj
+  } else if (currentWord?.parent) {
+    rootWord = {
+      word: currentWord.parent,
+      normalized: rootNormalized,
+      isVirtual: true,
+    }
+  } else if (!isCurrentRoot) {
+    rootWord = {
+      word: rootNormalized,
+      normalized: rootNormalized,
+      isVirtual: true,
+    }
+  }
+
+  // 2. Find all family members in the same language
+  const familyMembers = words.filter((w) => {
+    if (w.language !== language) return false
+    if (w.normalized === normCurrent) return false // exclude self from lists
+    if (w.normalized === rootNormalized) return true // is root
+    if (w.parent && normalizeWord(w.parent) === rootNormalized) return true
+    if (currentWord?.parent && w.parent && normalizeWord(w.parent) === normalizeWord(currentWord.parent)) return true
+    return false
+  })
+
+  // Deduplicate by normalized
+  const memberMap = new Map<string, LearnedWord>()
+  familyMembers.forEach((m) => {
+    if (m.normalized !== normCurrent) {
+      memberMap.set(m.normalized, m)
+    }
+  })
+
+  const grammaticalForms: LearnedWord[] = []
+  const derivatives: LearnedWord[] = []
+
+  memberMap.forEach((member) => {
+    // If it's the root word and we are viewing a child, it's displayed in the "Mot de référence" section
+    if (member.normalized === rootNormalized) {
+      return
+    }
+    if (member.relationType === 'grammatical_form') {
+      grammaticalForms.push(member)
+    } else {
+      derivatives.push(member)
+    }
+  })
+
+  // Sort grammatical forms alphabetically
+  grammaticalForms.sort((a, b) => a.word.localeCompare(b.word))
+
+  // Sort derivatives by POS rank first, then alphabetically
+  derivatives.sort((a, b) => {
+    const rankA = getWordPosRank(a)
+    const rankB = getWordPosRank(b)
+    if (rankA !== rankB) return rankA - rankB
+    return a.word.localeCompare(b.word)
+  })
+
+  const totalLinkedCount = (rootWord && !isCurrentRoot ? 1 : 0) + grammaticalForms.length + derivatives.length
+
+  return {
+    rootWord: isCurrentRoot ? null : rootWord,
+    isRoot: isCurrentRoot,
+    grammaticalForms,
+    derivatives,
+    totalLinkedCount,
+  }
+}
+
 /** Save or update a word the user annotated while reading (own translation, parent, pronunciation). */
 export const upsertWordDetails = (state: AppState, args: {
   raw: string
@@ -132,6 +264,8 @@ export const upsertWordDetails = (state: AppState, args: {
   pronunciation: string
   knowledge?: number
   tags?: string[]
+  relationType?: WordRelationType
+  partOfSpeech?: string
 }): AppState => {
   const cleaned = args.raw.replace(/^[.,!?;:()"“”\s]+|[.,!?;:()"“”\s]+$/g, '').replace(/\s+/g, ' ').trim()
   if (!cleaned) return state
@@ -146,9 +280,11 @@ export const upsertWordDetails = (state: AppState, args: {
             word: cleaned,
             translation: args.translation,
             parent: args.parent || undefined,
+            relationType: args.relationType ?? word.relationType,
+            partOfSpeech: args.partOfSpeech ?? word.partOfSpeech ?? '',
             phonetic: args.pronunciation || undefined,
             knowledge: args.knowledge,
-            tags: args.tags ?? [],
+            tags: args.tags ?? word.tags ?? [],
             definitions: args.translation ? [{ definition: '', translation: args.translation }] : word.definitions,
           }
         : word),
@@ -165,7 +301,8 @@ export const upsertWordDetails = (state: AppState, args: {
       phonetic: args.pronunciation || undefined,
       translation: args.translation,
       parent: args.parent || undefined,
-      partOfSpeech: '',
+      relationType: args.relationType,
+      partOfSpeech: args.partOfSpeech ?? '',
       knowledge: args.knowledge,
       definitions: args.translation ? [{ definition: '', translation: args.translation }] : [],
       contextSentence: args.sentence,
