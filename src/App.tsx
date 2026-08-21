@@ -70,6 +70,7 @@ export default function App() {
   const [focusId, setFocusId] = useState<string | null>(null)
   const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem('vivre-side-collapsed') === '1')
   const [speakingPrompterText, setSpeakingPrompterText] = useState<string | null>(null)
+  const [isAiTaskRunning, setIsAiTaskRunning] = useState(false)
 
   const toggleSide = () => {
     const next = !sideCollapsed
@@ -93,7 +94,17 @@ export default function App() {
   return (
     <CameraProvider language={state.settings.learningLanguage}>
       <main className={`app-shell ${sideCollapsed ? 'side-collapsed' : ''}`}>
-        <Sidebar page={page} setPage={go} t={t} theme={state.settings.theme} toggleTheme={() => change({ ...state, settings: { ...state.settings, theme: state.settings.theme === 'light' ? 'dark' : 'light' } })} name={state.settings.name} collapsed={sideCollapsed} onToggleCollapse={toggleSide} />
+        <Sidebar
+          page={page}
+          setPage={go}
+          t={t}
+          theme={state.settings.theme}
+          toggleTheme={() => change({ ...state, settings: { ...state.settings, theme: state.settings.theme === 'light' ? 'dark' : 'light' } })}
+          name={state.settings.name}
+          collapsed={sideCollapsed}
+          isAiTaskRunning={isAiTaskRunning}
+          onToggleCollapse={toggleSide}
+        />
         <section className="page-canvas">
           <header className="mobile-header"><Brand /><button className="avatar">{state.settings.name.slice(0, 1).toUpperCase()}</button></header>
           {reader ? (
@@ -127,6 +138,7 @@ export default function App() {
                   api={state.settings.api}
                   customPrompterText={speakingPrompterText}
                   existingTags={Array.from(new Set(state.words.flatMap((w) => w.tags || [])))}
+                  onAiTaskChange={setIsAiTaskRunning}
                   onSaveWord={(args) => change(upsertWordDetails(state, args))}
                 />
               )}
@@ -188,44 +200,92 @@ function Onboarding({ onComplete }: { onComplete: (name: string, uiLanguage: UiL
   </main>
 }
 
-function Sidebar({ page, setPage, t, theme, toggleTheme, name, collapsed, onToggleCollapse }: { page: Page; setPage: (p: Page) => void; t: UI; theme: string; toggleTheme: () => void; name: string; collapsed: boolean; onToggleCollapse: () => void }) {
-  return <aside className="sidebar">
-    <Brand />
-    <nav>{navItems.map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)} key={item.id} title={collapsed ? t[item.label] : undefined}><b>{item.icon}</b><span className="side-label">{t[item.label]}</span></button>)}</nav>
-    <div className="side-bottom">
-      <div className="side-bottom-actions">
-        <button
-          className={`side-action-btn ${page === 'settings' ? 'active' : ''}`}
-          onClick={() => setPage('settings')}
-          title={t.settings}
-          aria-label={t.settings}
-        >
-          <SettingsIcon size={17} />
-        </button>
-        <button
-          className="side-action-btn"
-          onClick={toggleTheme}
-          title={theme === 'light' ? t.darkMode : t.lightMode}
-          aria-label={theme === 'light' ? t.darkMode : t.lightMode}
-        >
-          {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
-        </button>
-        <button
-          className="side-action-btn"
-          onClick={onToggleCollapse}
-          title={collapsed ? t.expandSidebar : t.collapseSidebar}
-          aria-label={collapsed ? t.expandSidebar : t.collapseSidebar}
-        >
-          {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
-        </button>
+function Sidebar({
+  page,
+  setPage,
+  t,
+  theme,
+  toggleTheme,
+  name,
+  collapsed,
+  isAiTaskRunning,
+  onToggleCollapse,
+}: {
+  page: Page
+  setPage: (p: Page) => void
+  t: UI
+  theme: string
+  toggleTheme: () => void
+  name: string
+  collapsed: boolean
+  isAiTaskRunning?: boolean
+  onToggleCollapse: () => void
+}) {
+  return (
+    <aside className="sidebar">
+      <Brand />
+      <nav>
+        {navItems.map((item) => (
+          <button
+            className={page === item.id ? 'active' : ''}
+            onClick={() => setPage(item.id)}
+            key={item.id}
+            title={collapsed ? t[item.label] : undefined}
+          >
+            <b>{item.icon}</b>
+            <span className="side-label">{t[item.label]}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="side-bottom">
+        {isAiTaskRunning && (
+          <div
+            className="sidebar-ai-task-pill"
+            title="L'IA analyse le mot en arrière-plan"
+          >
+            <span className="sidebar-ai-pulse-dot" />
+            <span className="side-label">Analyse IA en cours…</span>
+          </div>
+        )}
+        <div className="side-bottom-actions">
+          <button
+            className={`side-action-btn ${page === 'settings' ? 'active' : ''}`}
+            onClick={() => setPage('settings')}
+            title={t.settings}
+            aria-label={t.settings}
+          >
+            <SettingsIcon size={17} />
+          </button>
+          <button
+            className="side-action-btn"
+            onClick={toggleTheme}
+            title={theme === 'light' ? t.darkMode : t.lightMode}
+            aria-label={theme === 'light' ? t.darkMode : t.lightMode}
+          >
+            {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
+          </button>
+          <button
+            className="side-action-btn"
+            onClick={onToggleCollapse}
+            title={collapsed ? t.expandSidebar : t.collapseSidebar}
+            aria-label={collapsed ? t.expandSidebar : t.collapseSidebar}
+          >
+            {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+          </button>
+        </div>
+        <div className="profile-mini">
+          <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
+          <div className="side-label">
+            <strong>{name}</strong>
+            <small>{t.roleLabel}</small>
+          </div>
+          <span className="side-label">
+            <ChevronDown size={14} />
+          </span>
+        </div>
       </div>
-      <div className="profile-mini">
-        <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
-        <div className="side-label"><strong>{name}</strong><small>{t.roleLabel}</small></div>
-        <span className="side-label"><ChevronDown size={14} /></span>
-      </div>
-    </div>
-  </aside>
+    </aside>
+  )
 }
 
 /** Discreet round flag icons — switch the whole interface language. */

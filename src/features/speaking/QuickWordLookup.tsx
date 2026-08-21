@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import type { ApiSettings, Language } from '../../domain'
 import { translateText, type DeepLTranslationResult } from './deeplService'
-import { analyzeWordWithAi, type StagedWord } from './wordAiService'
 import { speak } from '../../ai'
 import {
   Search,
@@ -9,12 +8,17 @@ import {
   ExternalLink,
   Loader2,
   Volume2,
-  BookmarkPlus,
-  Check,
   Sparkles,
 } from 'lucide-react'
 
 type TabType = 'deepl' | 'linguee' | 'cambridge'
+
+export type StageWordRequest = {
+  word: string
+  targetLang: Language
+  contextSentence?: string
+  fallbackTranslation?: string
+}
 
 type QuickWordLookupProps = {
   isOpen: boolean
@@ -23,7 +27,7 @@ type QuickWordLookupProps = {
   ui?: 'fr' | 'en'
   api: ApiSettings
   existingTags?: string[]
-  onStageWord?: (word: StagedWord) => void
+  onRequestStageWord?: (req: StageWordRequest) => void
 }
 
 export function QuickWordLookup({
@@ -33,7 +37,7 @@ export function QuickWordLookup({
   ui = 'fr',
   api,
   existingTags = [],
-  onStageWord,
+  onRequestStageWord,
 }: QuickWordLookupProps) {
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('deepl')
@@ -48,9 +52,6 @@ export function QuickWordLookup({
     lang: Language
     contextSentence: string
   } | null>(null)
-  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false)
-  const [savedSuccessWord, setSavedSuccessWord] = useState<string | null>(null)
-  const [isPlayingTts, setIsPlayingTts] = useState(false)
 
   const drawerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -69,7 +70,6 @@ export function QuickWordLookup({
   useEffect(() => {
     const handleGlobalClick = () => {
       setActiveWordMenu(null)
-      setSavedSuccessWord(null)
     }
     if (activeWordMenu) {
       window.addEventListener('click', handleGlobalClick)
@@ -107,7 +107,6 @@ export function QuickWordLookup({
     const val = e.target.value
     setQuery(val)
     setActiveWordMenu(null)
-    setSavedSuccessWord(null)
 
     if (debounceTimerRef.current) {
       window.clearTimeout(debounceTimerRef.current)
@@ -128,7 +127,6 @@ export function QuickWordLookup({
     setQuery('')
     setTranslation(null)
     setActiveWordMenu(null)
-    setSavedSuccessWord(null)
     inputRef.current?.focus()
   }
 
@@ -145,9 +143,14 @@ export function QuickWordLookup({
 
     // Calculate relative coordinates inside drawer
     const top = (drawerRect ? rect.bottom - drawerRect.top : rect.bottom) + 6
-    const left = Math.max(12, Math.min((drawerRect ? rect.left - drawerRect.left : rect.left) - 30, (drawerRect?.width || 340) - 210))
+    const left = Math.max(
+      12,
+      Math.min(
+        (drawerRect ? rect.left - drawerRect.left : rect.left) - 30,
+        (drawerRect?.width || 340) - 230,
+      ),
+    )
 
-    setSavedSuccessWord(null)
     setActiveWordMenu({
       word,
       top,
@@ -157,57 +160,28 @@ export function QuickWordLookup({
     })
   }
 
-  const handlePronounceWord = async (e: React.MouseEvent) => {
+  // Action 1: Pronounce word immediately and close menu
+  const handlePronounceWord = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!activeWordMenu?.word) return
-    setIsPlayingTts(true)
-    try {
-      await speak(activeWordMenu.word, activeWordMenu.lang, api)
-    } finally {
-      setIsPlayingTts(false)
-    }
+    const wordToSpeak = activeWordMenu.word
+    const langToSpeak = activeWordMenu.lang
+    setActiveWordMenu(null)
+    void speak(wordToSpeak, langToSpeak, api)
   }
 
-  const handleSaveWordWithAi = async (e: React.MouseEvent) => {
+  // Action 2: Trigger AI analysis in background and close menu immediately
+  const handleSaveWordWithAi = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!activeWordMenu?.word || !onStageWord) return
-    setIsAiAnalyzing(true)
-
-    try {
-      const analysis = await analyzeWordWithAi({
-        word: activeWordMenu.word,
-        targetLang: activeWordMenu.lang,
-        uiLang: ui,
-        existingTags,
-        api,
-        contextSentence: activeWordMenu.contextSentence,
-        fallbackTranslation: translation?.translatedText,
-      })
-
-      const staged: StagedWord = {
-        id: `staged-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        word: analysis.word || activeWordMenu.word,
-        translation: analysis.translation,
-        pronunciation: analysis.pronunciation,
-        parent: analysis.parent,
-        partOfSpeech: analysis.partOfSpeech,
-        tags: analysis.tags,
-        contextSentence: activeWordMenu.contextSentence,
-        language: activeWordMenu.lang,
-        timestamp: new Date().toISOString(),
-      }
-
-      onStageWord(staged)
-      setSavedSuccessWord(activeWordMenu.word)
-      setTimeout(() => {
-        setActiveWordMenu(null)
-        setSavedSuccessWord(null)
-      }, 1400)
-    } catch (err) {
-      console.error('[QuickWordLookup] Error analyzing and staging word:', err)
-    } finally {
-      setIsAiAnalyzing(false)
-    }
+    if (!activeWordMenu?.word || !onRequestStageWord) return
+    const currentMenu = { ...activeWordMenu }
+    setActiveWordMenu(null)
+    onRequestStageWord({
+      word: currentMenu.word,
+      targetLang: currentMenu.lang,
+      contextSentence: currentMenu.contextSentence,
+      fallbackTranslation: translation?.translatedText,
+    })
   }
 
   const cleanWord = query.trim().replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '')
@@ -295,7 +269,7 @@ export function QuickWordLookup({
         </button>
       </div>
 
-      {/* Body: Translation / Dictionary frames en haut */}
+      {/* Body: Translation / Dictionary frames */}
       <div className="quick-dict-body">
         {activeTab === 'deepl' && (
           <div className="quick-dict-deepl-view">
@@ -362,10 +336,10 @@ export function QuickWordLookup({
           </div>
         )}
 
-        {/* Floating Discreet Word Context Menu */}
+        {/* Floating Discreet Word Context Menu matching in-place topic drawer style */}
         {activeWordMenu && (
           <div
-            className="quick-dict-word-popover glass"
+            className="quick-dict-word-popover"
             style={{
               top: activeWordMenu.top,
               left: activeWordMenu.left,
@@ -373,54 +347,38 @@ export function QuickWordLookup({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="word-popover-header">
-              <strong>{activeWordMenu.word}</strong>
+              <span className="word-popover-title">{activeWordMenu.word}</span>
               <button
                 type="button"
                 className="word-popover-close"
                 onClick={() => setActiveWordMenu(null)}
+                title="Fermer"
               >
-                <X size={12} />
+                <X size={13} />
               </button>
             </div>
 
-            {savedSuccessWord === activeWordMenu.word ? (
-              <div className="word-popover-success">
-                <Check size={14} />
-                <span>Enregistré pour la revue !</span>
-              </div>
-            ) : (
-              <div className="word-popover-actions">
-                <button
-                  type="button"
-                  className={`word-popover-btn ${isPlayingTts ? 'active' : ''}`}
-                  onClick={handlePronounceWord}
-                  title="Écouter la prononciation"
-                >
-                  <Volume2 size={14} />
-                  <span>Prononcer le mot</span>
-                </button>
+            <div className="word-popover-actions">
+              <button
+                type="button"
+                className="word-popover-btn"
+                onClick={handlePronounceWord}
+                title="Prononcer le mot avec la voix configurée"
+              >
+                <Volume2 size={15} className="popover-icon" />
+                <span>Prononcer le mot</span>
+              </button>
 
-                <button
-                  type="button"
-                  className="word-popover-btn primary"
-                  onClick={handleSaveWordWithAi}
-                  disabled={isAiAnalyzing}
-                  title="Analyser par IA et ajouter aux mots à revoir"
-                >
-                  {isAiAnalyzing ? (
-                    <>
-                      <Loader2 size={14} className="spin" />
-                      <span>Analyse IA…</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={14} />
-                      <span>Enregistrer le mot</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
+              <button
+                type="button"
+                className="word-popover-btn primary"
+                onClick={handleSaveWordWithAi}
+                title="Analyser par IA et ajouter aux mots à revoir"
+              >
+                <Sparkles size={15} className="popover-icon" />
+                <span>Enregistrer le mot</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

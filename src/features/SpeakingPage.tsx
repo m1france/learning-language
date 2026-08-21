@@ -4,8 +4,8 @@ import { GLOBAL_CATEGORIES, GlobalTopicCategory, NicheTopic, getPromptText } fro
 import { useCamera } from './speaking/CameraContext'
 import { TeleprompterOverlay } from './speaking/TeleprompterOverlay'
 import { SpeakingWorkspace } from './speaking/SpeakingWorkspace'
-import { QuickWordLookup } from './speaking/QuickWordLookup'
-import { StagedWord } from './speaking/wordAiService'
+import { QuickWordLookup, StageWordRequest } from './speaking/QuickWordLookup'
+import { StagedWord, analyzeWordWithAi } from './speaking/wordAiService'
 import { StagedWordsReviewModal } from './speaking/StagedWordsReviewModal'
 import {
   Camera,
@@ -34,6 +34,7 @@ type SpeakingPageProps = {
   api: ApiSettings
   customPrompterText?: string | null
   existingTags?: string[]
+  onAiTaskChange?: (running: boolean) => void
   onSaveWord?: (args: {
     raw: string
     sentence: string
@@ -98,7 +99,15 @@ const L = {
   },
 } as const
 
-export function SpeakingPage({ ui, language, api, customPrompterText, existingTags = [], onSaveWord }: SpeakingPageProps) {
+export function SpeakingPage({
+  ui,
+  language,
+  api,
+  customPrompterText,
+  existingTags = [],
+  onAiTaskChange,
+  onSaveWord,
+}: SpeakingPageProps) {
   const t = L[ui]
   const {
     stream,
@@ -144,6 +153,43 @@ export function SpeakingPage({ ui, language, api, customPrompterText, existingTa
   // Staged words saved by AI during the session
   const [stagedWords, setStagedWords] = useState<StagedWord[]>([])
   const [showReviewModal, setShowReviewModal] = useState(false)
+
+  const handleRequestStageWord = (req: StageWordRequest) => {
+    onAiTaskChange?.(true)
+    analyzeWordWithAi({
+      word: req.word,
+      targetLang: req.targetLang,
+      uiLang: ui,
+      existingTags,
+      api,
+      contextSentence: req.contextSentence,
+      fallbackTranslation: req.fallbackTranslation,
+    })
+      .then((analysis) => {
+        const staged: StagedWord = {
+          id: `staged-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          word: analysis.word || req.word,
+          translation: analysis.translation,
+          pronunciation: analysis.pronunciation,
+          parent: analysis.parent,
+          partOfSpeech: analysis.partOfSpeech,
+          tags: analysis.tags,
+          contextSentence: req.contextSentence,
+          language: req.targetLang,
+          timestamp: new Date().toISOString(),
+        }
+        setStagedWords((prev) => {
+          const filtered = prev.filter((w) => w.word.toLowerCase() !== staged.word.toLowerCase())
+          return [...filtered, staged]
+        })
+      })
+      .catch((err) => {
+        console.error('[SpeakingPage] Background AI analysis error:', err)
+      })
+      .finally(() => {
+        onAiTaskChange?.(false)
+      })
+  }
 
   const handleStageWord = (word: StagedWord) => {
     setStagedWords((prev) => {
@@ -587,7 +633,7 @@ export function SpeakingPage({ ui, language, api, customPrompterText, existingTa
                 ui={ui}
                 api={api}
                 existingTags={existingTags}
-                onStageWord={handleStageWord}
+                onRequestStageWord={handleRequestStageWord}
               />
             </div>
           )}
