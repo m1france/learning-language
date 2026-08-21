@@ -103,10 +103,18 @@ export function QuickWordLookup({
     [api, language],
   )
 
+  const queryWordCount = query.trim().split(/\s+/).filter(Boolean).length
+  const isMultiWord = queryWordCount > 1
+
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setQuery(val)
     setActiveWordMenu(null)
+
+    const wordCount = val.trim().split(/\s+/).filter(Boolean).length
+    if (wordCount > 1 && (activeTab === 'linguee' || activeTab === 'cambridge')) {
+      setActiveTab('deepl')
+    }
 
     if (debounceTimerRef.current) {
       window.clearTimeout(debounceTimerRef.current)
@@ -250,23 +258,29 @@ export function QuickWordLookup({
           <button
             type="button"
             role="tab"
-            className={`quick-dict-tab ${activeTab === 'linguee' ? 'active' : ''}`}
+            disabled={isMultiWord}
+            className={`quick-dict-tab ${activeTab === 'linguee' ? 'active' : ''} ${isMultiWord ? 'disabled' : ''}`}
             onClick={() => {
+              if (isMultiWord) return
               setActiveTab('linguee')
               setActiveWordMenu(null)
             }}
+            title={isMultiWord ? (ui === 'fr' ? 'Uniquement pour un seul mot' : 'Only available for a single word') : undefined}
           >
             Linguee
           </button>
           <button
             type="button"
             role="tab"
-            className={`quick-dict-tab ${activeTab === 'cambridge' ? 'active' : ''}`}
+            disabled={isMultiWord}
+            className={`quick-dict-tab ${activeTab === 'cambridge' ? 'active' : ''} ${isMultiWord ? 'disabled' : ''}`}
             onClick={() => {
+              if (isMultiWord) return
               setActiveTab('cambridge')
               setActiveWordMenu(null)
               openCambridgePopup(cleanWord)
             }}
+            title={isMultiWord ? (ui === 'fr' ? 'Uniquement pour un seul mot' : 'Only available for a single word') : undefined}
           >
             Cambridge
           </button>

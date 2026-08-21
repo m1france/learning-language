@@ -28,9 +28,10 @@ function formatTime(seconds: number): string {
 
 // Convert plain markdown/text into rich HTML with styled timestamp chips
 function textToHtml(raw: string): string {
-  if (!raw) return '<p><br></p>'
+  if (!raw || !raw.trim()) return '<p><br></p>'
 
-  const lines = raw.split('\n')
+  const normalized = raw.replace(/\r\n/g, '\n')
+  const lines = normalized.split('\n')
   const htmlLines = lines.map((line) => {
     if (!line.trim()) return '<p><br></p>'
 
@@ -40,11 +41,14 @@ function textToHtml(raw: string): string {
       (match) => {
         const secs = parseSecondsFromStr(match)
         const label = match.replace(/^[@\[\]]/g, '').trim()
-        return `<span class="notion-ts-chip" contenteditable="false" data-seconds="${secs}"><span class="chip-icon">▶</span> ${label}</span>&nbsp;`
+        return `<span class="notion-ts-chip" contenteditable="false" data-seconds="${secs}"><span class="chip-icon">▶</span> ${label}</span>`
       },
     )
 
     // Basic markdown tags conversion for initial load
+    if (processed.startsWith('### ')) {
+      return `<h3>${processed.substring(4)}</h3>`
+    }
     if (processed.startsWith('## ')) {
       return `<h2>${processed.substring(3)}</h2>`
     }
@@ -69,8 +73,36 @@ function textToHtml(raw: string): string {
   return htmlLines.join('')
 }
 
+// Recursive helper to get text + inline markdown from a DOM node
+function nodeToText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent || ''
+  }
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const el = node as HTMLElement
+    const tag = el.tagName.toLowerCase()
+
+    if (tag === 'br') return '\n'
+
+    let inner = ''
+    el.childNodes.forEach((child) => {
+      inner += nodeToText(child)
+    })
+
+    if (tag === 'strong' || tag === 'b') return `**${inner}**`
+    if (tag === 'em' || tag === 'i') return `*${inner}*`
+    if (tag === 'u') return `<u>${inner}</u>`
+    if (tag === 'code') return `\`${inner}\``
+
+    return inner
+  }
+  return ''
+}
+
 // Serialize contentEditable HTML back to clean text/markdown with @MM:SS
 function htmlToText(html: string): string {
+  if (!html || !html.trim()) return ''
+
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
 
@@ -78,41 +110,82 @@ function htmlToText(html: string): string {
   const chips = doc.querySelectorAll('.notion-ts-chip')
   chips.forEach((chip) => {
     const secs = parseInt(chip.getAttribute('data-seconds') || '0', 10)
-    const textNode = doc.createTextNode(`@${formatTime(secs)} `)
+    const textNode = doc.createTextNode(`@${formatTime(secs)}`)
     chip.replaceWith(textNode)
   })
 
   const lines: string[] = []
-  const traverse = (node: Node) => {
+
+  doc.body.childNodes.forEach((node) => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return node.textContent || ''
+      const text = (node.textContent || '').replace(/\u00A0/g, ' ')
+      if (text.trim()) {
+        lines.push(text.trim())
+      }
+      return
     }
+
     if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement
       const tag = el.tagName.toLowerCase()
 
-      let inner = ''
-      el.childNodes.forEach((child) => {
-        inner += traverse(child)
-      })
+      if (tag === 'h1') {
+        const text = nodeToText(el).replace(/\u00A0/g, ' ').trim()
+        lines.push(`# ${text}`)
+        return
+      }
+      if (tag === 'h2') {
+        const text = nodeToText(el).replace(/\u00A0/g, ' ').trim()
+        lines.push(`## ${text}`)
+        return
+      }
+      if (tag === 'h3') {
+        const text = nodeToText(el).replace(/\u00A0/g, ' ').trim()
+        lines.push(`### ${text}`)
+        return
+      }
+      if (tag === 'blockquote') {
+        const text = nodeToText(el).replace(/\u00A0/g, ' ').trim()
+        lines.push(`> ${text}`)
+        return
+      }
+      if (tag === 'ul' || tag === 'ol') {
+        const lis = el.querySelectorAll('li')
+        if (lis.length > 0) {
+          lis.forEach((li) => {
+            const text = nodeToText(li).replace(/\u00A0/g, ' ').trim()
+            lines.push(`- ${text}`)
+          })
+        } else {
+          const text = nodeToText(el).replace(/\u00A0/g, ' ').trim()
+          lines.push(`- ${text}`)
+        }
+        return
+      }
+      if (tag === 'li') {
+        const text = nodeToText(el).replace(/\u00A0/g, ' ').trim()
+        lines.push(`- ${text}`)
+        return
+      }
 
-      if (tag === 'h1') return `\n# ${inner.trim()}\n`
-      if (tag === 'h2') return `\n## ${inner.trim()}\n`
-      if (tag === 'h3') return `\n### ${inner.trim()}\n`
-      if (tag === 'blockquote') return `\n> ${inner.trim()}\n`
-      if (tag === 'li') return `\n- ${inner.trim()}`
-      if (tag === 'p') return `\n${inner.trim()}\n`
-      if (tag === 'strong' || tag === 'b') return `**${inner}**`
-      if (tag === 'em' || tag === 'i') return `*${inner}*`
-      if (tag === 'br') return '\n'
-
-      return inner
+      // Paragraphs / divs / generic containers
+      const text = nodeToText(el).replace(/\u00A0/g, ' ')
+      // Check if it represents an empty paragraph / blank line
+      if (!text.trim() && (el.querySelector('br') || !text)) {
+        lines.push('')
+      } else {
+        const sublines = text.split('\n')
+        sublines.forEach((s) => lines.push(s.trim()))
+      }
     }
-    return ''
+  })
+
+  // Remove trailing blank lines
+  while (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop()
   }
 
-  let result = traverse(doc.body).replace(/\n{3,}/g, '\n\n').trim()
-  return result
+  return lines.join('\n')
 }
 
 export function NotionSpeakingEditor({

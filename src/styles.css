@@ -5214,7 +5214,7 @@ h2 {
   transition: 0.15s;
 }
 
-.quick-dict-tab:hover {
+.quick-dict-tab:hover:not(:disabled) {
   color: #fff;
   background: rgba(255, 255, 255, 0.08);
 }
@@ -5223,6 +5223,13 @@ h2 {
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
   font-weight: 600;
+}
+
+.quick-dict-tab:disabled,
+.quick-dict-tab.disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .quick-dict-close {
@@ -5273,20 +5280,15 @@ h2 {
   display: inline;
   cursor: pointer;
   border-radius: 4px;
-  padding: 1px 3px;
-  margin: 0;
+  padding: 1px 2px;
+  margin: 0 -2px;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .quick-dict-word-token:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.22);
   color: #ffffff;
   text-decoration: none;
-}
-
-:root[data-theme='light'] .quick-dict-word-token:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: var(--ink);
 }
 
 .quick-dict-divider {
