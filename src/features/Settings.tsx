@@ -48,6 +48,74 @@ const TEACHER_TOOLS_INFO = [
   { id: 'eraser', label: 'Gomme', desc: 'Suppression continue par contact' },
 ]
 
+const AGENT_PROVIDERS: {
+  id: NonNullable<UserSettings['api']['agentProvider']>
+  name: string
+  detail: string
+  defaultModel: string
+  keyField: keyof UserSettings['api']
+  keyPlaceholder: string
+  keyLabel: string
+  keyHint?: string
+  examples: string
+}[] = [
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    detail: 'Accès universel (Nemotron, Claude, GPT, Llama, Gemini…)',
+    defaultModel: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    keyField: 'openRouterKey',
+    keyPlaceholder: 'sk-or-v1-…',
+    keyLabel: 'Clé API OpenRouter',
+    keyHint: 'Permet d’accéder à de nombreux modèles gratuits ou payants avec une seule clé (openrouter.ai).',
+    examples: 'nvidia/nemotron-3-ultra-550b-a55b:free, meta-llama/llama-3.3-70b-instruct:free, anthropic/claude-3.5-sonnet',
+  },
+  {
+    id: 'nvidia',
+    name: 'Nvidia NIM',
+    detail: 'Inférence ultra-rapide sur modèles Nemotron, Llama & Mistral',
+    defaultModel: 'meta/llama-3.3-70b-instruct',
+    keyField: 'nvidiaKey',
+    keyPlaceholder: 'nvapi-…',
+    keyLabel: 'Clé API Nvidia NIM',
+    keyHint: 'Obtenable gratuitement avec des crédits sur build.nvidia.com.',
+    examples: 'nvidia/nemotron-4-340b-instruct, meta/llama-3.3-70b-instruct, mistralai/mistral-large-2-instruct',
+  },
+  {
+    id: 'kimi',
+    name: 'Kimi for Coding',
+    detail: 'Moonshot AI — précision linguistique et raisonnement',
+    defaultModel: 'moonshot-v1-8k',
+    keyField: 'kimiKey',
+    keyPlaceholder: 'sk-…',
+    keyLabel: 'Clé API Kimi (Moonshot)',
+    keyHint: 'Clé de plateforme platform.moonshot.cn.',
+    examples: 'moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k',
+  },
+  {
+    id: 'google',
+    name: 'Google Cloud / Gemini',
+    detail: 'Modèles Gemini 2.0 Flash et 1.5 Pro haute vitesse',
+    defaultModel: 'gemini-2.0-flash',
+    keyField: 'googleKey',
+    keyPlaceholder: 'AIzaSy…',
+    keyLabel: 'Clé API Google Gemini',
+    keyHint: 'Clé API Google AI Studio (aistudio.google.com).',
+    examples: 'gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro',
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    detail: 'Modèles officiels GPT-4o, GPT-4o-mini',
+    defaultModel: 'gpt-4o-mini',
+    keyField: 'openAiKey',
+    keyPlaceholder: 'sk-proj-…',
+    keyLabel: 'Clé API OpenAI',
+    keyHint: 'Clé de plateforme platform.openai.com.',
+    examples: 'gpt-4o-mini, gpt-4o, o3-mini',
+  },
+]
+
 const TTS_PROVIDERS: { id: UserSettings['api']['ttsProvider']; name: string; detail: string }[] = [
   { id: 'google', name: 'Voix naturelle (gratuit)', detail: 'Voix Google de bonne qualité, sans clé ni compte. Recommandé pour démarrer.' },
   { id: 'elevenlabs', name: 'ElevenLabs', detail: 'Voix IA haut de gamme. Colle ta clé API ElevenLabs ci-dessous.' },
@@ -450,11 +518,65 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
 
         {tab === 'connections' && <>
           <SettingHeading title="Connexions" detail="Les clés restent dans ce navigateur. Laisse vide pour utiliser les solutions gratuites." />
+          
           <div className="connection-card">
-            <div><h3>Choix modèle Agent principal</h3><p>Le modèle qui pilotera les prochaines fonctionnalités IA. Écris directement l’identifiant du modèle (OpenRouter ou autre).</p></div>
-            <label>Modèle principal<input value={draft.api.agentModel} onChange={(event) => updateApi('agentModel', event.target.value)} placeholder="nvidia/nemotron-3-ultra-550b-a55b:free" /></label>
-            <p className="field-hint">Exemples : <code>nvidia/nemotron-3-ultra-550b-a55b:free</code>, <code>z-ai/glm-5.2</code>, <code>meta-llama/llama-3.3-70b-instruct:free</code></p>
+            <div>
+              <h3>Choix modèle Agent principal</h3>
+              <p>Sélectionne le fournisseur d'IA qui pilotera les fonctionnalités intelligentes (analyse de mots, aide à l'apprentissage).</p>
+            </div>
+
+            <div className="preset-grid">
+              {AGENT_PROVIDERS.map((provider) => {
+                const isSelected = (draft.api.agentProvider || 'openrouter') === provider.id
+                return (
+                  <button
+                    key={provider.id}
+                    type="button"
+                    className={isSelected ? 'preset-card selected' : 'preset-card'}
+                    onClick={() => {
+                      updateApi('agentProvider', provider.id)
+                      if (!draft.api.agentModel || AGENT_PROVIDERS.some((p) => p.defaultModel === draft.api.agentModel)) {
+                        updateApi('agentModel', provider.defaultModel)
+                      }
+                    }}
+                  >
+                    <strong>{provider.name}</strong>
+                    <p>{provider.detail}</p>
+                  </button>
+                )
+              })}
+            </div>
+
+            {(() => {
+              const activeProvider = AGENT_PROVIDERS.find((p) => p.id === (draft.api.agentProvider || 'openrouter')) || AGENT_PROVIDERS[0]
+              return (
+                <>
+                  <label>
+                    {activeProvider.keyLabel}
+                    <input
+                      type="password"
+                      value={(draft.api[activeProvider.keyField] as string) || ''}
+                      onChange={(event) => updateApi(activeProvider.keyField, event.target.value)}
+                      placeholder={activeProvider.keyPlaceholder}
+                      autoComplete="off"
+                    />
+                  </label>
+                  {activeProvider.keyHint && <p className="field-hint">{activeProvider.keyHint}</p>}
+
+                  <label>
+                    Modèle souhaité
+                    <input
+                      value={draft.api.agentModel || ''}
+                      onChange={(event) => updateApi('agentModel', event.target.value)}
+                      placeholder={activeProvider.defaultModel}
+                    />
+                  </label>
+                  <p className="field-hint">Exemples : <code>{activeProvider.examples}</code></p>
+                </>
+              )
+            })()}
           </div>
+
           <div className="connection-card">
             <div><h3>Voix (TTS)</h3><p>Choisis le fournisseur qui lit les textes à voix haute, puis colle la clé correspondante si besoin.</p></div>
             <div className="preset-grid">
@@ -472,13 +594,14 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
             </>}
             {draft.api.ttsProvider === 'openrouter' && <>
               <label>Modèle audio OpenRouter<input value={draft.api.ttsModel} onChange={(event) => updateApi('ttsModel', event.target.value)} placeholder="openai/gpt-4o-audio-preview" /></label>
-              <p className="field-hint">Nécessite ta clé OpenRouter (carte « Clés API » ci-dessous) et un modèle qui accepte la sortie audio.</p>
+              <p className="field-hint">Nécessite ta clé OpenRouter (renseignée dans la carte Agent principal ci-dessus) et un modèle qui accepte la sortie audio.</p>
             </>}
             {draft.api.ttsProvider === 'browser' && voices.length > 0 && <label>Voix préférée<select value={draft.api.ttsVoice} onChange={(event) => updateApi('ttsVoice', event.target.value)}>
               <option value="">Automatique (la plus naturelle)</option>
               {voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} ({voice.lang})</option>)}
             </select></label>}
           </div>
+
           <div className="connection-card">
             <div><h3>DeepL (Traduction & Dictionnaire)</h3><p>Utilisé pour la recherche rapide et la traduction en direct durant tes sessions de parole.</p></div>
             <label>Clé API DeepL <small>Free (termine par :fx) ou Pro</small><input type="password" value={draft.api.deepLKey || ''} onChange={(event) => updateApi('deepLKey', event.target.value)} placeholder="ex. 00000000-0000-0000-0000-000000000000:fx" autoComplete="off" /></label>
@@ -499,13 +622,6 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
               </select>
             </label>
             <p className="field-hint">Obtiens une clé gratuite sur <code>deepl.com/pro-api</code>. Si vide, un service de secours est utilisé.</p>
-          </div>
-          <div className="connection-card">
-            <div><h3>Clés API (optionnel)</h3><p>Utilisées uniquement pour les fonctions IA et la recherche d’images.</p></div>
-            <label>Clé OpenRouter<input type="password" value={draft.api.openRouterKey} onChange={(event) => updateApi('openRouterKey', event.target.value)} placeholder="sk-or-…" autoComplete="off" /></label>
-            <label>Clé OpenAI <small>optionnel, transcription Whisper</small><input type="password" value={draft.api.openAiKey} onChange={(event) => updateApi('openAiKey', event.target.value)} placeholder="sk-…" autoComplete="off" /></label>
-            <label>Clé Unsplash<input type="password" value={draft.api.unsplashKey} onChange={(event) => updateApi('unsplashKey', event.target.value)} autoComplete="off" /></label>
-            <label>Clé Pexels<input type="password" value={draft.api.pexelsKey} onChange={(event) => updateApi('pexelsKey', event.target.value)} autoComplete="off" /></label>
           </div>
         </>}
 

@@ -5,6 +5,8 @@ import { useCamera } from './speaking/CameraContext'
 import { TeleprompterOverlay } from './speaking/TeleprompterOverlay'
 import { SpeakingWorkspace } from './speaking/SpeakingWorkspace'
 import { QuickWordLookup } from './speaking/QuickWordLookup'
+import { StagedWord } from './speaking/wordAiService'
+import { StagedWordsReviewModal } from './speaking/StagedWordsReviewModal'
 import {
   Camera,
   CameraOff,
@@ -31,6 +33,7 @@ type SpeakingPageProps = {
   language: Language
   api: ApiSettings
   customPrompterText?: string | null
+  existingTags?: string[]
   onSaveWord?: (args: {
     raw: string
     sentence: string
@@ -46,7 +49,7 @@ const L = {
   fr: {
     heading: 'Studio vocal & vidéo',
     sub: 'Entraîne ton éloquence face caméra : lis avec prompteur ou parle librement sur des sujets variés.',
-    enableCamTitle: 'Enregistre tes sessions en activant la caméra',
+    enableCamTitle: 'Active la caméra pour commencer',
     enableCamBtn: 'Activer la caméra',
     camOff: 'Caméra désactivée',
     micOff: 'Micro désactivé',
@@ -71,7 +74,7 @@ const L = {
   en: {
     heading: 'Voice & Video Studio',
     sub: 'Practice speaking on camera: read with a teleprompter or speak freely on various topics.',
-    enableCamTitle: 'Record your sessions by activating the camera',
+    enableCamTitle: 'Activate the camera to get started',
     enableCamBtn: 'Activate camera',
     camOff: 'Camera off',
     micOff: 'Microphone off',
@@ -95,7 +98,7 @@ const L = {
   },
 } as const
 
-export function SpeakingPage({ ui, language, api, customPrompterText, onSaveWord }: SpeakingPageProps) {
+export function SpeakingPage({ ui, language, api, customPrompterText, existingTags = [], onSaveWord }: SpeakingPageProps) {
   const t = L[ui]
   const {
     stream,
@@ -137,6 +140,36 @@ export function SpeakingPage({ ui, language, api, customPrompterText, onSaveWord
   const [inPickerCategory, setInPickerCategory] = useState<GlobalTopicCategory | null>(null)
   const [pendingNiche, setPendingNiche] = useState<NicheTopic | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Staged words saved by AI during the session
+  const [stagedWords, setStagedWords] = useState<StagedWord[]>([])
+  const [showReviewModal, setShowReviewModal] = useState(false)
+
+  const handleStageWord = (word: StagedWord) => {
+    setStagedWords((prev) => {
+      const filtered = prev.filter((w) => w.word.toLowerCase() !== word.word.toLowerCase())
+      return [...filtered, word]
+    })
+  }
+
+  const handleApproveWord = (stagedWord: StagedWord) => {
+    if (onSaveWord) {
+      onSaveWord({
+        raw: stagedWord.word,
+        sentence: stagedWord.contextSentence || '',
+        language: stagedWord.language || language,
+        translation: stagedWord.translation,
+        parent: stagedWord.parent,
+        pronunciation: stagedWord.pronunciation,
+        tags: stagedWord.tags,
+      })
+    }
+    setStagedWords((prev) => prev.filter((w) => w.id !== stagedWord.id))
+  }
+
+  const handleDiscardWord = (wordId: string) => {
+    setStagedWords((prev) => prev.filter((w) => w.id !== wordId))
+  }
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const studioContainerRef = useRef<HTMLDivElement>(null)
@@ -357,7 +390,7 @@ export function SpeakingPage({ ui, language, api, customPrompterText, onSaveWord
       <section className="studio-stage-wrapper">
         <div
           ref={studioContainerRef}
-          className={`studio-camera-viewport ${isFullscreen ? 'fullscreen' : ''}`}
+          className={`studio-camera-viewport ${cameraActive ? 'active' : 'inactive'} ${isFullscreen ? 'fullscreen' : ''}`}
         >
           {/* Active Live Video */}
           {cameraActive && (
@@ -378,13 +411,10 @@ export function SpeakingPage({ ui, language, api, customPrompterText, onSaveWord
             </div>
           )}
 
-          {/* Inactive Camera State (Dashed border enclosure) */}
+          {/* Inactive Camera State */}
           {!cameraActive && (
             <div className="studio-dashed-auth-box">
               <div className="dashed-auth-inner">
-                <div className="dashed-cam-icon">
-                  <Camera size={32} />
-                </div>
                 <h3>{t.enableCamTitle}</h3>
                 {permissionError && <p className="studio-auth-error">{permissionError}</p>}
                 <button className="dashed-activate-btn" onClick={() => void requestMediaAccess()}>
@@ -554,8 +584,10 @@ export function SpeakingPage({ ui, language, api, customPrompterText, onSaveWord
                 isOpen={showQuickLookup}
                 onClose={() => setShowQuickLookup(false)}
                 language={language}
+                ui={ui}
                 api={api}
-                onSaveWord={onSaveWord}
+                existingTags={existingTags}
+                onStageWord={handleStageWord}
               />
             </div>
           )}
@@ -657,6 +689,58 @@ export function SpeakingPage({ ui, language, api, customPrompterText, onSaveWord
           </div>
         )}
       </section>
+
+      {/* Bottom-Left Visual Notification for Staged AI Words */}
+      {stagedWords.length > 0 && (
+        <aside
+          className="speaking-staged-notification glass"
+          onClick={() => setShowReviewModal(true)}
+          title="Cliquer pour revoir et valider les fiches de vocabulaire générées par l'IA"
+          role="button"
+          tabIndex={0}
+        >
+          <div className="staged-notif-icon-wrap">
+            <Sparkles size={16} />
+            <span className="staged-notif-pulse-dot" />
+          </div>
+          <div className="staged-notif-content">
+            <strong className="staged-notif-title">
+              {stagedWords.length === 1
+                ? ui === 'fr'
+                  ? '1 mot enregistré à revoir'
+                  : '1 saved word to review'
+                : ui === 'fr'
+                ? `${stagedWords.length} mots enregistrés à revoir`
+                : `${stagedWords.length} saved words to review`}
+            </strong>
+            <span className="staged-notif-sub">
+              {ui === 'fr' ? 'Clique pour valider la fiche IA' : 'Click to review AI card'}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="staged-notif-cta"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowReviewModal(true)
+            }}
+          >
+            {ui === 'fr' ? 'Revoir' : 'Review'}
+          </button>
+        </aside>
+      )}
+
+      {/* Review & Approve Modal */}
+      <StagedWordsReviewModal
+        isOpen={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        stagedWords={stagedWords}
+        language={language}
+        api={api}
+        existingTags={existingTags}
+        onApprove={handleApproveWord}
+        onDiscard={handleDiscardWord}
+      />
     </div>
   )
 }

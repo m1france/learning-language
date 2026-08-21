@@ -1,13 +1,17 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import type { ApiSettings, Language } from '../../domain'
 import { translateText, type DeepLTranslationResult } from './deeplService'
+import { analyzeWordWithAi, type StagedWord } from './wordAiService'
+import { speak } from '../../ai'
 import {
   Search,
   X,
   ExternalLink,
   Loader2,
+  Volume2,
   BookmarkPlus,
   Check,
+  Sparkles,
 } from 'lucide-react'
 
 type TabType = 'deepl' | 'linguee' | 'cambridge'
@@ -16,25 +20,39 @@ type QuickWordLookupProps = {
   isOpen: boolean
   onClose: () => void
   language: Language
+  ui?: 'fr' | 'en'
   api: ApiSettings
-  onSaveWord?: (args: {
-    raw: string
-    sentence: string
-    language: Language
-    translation: string
-    parent: string
-    pronunciation: string
-    tags?: string[]
-  }) => void
+  existingTags?: string[]
+  onStageWord?: (word: StagedWord) => void
 }
 
-export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: QuickWordLookupProps) {
+export function QuickWordLookup({
+  isOpen,
+  onClose,
+  language,
+  ui = 'fr',
+  api,
+  existingTags = [],
+  onStageWord,
+}: QuickWordLookupProps) {
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('deepl')
   const [translation, setTranslation] = useState<DeepLTranslationResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [isSaved, setIsSaved] = useState(false)
 
+  // Floating word action popover state
+  const [activeWordMenu, setActiveWordMenu] = useState<{
+    word: string
+    top: number
+    left: number
+    lang: Language
+    contextSentence: string
+  } | null>(null)
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false)
+  const [savedSuccessWord, setSavedSuccessWord] = useState<string | null>(null)
+  const [isPlayingTts, setIsPlayingTts] = useState(false)
+
+  const drawerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceTimerRef = useRef<number | null>(null)
 
@@ -46,6 +64,20 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
       }, 50)
     }
   }, [isOpen])
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setActiveWordMenu(null)
+      setSavedSuccessWord(null)
+    }
+    if (activeWordMenu) {
+      window.addEventListener('click', handleGlobalClick)
+    }
+    return () => {
+      window.removeEventListener('click', handleGlobalClick)
+    }
+  }, [activeWordMenu])
 
   // Handle translation fetch with debounce
   const handleTranslate = useCallback(
@@ -74,6 +106,8 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setQuery(val)
+    setActiveWordMenu(null)
+    setSavedSuccessWord(null)
 
     if (debounceTimerRef.current) {
       window.clearTimeout(debounceTimerRef.current)
@@ -93,22 +127,87 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
   const handleClear = () => {
     setQuery('')
     setTranslation(null)
-    setIsSaved(false)
+    setActiveWordMenu(null)
+    setSavedSuccessWord(null)
     inputRef.current?.focus()
   }
 
-  const handleSaveToVault = () => {
-    if (!onSaveWord || !query.trim() || !translation?.translatedText) return
-    onSaveWord({
-      raw: query.trim(),
-      sentence: '',
-      language,
-      translation: translation.translatedText,
-      parent: '',
-      pronunciation: '',
-      tags: ['oral', 'deepl'],
+  const handleWordClick = (
+    word: string,
+    event: React.MouseEvent<HTMLElement>,
+    lang: Language,
+    contextSentence: string,
+  ) => {
+    event.stopPropagation()
+    const targetElement = event.currentTarget
+    const rect = targetElement.getBoundingClientRect()
+    const drawerRect = drawerRef.current?.getBoundingClientRect()
+
+    // Calculate relative coordinates inside drawer
+    const top = (drawerRect ? rect.bottom - drawerRect.top : rect.bottom) + 6
+    const left = Math.max(12, Math.min((drawerRect ? rect.left - drawerRect.left : rect.left) - 30, (drawerRect?.width || 340) - 210))
+
+    setSavedSuccessWord(null)
+    setActiveWordMenu({
+      word,
+      top,
+      left,
+      lang,
+      contextSentence,
     })
-    setIsSaved(true)
+  }
+
+  const handlePronounceWord = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!activeWordMenu?.word) return
+    setIsPlayingTts(true)
+    try {
+      await speak(activeWordMenu.word, activeWordMenu.lang, api)
+    } finally {
+      setIsPlayingTts(false)
+    }
+  }
+
+  const handleSaveWordWithAi = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!activeWordMenu?.word || !onStageWord) return
+    setIsAiAnalyzing(true)
+
+    try {
+      const analysis = await analyzeWordWithAi({
+        word: activeWordMenu.word,
+        targetLang: activeWordMenu.lang,
+        uiLang: ui,
+        existingTags,
+        api,
+        contextSentence: activeWordMenu.contextSentence,
+        fallbackTranslation: translation?.translatedText,
+      })
+
+      const staged: StagedWord = {
+        id: `staged-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        word: analysis.word || activeWordMenu.word,
+        translation: analysis.translation,
+        pronunciation: analysis.pronunciation,
+        parent: analysis.parent,
+        partOfSpeech: analysis.partOfSpeech,
+        tags: analysis.tags,
+        contextSentence: activeWordMenu.contextSentence,
+        language: activeWordMenu.lang,
+        timestamp: new Date().toISOString(),
+      }
+
+      onStageWord(staged)
+      setSavedSuccessWord(activeWordMenu.word)
+      setTimeout(() => {
+        setActiveWordMenu(null)
+        setSavedSuccessWord(null)
+      }, 1400)
+    } catch (err) {
+      console.error('[QuickWordLookup] Error analyzing and staging word:', err)
+    } finally {
+      setIsAiAnalyzing(false)
+    }
   }
 
   const cleanWord = query.trim().replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '')
@@ -128,10 +227,31 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
     )
   }
 
+  /** Render text broken down into individually clickable word tokens */
+  const renderWordTokens = (text: string, textLang: Language) => {
+    const tokens = text.split(/([\s.,!?;:()"“”«»]+)/)
+    return tokens.map((token, idx) => {
+      const clean = token.replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '')
+      if (!clean) {
+        return <span key={idx}>{token}</span>
+      }
+      return (
+        <span
+          key={idx}
+          className="quick-dict-word-token"
+          onClick={(e) => handleWordClick(clean, e, textLang, text)}
+          title={`Cliquer pour prononcer ou enregistrer "${clean}"`}
+        >
+          {token}
+        </span>
+      )
+    })
+  }
+
   if (!isOpen) return null
 
   return (
-    <div className="quick-dict-drawer" onClick={(e) => e.stopPropagation()}>
+    <div ref={drawerRef} className="quick-dict-drawer" onClick={(e) => e.stopPropagation()}>
       {/* Head with discrete tabs and close button */}
       <div className="quick-dict-head">
         <div className="quick-dict-tabs" role="tablist">
@@ -139,7 +259,10 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
             type="button"
             role="tab"
             className={`quick-dict-tab ${activeTab === 'deepl' ? 'active' : ''}`}
-            onClick={() => setActiveTab('deepl')}
+            onClick={() => {
+              setActiveTab('deepl')
+              setActiveWordMenu(null)
+            }}
           >
             DeepL
           </button>
@@ -147,7 +270,10 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
             type="button"
             role="tab"
             className={`quick-dict-tab ${activeTab === 'linguee' ? 'active' : ''}`}
-            onClick={() => setActiveTab('linguee')}
+            onClick={() => {
+              setActiveTab('linguee')
+              setActiveWordMenu(null)
+            }}
           >
             Linguee
           </button>
@@ -157,6 +283,7 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
             className={`quick-dict-tab ${activeTab === 'cambridge' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('cambridge')
+              setActiveWordMenu(null)
               openCambridgePopup(cleanWord)
             }}
           >
@@ -174,7 +301,9 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
           <div className="quick-dict-deepl-view">
             {query.trim() ? (
               <>
-                <div className="quick-dict-source-text">{query}</div>
+                <div className="quick-dict-source-text">
+                  {renderWordTokens(query, language === 'fr' ? 'en' : 'fr')}
+                </div>
                 <div className="quick-dict-divider" />
                 {isLoading ? (
                   <div className="quick-dict-loading">
@@ -184,19 +313,12 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
                 ) : (
                   <div className="quick-dict-translated-wrap">
                     <div className="quick-dict-translated-text">
-                      {translation?.translatedText || 'Traduction…'}
+                      {translation?.translatedText ? (
+                        renderWordTokens(translation.translatedText, language)
+                      ) : (
+                        'Traduction…'
+                      )}
                     </div>
-                    {onSaveWord && translation?.translatedText && (
-                      <button
-                        type="button"
-                        className={`quick-dict-save-btn ${isSaved ? 'saved' : ''}`}
-                        onClick={handleSaveToVault}
-                        title="Enregistrer ce mot dans mon vocabulaire"
-                      >
-                        {isSaved ? <Check size={12} /> : <BookmarkPlus size={12} />}
-                        <span>{isSaved ? 'Enregistré' : 'Ajouter au vocabulaire'}</span>
-                      </button>
-                    )}
                   </div>
                 )}
               </>
@@ -239,6 +361,68 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
             </button>
           </div>
         )}
+
+        {/* Floating Discreet Word Context Menu */}
+        {activeWordMenu && (
+          <div
+            className="quick-dict-word-popover glass"
+            style={{
+              top: activeWordMenu.top,
+              left: activeWordMenu.left,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="word-popover-header">
+              <strong>{activeWordMenu.word}</strong>
+              <button
+                type="button"
+                className="word-popover-close"
+                onClick={() => setActiveWordMenu(null)}
+              >
+                <X size={12} />
+              </button>
+            </div>
+
+            {savedSuccessWord === activeWordMenu.word ? (
+              <div className="word-popover-success">
+                <Check size={14} />
+                <span>Enregistré pour la revue !</span>
+              </div>
+            ) : (
+              <div className="word-popover-actions">
+                <button
+                  type="button"
+                  className={`word-popover-btn ${isPlayingTts ? 'active' : ''}`}
+                  onClick={handlePronounceWord}
+                  title="Écouter la prononciation"
+                >
+                  <Volume2 size={14} />
+                  <span>Prononcer le mot</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="word-popover-btn primary"
+                  onClick={handleSaveWordWithAi}
+                  disabled={isAiAnalyzing}
+                  title="Analyser par IA et ajouter aux mots à revoir"
+                >
+                  {isAiAnalyzing ? (
+                    <>
+                      <Loader2 size={14} className="spin" />
+                      <span>Analyse IA…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={14} />
+                      <span>Enregistrer le mot</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer: Search input en bas */}
@@ -254,7 +438,9 @@ export function QuickWordLookup({ isOpen, onClose, language, api, onSaveWord }: 
             onChange={handleQueryChange}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
-                if (query) {
+                if (activeWordMenu) {
+                  setActiveWordMenu(null)
+                } else if (query) {
                   handleClear()
                 } else {
                   onClose()

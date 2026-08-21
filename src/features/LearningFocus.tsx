@@ -1085,7 +1085,7 @@ export function LearningFocus({ resources, initialResourceId, shortcuts, onUpdat
       <button title="Agrandir le texte" onClick={() => setFontSize(Math.min(46, fontSize + 2))}>A+</button>
       <button title="Réduire le texte" onClick={() => setFontSize(Math.max(20, fontSize - 2))}>A−</button>
       <button className="focus-zoom" title="Revenir à 100 %" onClick={() => setFontSize(BASE_FONT)}>{zoom} %</button>
-      <button className="focus-quit-btn" onClick={quitAll}><X size={14} /> Quitter</button>
+      <button className="focus-quit-btn" onClick={quitAll}><X size={14} /><span>Quitter</span></button>
     </div>
 
     {/* annuler / gomme / effacer — bord gauche, centré verticalement */}

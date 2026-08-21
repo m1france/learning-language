@@ -126,6 +126,7 @@ export default function App() {
                   language={state.settings.learningLanguage}
                   api={state.settings.api}
                   customPrompterText={speakingPrompterText}
+                  existingTags={Array.from(new Set(state.words.flatMap((w) => w.tags || [])))}
                   onSaveWord={(args) => change(upsertWordDetails(state, args))}
                 />
               )}

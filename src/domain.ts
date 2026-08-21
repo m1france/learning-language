@@ -111,15 +111,19 @@ export type MediaSession = {
 }
 
 export type TtsProvider = 'google' | 'openrouter' | 'elevenlabs' | 'fish' | 'browser'
+export type AgentProvider = 'openrouter' | 'nvidia' | 'kimi' | 'google' | 'openai'
 
 export type ApiSettings = {
+  agentProvider?: AgentProvider
+  agentModel: string
   openRouterKey: string
   openRouterModel: string
-  /** Main agent model (free-form OpenRouter model id), reserved for upcoming AI features. */
-  agentModel: string
   openAiKey: string
-  unsplashKey: string
-  pexelsKey: string
+  nvidiaKey?: string
+  kimiKey?: string
+  googleKey?: string
+  unsplashKey?: string
+  pexelsKey?: string
   ttsVoice: string
   /** TTS provider currently selected in Settings. */
   ttsProvider: TtsProvider
