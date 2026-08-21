@@ -5313,6 +5313,52 @@ h2 {
   white-space: pre-wrap;
 }
 
+.quick-dict-speak-sentence-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  padding: 2px 3px;
+  margin-left: 6px;
+  color: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  line-height: 1;
+}
+
+.quick-dict-speak-sentence-btn:hover {
+  background: transparent;
+  border: none;
+  color: #38bdf8;
+  transform: scale(1.12);
+}
+
+.quick-dict-speak-sentence-btn:active {
+  transform: scale(0.94);
+}
+
+.quick-dict-speak-sentence-btn.speaking {
+  color: #38bdf8;
+  opacity: 1;
+  animation: pulseSentenceSpeaking 0.9s infinite alternate ease-in-out;
+}
+
+@keyframes pulseSentenceSpeaking {
+  from {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
 /* Floating Discreet Word Context Menu - matches in-place-topic-drawer design */
 .quick-dict-word-popover {
   position: absolute;

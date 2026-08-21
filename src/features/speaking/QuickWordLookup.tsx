@@ -43,6 +43,7 @@ export function QuickWordLookup({
   const [activeTab, setActiveTab] = useState<TabType>('deepl')
   const [translation, setTranslation] = useState<DeepLTranslationResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [speakingText, setSpeakingText] = useState<string | null>(null)
 
   // Floating word action popover state
   const [activeWordMenu, setActiveWordMenu] = useState<{
@@ -179,6 +180,21 @@ export function QuickWordLookup({
     void speak(wordToSpeak, langToSpeak, api)
   }
 
+  // Pronounce entire sentence on demand
+  const handleSpeakSentence = (text: string, lang: Language, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const trimmed = text.trim()
+    if (!trimmed) return
+    setSpeakingText(trimmed)
+    void speak(trimmed, lang, api)
+      .catch((err) => console.error('[QuickWordLookup] Sentence pronunciation error:', err))
+      .finally(() => {
+        setTimeout(() => {
+          setSpeakingText((curr) => (curr === trimmed ? null : curr))
+        }, 1200)
+      })
+  }
+
   // Action 2: Trigger AI analysis in background and close menu immediately
   const handleSaveWord = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -298,6 +314,15 @@ export function QuickWordLookup({
               <>
                 <div className="quick-dict-source-text">
                   {renderWordTokens(query, language === 'fr' ? 'en' : 'fr')}
+                  <button
+                    type="button"
+                    className={`quick-dict-speak-sentence-btn ${speakingText === query.trim() ? 'speaking' : ''}`}
+                    onClick={(e) => handleSpeakSentence(query, language === 'fr' ? 'en' : 'fr', e)}
+                    title={ui === 'fr' ? 'Prononcer la phrase entière' : 'Pronounce entire sentence'}
+                    aria-label={ui === 'fr' ? 'Prononcer la phrase entière' : 'Pronounce entire sentence'}
+                  >
+                    <Volume2 size={13} />
+                  </button>
                 </div>
                 <div className="quick-dict-divider" />
                 {isLoading ? (
@@ -309,7 +334,18 @@ export function QuickWordLookup({
                   <div className="quick-dict-translated-wrap">
                     <div className="quick-dict-translated-text">
                       {translation?.translatedText ? (
-                        renderWordTokens(translation.translatedText, language)
+                        <>
+                          {renderWordTokens(translation.translatedText, language)}
+                          <button
+                            type="button"
+                            className={`quick-dict-speak-sentence-btn ${speakingText === translation.translatedText.trim() ? 'speaking' : ''}`}
+                            onClick={(e) => handleSpeakSentence(translation.translatedText, language, e)}
+                            title={ui === 'fr' ? 'Prononcer la phrase entière' : 'Pronounce entire sentence'}
+                            aria-label={ui === 'fr' ? 'Prononcer la phrase entière' : 'Pronounce entire sentence'}
+                          >
+                            <Volume2 size={14} />
+                          </button>
+                        </>
                       ) : (
                         'Traduction…'
                       )}
