@@ -173,6 +173,8 @@ export type ListeningLesson = {
   sourceUrl?: string
   youtubeId?: string
   fileName?: string
+  /** Real video thumbnail URL (YouTube oEmbed), shown in the theater preview. */
+  thumbnail?: string
   transcript: TranscriptCue[]
   createdAt: string
   updatedAt: string

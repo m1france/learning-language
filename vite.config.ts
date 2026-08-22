@@ -15,6 +15,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-deepl-pro/, ''),
       },
+      // Local backend (server/) — serves /api/youtube-transcript & /api/youtube-meta.
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
 })

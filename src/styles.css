@@ -890,6 +890,8 @@ h2 {
 
 .resource-meta {
   padding: 13px 2px 0;
+  /* Fixed meta height: cards stay aligned even when the author line is absent. */
+  min-height: 92px;
 }
 
 .resource-meta>span,
@@ -3190,6 +3192,106 @@ h2 {
 .listening-file-actions { display: flex; gap: 6px; margin-top: auto; }
 .listening-file-actions .outline, .listening-file-actions .primary { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
 
+/* ===== Listening theater (single-section page) ===== */
+.listening-header-actions { display: flex; align-items: center; gap: 10px; }
+.listening-theater { display: grid; gap: 0; background: var(--dark); border-radius: 22px; padding: 14px 14px 12px; box-shadow: var(--shadow); }
+.listening-stage { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 14px; overflow: hidden; }
+.listening-stage iframe,
+.listening-stage video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.listening-subtitles { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 96px; padding: 18px 26px 6px; text-align: center; }
+.listening-sub { margin: 0; width: 100%; }
+.listening-sub-original {
+  font-size: clamp(19px, 2.3vw, 27px);
+  line-height: 1.35;
+  color: var(--ink);
+}
+.listening-sub-original .cue-word {
+  background: none;
+  border: 0;
+  padding: 0 1px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background .15s ease, color .15s ease;
+}
+.listening-sub-original .cue-word:hover {
+  background: var(--coral);
+  color: #fffdf9;
+}
+.listening-sub-translation {
+  margin-top: 8px;
+  font-size: clamp(14px, 1.5vw, 18px);
+  line-height: 1.45;
+  color: var(--muted);
+  font-style: italic;
+}
+.listening-sub-idle { opacity: .55; }
+.listening-sub-status { display: inline-flex; align-items: center; gap: 7px; opacity: .75; }
+.listening-controls { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; padding: 4px 20px 8px; position: relative; }
+.listening-controls button,
+.listening-controls label {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--white); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 999px; padding: 7px 13px; font-size: 11px;
+}
+.listening-controls select { border: 0; background: transparent; color: inherit; font-size: 11px; outline: none; }
+.listening-hint { position: absolute; right: 24px; max-width: 300px; text-align: right; color: var(--muted); font-size: 10.5px; line-height: 1.45; }
+
+/* Hero — single centered section with title + input + send icon */
+.listening-hero { min-height: 58vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 26px; padding: 40px 0; }
+.listening-hero h2 { margin: 0; max-width: 640px; font-size: clamp(30px, 4.4vw, 46px); line-height: 1.08; letter-spacing: -.8px; font-weight: 600; }
+.listening-hero-form { position: relative; width: min(640px, 92%); }
+.listening-hero-form input {
+  width: 100%;
+  height: 60px;
+  padding: 0 64px 0 24px;
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  outline: none;
+  box-shadow: var(--shadow);
+  transition: border-color .15s ease;
+}
+.listening-hero-form input:focus { border-color: var(--coral); }
+.listening-hero-form input::placeholder { color: var(--muted); }
+.listening-hero-send {
+  position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+  width: 46px; height: 46px; border-radius: 50%;
+  background: var(--coral); color: #fffdf9; border: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: transform .15s ease, filter .15s ease;
+}
+.listening-hero-send:hover:not(:disabled) { transform: translateY(-50%) scale(1.05); filter: brightness(1.06); }
+.listening-hero-error { margin-top: -12px; }
+.listening-recent { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 9px; max-width: 760px; }
+.listening-recent>span { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .3px; color: var(--muted); }
+.listening-recent button {
+  display: inline-flex; align-items: center; gap: 8px;
+  max-width: 240px; padding: 5px 12px 5px 6px;
+  background: var(--white); border: 1px solid var(--line); border-radius: 999px;
+  color: var(--ink); font-size: 11px;
+}
+.listening-recent button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listening-recent img { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; }
+.listening-recent button:hover { border-color: var(--coral); }
+
+/* Word popup — anchored panel over the theater */
+.listening-word-pop {
+  position: fixed; z-index: 90;
+  top: 120px; right: 40px;
+  width: min(330px, calc(100vw - 48px));
+  animation: listening-pop-in .18s ease;
+}
+@keyframes listening-pop-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+.listening-word-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.listening-chip { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .3px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; }
+.listening-word-analyzing { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; margin: 12px 0 0; }
+.listening-word-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 14px; }
+.listening-word-actions a { color: var(--blue); font-size: 12px; }
+
 .listening-paste textarea { min-height: 51px; flex: 1; margin: 9px 0; padding: 7px; resize: vertical; }
 .listening-paste .outline { align-self: flex-start; font-size: 10px; }
 
@@ -3253,6 +3355,43 @@ h2 {
 .listening-dictionary>div { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 15px; }
 .listening-dictionary a { color: var(--muted); font-size: 10px; }
 .listening-dictionary .primary { font-size: 10px; }
+
+/* Word popup overrides the legacy bottom-docked dictionary placement. */
+.listening-word-pop {
+  top: 120px;
+  bottom: auto;
+  right: 40px;
+  width: min(330px, calc(100vw - 48px));
+  z-index: 90;
+}
+.listening-word-actions {
+  /* Beats the legacy `.listening-dictionary>div` row layout (later in cascade). */
+  align-items: flex-start;
+  justify-content: flex-start;
+  margin-top: 14px;
+}
+.listening-word-actions a {
+  color: var(--blue);
+  font-size: 12px;
+}
+.listening-word-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.listening-chip {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .3px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+.listening-word-analyzing {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 12px 0 0;
+}
 
 .listening-tools-trigger {
   width: 100%;

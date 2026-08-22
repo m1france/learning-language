@@ -80,7 +80,7 @@ Available Categories: ${JSON.stringify(validCategoriesList)}.
 Your mission:
 Write an engaging, well-crafted, beautifully written text in ${langName} adapted perfectly to the target level and target length.
 - Format: Return ONLY a valid JSON object (no markdown surrounding, no conversational intro).
-- Author: Leave "author" empty ("") or set a realistic in-universe author/character name. NEVER use "AI Storyteller" or "IA".
+- Author: ALWAYS set "author" to an empty string "". Never invent an author, character name or byline — AI-generated texts stay authorless in this app.
 - Cover: Provide "coverPrompt", a short descriptive visual prompt in English for a book cover illustration matching the story theme.
 
 JSON Schema:
@@ -134,8 +134,8 @@ JSON Schema:
 
     const parsed = JSON.parse(jsonMatch[0]) as Partial<GeneratedResourceResult> & { coverPrompt?: string }
     const title = (parsed.title || 'Nouvelle ressource').trim()
-    const rawAuthor = (parsed.author || '').trim()
-    const author = rawAuthor.toLowerCase().includes('ai') || rawAuthor.toLowerCase().includes('storyteller') || rawAuthor.toLowerCase().includes('ia') ? '' : rawAuthor
+    // AI-generated resources stay authorless: never persist an invented author name.
+    const author = ''
     const paragraphs = Array.isArray(parsed.paragraphs)
       ? parsed.paragraphs.map((p) => String(p).trim()).filter((p) => p.length > 5)
       : []

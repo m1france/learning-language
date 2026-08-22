@@ -239,7 +239,7 @@ function Sidebar({
     <aside className="sidebar">
       <Brand onClick={() => setPage('home')} />
       <nav>
-        {navItems.filter((item) => item.id !== 'home').map((item) => (
+        {navItems.map((item) => (
           <button
             className={page === item.id ? 'active' : ''}
             onClick={() => setPage(item.id)}
@@ -450,7 +450,7 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
               <div className="resource-meta">
                 <span>{labelFor(resource.type)} · {t.difficulty[resource.difficulty]}</span>
                 <h3>{resource.title}</h3>
-                {resource.author && !isGenericImportedAuthor(resource.author) && <p>{resource.author}</p>}
+                {resource.author && !isGenericImportedAuthor(resource.author) && !resource.isAiGenerated && <p>{resource.author}</p>}
                 <div className="card-bottom"><small>{resource.minutes} min</small>{progressFor(state, resource) > 0 && <div className="tiny-progress"><i style={{ width: `${progressFor(state, resource)}%` }} /></div>}</div>
               </div>
             </button>
