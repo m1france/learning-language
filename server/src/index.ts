@@ -221,6 +221,18 @@ app.get('/api/youtube-meta', async (c) => {
     }
 })
 
+app.post('/api/youtube-audio', async (c) => {
+    const body: { url?: string } = await c.req.json<{ url?: string }>().catch(() => ({}))
+    const videoId = youtubeIdFromUrl(body.url || '')
+    if (!/^[\w-]{6,}$/.test(videoId)) return c.json({ error: 'Lien YouTube invalide.' }, 400)
+    try {
+        const { bytes } = await downloadYouTubeAudio(videoId)
+        return c.json({ videoId, audioBase64: Buffer.from(bytes).toString('base64') })
+    } catch (error) {
+        return c.json({ error: error instanceof Error ? error.message : 'Extraction audio impossible.' }, 502)
+    }
+})
+
 app.post('/api/youtube-transcript', async (c) => {
     const body: { url?: string; language?: string } = await c.req.json<{ url?: string; language?: string }>().catch(() => ({}))
     const videoId = youtubeIdFromUrl(body.url || '')

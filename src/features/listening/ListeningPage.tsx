@@ -3,7 +3,7 @@ import type { AppState, Language, ListeningLesson, TranscriptCue } from '../../d
 import { id, normalizeWord } from '../../domain'
 import { analyzeWordWithAi, type AiWordAnalysisResult } from '../speaking/wordAiService'
 import { translateCueLines } from './subtitleTranslation'
-import { isYouTubeUrl } from './transcription'
+import { isYouTubeUrl, transcribeWithAgent } from './transcription'
 import {
   Clock3,
   FileAudio,
@@ -23,8 +23,6 @@ type WordSave = { raw: string; sentence: string; language: Language; translation
 
 const text = {
   fr: {
-    eyebrow: 'ÉCOUTER · THÉÂTRE', title: 'Écoute. Comprends. Garde ce qui compte.',
-    subtitle: 'La vidéo s’ouvre en plein écran avec les sous-titres originaux et leur traduction ligne à ligne. Un mot te résiste ? Clique-le.',
     heroTitle: 'Colle ton lien YouTube pour commencer à écouter',
     urlPlaceholder: 'https://www.youtube.com/watch?v=…', startSession: 'Lancer la session',
     history: 'Mes écoutes', newSession: 'Nouvelle écoute',
@@ -38,8 +36,6 @@ const text = {
     sourceCaptions: 'Sous-titres source importés', generated: 'Transcription générée', fileNeedsImport: 'Le fichier doit être réimporté après un rechargement ; la transcription, elle, est sauvegardée.',
   },
   en: {
-    eyebrow: 'LISTEN · THEATER', title: 'Listen. Understand. Keep what matters.',
-    subtitle: 'The video opens full-screen with original subtitles and their line-by-line translation. A word resists you? Click it.',
     heroTitle: 'Paste your YouTube link to start listening',
     urlPlaceholder: 'https://www.youtube.com/watch?v=…', startSession: 'Start session',
     history: 'My listening', newSession: 'New session',
@@ -173,8 +169,25 @@ export function ListeningPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: trimmed, language: state.settings.learningLanguage }),
       })
-      const payload = await response.json().catch(() => ({})) as { videoId?: string; cues?: TranscriptCue[]; title?: string; thumbnail?: string; error?: string }
-      if (!response.ok || !payload.cues?.length) throw new Error(payload.error || t.error)
+      let payload = await response.json().catch(() => ({})) as { videoId?: string; cues?: TranscriptCue[]; title?: string; thumbnail?: string; error?: string }
+
+      // No captions anywhere? Transcribe locally with whichever AI key is
+      // configured (OpenAI Whisper, else Google Gemini) instead of failing.
+      if (!response.ok || !payload.cues?.length) {
+        const hasAiKey = Boolean(state.settings.api.openAiKey.trim() || state.settings.api.googleKey?.trim())
+        if (!hasAiKey) throw new Error(payload.error || t.error)
+        const audioResponse = await fetch('/api/youtube-audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: trimmed }),
+        })
+        const audioPayload = await audioResponse.json().catch(() => ({})) as { audioBase64?: string; error?: string }
+        if (!audioResponse.ok || !audioPayload.audioBase64) throw new Error(audioPayload.error || t.error)
+        const cues = await transcribeWithAgent(audioPayload.audioBase64, state.settings.learningLanguage, state.settings.api)
+        payload = { ...payload, cues }
+      }
+
+      if (!payload.cues?.length) throw new Error(t.error)
       createLesson({
         title: payload.title || `YouTube · ${payload.videoId || youtubeId(trimmed)}`,
         source: 'youtube',
@@ -214,13 +227,13 @@ export function ListeningPage({
   const isSaved = word ? state.words.some((item) => item.language === state.settings.learningLanguage && item.normalized === normalizeWord(word.raw)) : false
 
   return <div className="page listening-page listening-lab">
-    <header className="listening-lab-header">
-      <div><p className="eyebrow">{t.eyebrow}</p><h1>{t.title}</h1><p>{t.subtitle}</p></div>
-      <div className="listening-header-actions">
-        {activeLesson && <button type="button" className="outline" onClick={() => { setSessionOn(false); setError('') }}><Plus size={14} /> {t.newSession}</button>}
-        {lessons.length > 0 && <label className="listening-history"><Clock3 size={15} /><span>{t.history}</span><select value={activeLesson?.id ?? ''} onChange={(event) => setActiveLesson(event.target.value)}><option value="" disabled>{t.history}</option>{lessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}</select></label>}
-      </div>
-    </header>
+    {activeLesson && <div className="listening-theater-bar">
+      <button type="button" className="outline listening-icon-btn" onClick={() => { setSessionOn(false); setError('') }} title={t.newSession} aria-label={t.newSession}><Plus size={15} /></button>
+      <label className="listening-history" title={t.history}>
+        <Clock3 size={14} />
+        <select value={activeLesson.id} onChange={(event) => setActiveLesson(event.target.value)} aria-label={t.history}>{lessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}</select>
+      </label>
+    </div>}
 
     {activeLesson ? <section className="listening-theater">
       <div className="listening-stage">

@@ -49,7 +49,7 @@ type SpeakingPageProps = {
 
 const L = {
   fr: {
-    heading: 'Studio vocal & vidéo',
+    heading: 'Studio vocal',
     sub: 'Entraîne ton éloquence face caméra : lis avec prompteur ou parle librement sur des sujets variés.',
     enableCamTitle: 'Active la caméra pour commencer',
     enableCamBtn: 'Activer la caméra',
@@ -67,14 +67,14 @@ const L = {
     withPrompter: 'Oui',
     withoutPrompter: 'Non',
     talkingPoints: 'Pistes de réflexion :',
-    takesHeading: 'Mes Prises & Enregistrements',
+    takesHeading: 'Mes sessions',
     noTakes: 'Aucune prise enregistrée. Lance ta première session !',
     openReview: 'Ouvrir l’Espace Notes',
     deleteTake: 'Supprimer',
     downloadTake: 'Télécharger',
   },
   en: {
-    heading: 'Voice & Video Studio',
+    heading: 'Voice studio',
     sub: 'Practice speaking on camera: read with a teleprompter or speak freely on various topics.',
     enableCamTitle: 'Activate the camera to get started',
     enableCamBtn: 'Activate camera',
@@ -92,7 +92,7 @@ const L = {
     withPrompter: 'Yes',
     withoutPrompter: 'No',
     talkingPoints: 'Talking points:',
-    takesHeading: 'My Takes & Recordings',
+    takesHeading: 'My sessions',
     noTakes: 'No recorded takes yet. Start your very first session!',
     openReview: 'Open Notes Workspace',
     deleteTake: 'Delete',
@@ -427,7 +427,6 @@ export function SpeakingPage({
       {/* Header */}
       <header className="page-header">
         <div>
-          <p className="eyebrow">{ui === 'fr' ? 'PARLER' : 'SPEAK'}</p>
           <h1>{t.heading}</h1>
           <p className="subhead">{t.sub}</p>
         </div>
@@ -646,13 +645,10 @@ export function SpeakingPage({
         </div>
       </section>
 
-      {/* "Mes Prises" Management Grid */}
+      {/* "Mes sessions" Management Grid */}
       <section className="recorded-sessions-section">
         <div className="section-header-row">
-          <div>
-            <p className="eyebrow">{ui === 'fr' ? 'HISTORIQUE VIDÉO' : 'VIDEO ARCHIVE'}</p>
-            <h2>{t.takesHeading}</h2>
-          </div>
+          <h2>{t.takesHeading}</h2>
           <span className="sessions-counter-badge">{sessions.length}</span>
         </div>
 

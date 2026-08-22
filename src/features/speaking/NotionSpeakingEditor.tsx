@@ -510,36 +510,43 @@ export function NotionSpeakingEditor({
     }
   }
 
-  // Detect typing of '@' to show contextual autocomplete
-  const handleKeyUp = (e: React.KeyboardEvent) => {
-    if (e.key === '@') {
-      const sel = window.getSelection()
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0)
-        savedRangeRef.current = range.cloneRange()
-
-        const rect = range.getBoundingClientRect()
-        if (rect && editorRef.current) {
-          const editorRect = editorRef.current.getBoundingClientRect()
-          setAtMenuCoords({
-            top: rect.bottom - editorRect.top + 8,
-            left: Math.max(10, rect.left - editorRect.left),
-          })
-          setShowAtMenu(true)
-        }
-      }
-    } else if (showAtMenu && e.key !== 'Shift' && e.key !== 'Control' && e.key !== 'Alt') {
-      // If user typed something other than @ and didn't confirm, check if caret is still right after @
-      const sel = window.getSelection()
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0)
-        const text = range.startContainer.textContent || ''
-        const pos = range.startOffset
-        if (pos === 0 || text[pos - 1] !== '@') {
-          setShowAtMenu(false)
-        }
-      }
+  // Detect typing of '@' to show contextual autocomplete.
+  // Robust across keyboard layouts (AZERTY/Option produce e.key values other
+  // than '@'): we check the actual character right behind the caret instead,
+  // and run on every input + keyup so paste and IME compositions also work.
+  const evaluateAtTrigger = () => {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const range = sel.getRangeAt(0)
+    if (!range.collapsed) { setShowAtMenu(false); return }
+    const node = range.startContainer
+    if (node.nodeType !== Node.TEXT_NODE || !editorRef.current?.contains(node)) {
+      setShowAtMenu(false)
+      return
     }
+    const pos = range.startOffset
+    const text = node.textContent || ''
+    const previousChar = pos > 0 ? text[pos - 1] : ''
+    if (previousChar === '@') {
+      savedRangeRef.current = range.cloneRange()
+      const rect = range.getBoundingClientRect()
+      if (rect && editorRef.current) {
+        const editorRect = editorRef.current.getBoundingClientRect()
+        setAtMenuCoords({
+          top: rect.bottom - editorRect.top + 8,
+          left: Math.max(10, rect.left - editorRect.left),
+        })
+      }
+      setShowAtMenu(true)
+    } else if (showAtMenu && (!previousChar.trim() || /[.,;:!?)]/.test(previousChar))) {
+      // Caret left the '@' context (space or punctuation typed after it).
+      setShowAtMenu(false)
+    }
+  }
+
+  const handleKeyUp = (e: React.KeyboardEvent) => {
+    if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return
+    evaluateAtTrigger()
   }
 
   return (
@@ -574,7 +581,7 @@ export function NotionSpeakingEditor({
         className="notion-live-document"
         contentEditable
         suppressContentEditableWarning
-        onInput={handleInput}
+        onInput={() => { handleInput(); evaluateAtTrigger() }}
         onClick={handleEditorClick}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}

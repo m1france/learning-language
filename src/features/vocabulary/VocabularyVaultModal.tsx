@@ -12,10 +12,7 @@ import {
   Edit2,
   Trash2,
   X,
-  Sparkles,
   Download,
-  Layers,
-  Layout,
   Check,
 } from 'lucide-react'
 
@@ -159,7 +156,6 @@ export function VocabularyVaultModal({
 }: VocabularyVaultModalProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTag, setSelectedTag] = useState<string>('')
-  const [viewLayout, setViewLayout] = useState<'split' | 'graph' | 'list'>('split')
   const [selectedWord, setSelectedWord] = useState<LearnedWord | null>(null)
   const [editingWord, setEditingWord] = useState<LearnedWord | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
@@ -264,51 +260,46 @@ export function VocabularyVaultModal({
   return (
     <div className="vocab-vault-backdrop vocab-vault-overlay" onClick={onClose}>
       <div className="vocab-vault-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Header Bar */}
-        <header className="vocab-vault-header">
-          <div className="vault-header-title-area">
-            <div className="vault-header-icon">
-              <BookOpen size={20} />
-            </div>
-            <div>
-              <div className="vault-title-row">
-                <h2>Mon Vocabulaire Enregistré</h2>
-                <span className="count-pill">{words.length} mots</span>
-              </div>
-              <p className="vault-subtitle">
-                Graphe de connexions lexicales & révision active
-              </p>
-            </div>
+        {/* Compact Toolbar: search + scrolling tags + actions on one line */}
+        <header className="vocab-vault-toolbar">
+          <div className="search-field">
+            <Search size={14} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Filtrer par mot, traduction ou racine..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="clear-btn" onClick={() => setSearchQuery('')}>
+                ×
+              </button>
+            )}
           </div>
 
-          <div className="vault-top-actions">
-            <div className="segmented-sm">
+          {allTags.length > 0 && (
+            <div className="tags-filter-row">
               <button
                 type="button"
-                className={viewLayout === 'split' ? 'active' : ''}
-                onClick={() => setViewLayout('split')}
+                className={`tag-chip-btn ${!selectedTag ? 'active' : ''}`}
+                onClick={() => setSelectedTag('')}
               >
-                <Layout size={13} />
-                <span>Mixte</span>
+                Tous
               </button>
-              <button
-                type="button"
-                className={viewLayout === 'graph' ? 'active' : ''}
-                onClick={() => setViewLayout('graph')}
-              >
-                <Sparkles size={13} />
-                <span>Graphe</span>
-              </button>
-              <button
-                type="button"
-                className={viewLayout === 'list' ? 'active' : ''}
-                onClick={() => setViewLayout('list')}
-              >
-                <Layers size={13} />
-                <span>Liste</span>
-              </button>
+              {allTags.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={`tag-chip-btn ${selectedTag === t ? 'active' : ''}`}
+                  onClick={() => setSelectedTag(selectedTag === t ? '' : t)}
+                >
+                  #{t}
+                </button>
+              ))}
             </div>
+          )}
 
+          <div className="vault-top-actions">
             <button
               type="button"
               className="outline icon-btn-sm"
@@ -330,82 +321,26 @@ export function VocabularyVaultModal({
           </div>
         </header>
 
-        {/* Filter Bar */}
-        <div className="vocab-vault-filter-bar">
-          <div className="search-field">
-            <Search size={14} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Filtrer par mot, traduction ou racine..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button className="clear-btn" onClick={() => setSearchQuery('')}>
-                ×
-              </button>
-            )}
+        {/* Main Content Workspace */}
+        <div className="vocab-vault-workspace layout-split">
+          <div className="vault-graph-panel">
+            <div className="graph-embed-container">
+              <ObsidianWordGraph
+                words={filteredWords}
+                selectedWordId={selectedWord?.normalized || selectedWord?.word.toLowerCase().trim()}
+                onSelectWord={setSelectedWord}
+              />
+            </div>
           </div>
 
-          {allTags.length > 0 && (
-            <div className="tags-filter-row">
-              <span className="tag-filter-label">
-                Tags :
-              </span>
-              <button
-                type="button"
-                className={`tag-chip-btn ${!selectedTag ? 'active' : ''}`}
-                onClick={() => setSelectedTag('')}
-              >
-                Tous
-              </button>
-              {allTags.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  className={`tag-chip-btn ${selectedTag === t ? 'active' : ''}`}
-                  onClick={() => setSelectedTag(selectedTag === t ? '' : t)}
-                >
-                  #{t}
-                </button>
-              ))}
+          <div className="vault-list-panel">
+            <div className="panel-title-bar">
+              <h4>
+                Liste des mots <span className="counter-badge">{filteredWords.length}</span>
+              </h4>
             </div>
-          )}
-        </div>
 
-        {/* Main Content Workspace */}
-        <div className={`vocab-vault-workspace layout-${viewLayout}`}>
-          {(viewLayout === 'split' || viewLayout === 'graph') && (
-            <div className="vault-graph-panel">
-              <div className="panel-title-bar">
-                <div className="panel-title-left">
-                  <Sparkles size={14} className="text-purple" />
-                  <h4>Obsidian Graph View</h4>
-                </div>
-                <span className="panel-hint">
-                  Glisse les nœuds, zoome à la molette et clique pour inspecter
-                </span>
-              </div>
-
-              <div className="graph-embed-container">
-                <ObsidianWordGraph
-                  words={filteredWords}
-                  selectedWordId={selectedWord?.normalized || selectedWord?.word.toLowerCase().trim()}
-                  onSelectWord={setSelectedWord}
-                />
-              </div>
-            </div>
-          )}
-
-          {(viewLayout === 'split' || viewLayout === 'list') && (
-            <div className="vault-list-panel">
-              <div className="panel-title-bar">
-                <h4>
-                  Liste des mots <span className="counter-badge">{filteredWords.length}</span>
-                </h4>
-              </div>
-
-              <div className="words-table-scroll">
+            <div className="words-table-scroll">
                 {filteredWords.length === 0 ? (
                   <div className="empty-vocab-msg">
                     <BookOpen size={28} className="empty-icon" />
@@ -445,14 +380,6 @@ export function VocabularyVaultModal({
                                 « {w.contextSentence} »
                               </blockquote>
                             )}
-
-                            {w.tags && w.tags.length > 0 && (
-                              <div className="word-tags-row">
-                                {w.tags.map((t) => (
-                                  <span key={t} className="word-tag-pill">#{t}</span>
-                                ))}
-                              </div>
-                            )}
                           </div>
 
                           <div className="word-item-actions">
@@ -473,7 +400,7 @@ export function VocabularyVaultModal({
                               }}
                               title="Modifier"
                             >
-                              <Edit2 size={13} />
+                              <Edit2 size={14} />
                             </button>
                             <button
                               type="button"
@@ -484,7 +411,7 @@ export function VocabularyVaultModal({
                               }}
                               title="Supprimer"
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={14} />
                             </button>
                           </div>
                         </div>
@@ -492,9 +419,8 @@ export function VocabularyVaultModal({
                     })}
                   </div>
                 )}
-              </div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Add / Edit Word Modal Popup matching Reader Word Card */}

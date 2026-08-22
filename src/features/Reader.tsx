@@ -8,7 +8,8 @@ import { isGenericImportedAuthor } from '../App'
 import {
   ArrowLeft,
   ArrowLeftRight,
-  Maximize2,
+  Headphones,
+  EyeOff,
   GraduationCap,
   ChevronLeft,
   ChevronRight,
@@ -693,7 +694,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     <header className="reader-top">
       <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}><ArrowLeft size={16} /> {t.back.replace('←', '').trim()}</button>
       <div className="reader-controls">
-        <button className="control control-learning-focus" onClick={(event) => { event.stopPropagation(); startFocus() }}><Maximize2 size={14} /> {t.focus}</button>
+        <button className="control control-learning-focus" onClick={(event) => { event.stopPropagation(); startFocus() }}><Headphones size={14} /> {t.focus}</button>
         <button className="control control-focus" onClick={(event) => { event.stopPropagation(); onOpenFocus(resource) }}><GraduationCap size={14} /> {t.teacherMode}</button>
         <button className="control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.min(26, fontSize + 1)) }}>A+</button>
         <button className="control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.max(15, fontSize - 1)) }}>A−</button>
@@ -707,15 +708,25 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       <aside className={`reader-aside ${leftCollapsed ? 'collapsed' : ''}`}>
         <div className="reader-aside-inner">
           <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => pickCover(event.target.files?.[0])} />
-          <Cover
-            cover={resource.cover}
-            coverImage={resource.coverImage}
-            type={categoryLabel(resource.type)}
-            isAiGenerated={resource.isAiGenerated}
-            onClick={() => fileInputRef.current?.click()}
-            onContextMenu={handleCoverContextMenu}
-            editHint={t.coverChange}
-          />
+          <div className="cover-wrap">
+            <Cover
+              cover={resource.cover}
+              coverImage={resource.coverImage}
+              type={categoryLabel(resource.type)}
+              isAiGenerated={resource.isAiGenerated}
+              onClick={() => fileInputRef.current?.click()}
+              onContextMenu={handleCoverContextMenu}
+              editHint={t.coverChange}
+            />
+            <button
+              className="cover-hide-info-btn"
+              onClick={(event) => { event.stopPropagation(); toggleLeftPanel() }}
+              title="Masquer les informations de la ressource"
+              aria-label="Masquer les informations de la ressource"
+            >
+              <EyeOff size={14} />
+            </button>
+          </div>
           <div className="reader-aside-meta">
             <span className="tag">{categoryLabel(resource.type)}</span>
             {editingTitle
@@ -744,7 +755,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         {leftCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
       </button>
 
-      <article className={`reading-text ${settings.readerWidth}`}>
+      <article className={`reading-text ${settings.readerWidth} ${leftCollapsed ? 'left-free' : ''}`}>
         {page.map((entry) => {
           const paragraphKey = `${entry.chapterIndex}:${entry.paragraphIndex}`
           const original = originals[paragraphKey]
@@ -2350,16 +2361,13 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
 }) {
   const t = readerCopy[ui]
   const settings = state.settings
-  const [pageIndex, setPageIndex] = useState(0)
-  const [selected, setSelected] = useState<{ raw: string; sentence: string } | null>(null)
+  const [selected, setSelected] = useState<{ raw: string; sentence: string; x?: number; y?: number } | null>(null)
   const [wikiWord, setWikiWord] = useState('')
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiArmed, setWikiArmed] = useState(false)
 
+  // The whole story renders in one continuous scroll — no pagination.
   const entries = useMemo(() => flatten(resource), [resource])
-  const pages = useMemo(() => paginate(entries, settings.readerPageSize), [entries, settings.readerPageSize])
-  const safePage = Math.min(pageIndex, pages.length - 1)
-  const page = pages[safePage] ?? []
 
   const knownPhrases = useMemo(() => {
     const fromWords = state.words
@@ -2371,11 +2379,6 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
     const all = Array.from(new Set([...fromWords, ...fromMarks]))
     return all.sort((a, b) => b.length - a.length)
   }, [state.words, state.wordMarks, resource.language])
-
-  const gotoPage = (next: number) => {
-    setSelected(null)
-    setPageIndex(Math.max(0, Math.min(pages.length - 1, next)))
-  }
 
   const clickWord = (raw: string, text: string, _isInstance = false, _offset = 0) => {
     const cleaned = cleanRaw(raw)
@@ -2431,17 +2434,12 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
   }}>
     <header className="focus-top">
       <strong className="focus-title">{resource.title}</strong>
-      <div className="focus-nav">
-        <button aria-label={t.previous} disabled={safePage === 0} onClick={() => gotoPage(safePage - 1)}><ChevronLeft size={18} /></button>
-        <span>{safePage + 1} / {pages.length}</span>
-        <button aria-label={t.next} disabled={safePage >= pages.length - 1} onClick={() => gotoPage(safePage + 1)}><ChevronRight size={18} /></button>
-      </div>
       <button className="focus-exit" onClick={onClose}><Minimize2 size={15} /> {t.focusExit}</button>
     </header>
 
     <div className="focus-body">
       <article className="focus-text">
-        {page.map((entry) => {
+        {entries.map((entry) => {
           const origMap = loadOriginals(resource.id)
           const paragraphKey = `${entry.chapterIndex}:${entry.paragraphIndex}`
           const original = origMap[paragraphKey]
@@ -2471,17 +2469,13 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
           )
         })}
       </article>
-
-      <aside className="focus-side">
-        {selected
-          ? <WordPanel ui={ui} selected={selected} state={state} language={resource.language} docked
-            onClose={() => setSelected(null)}
-            onOpenWord={(raw) => setSelected({ raw, sentence: '' })}
-            onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })}
-            onDeleteWord={(raw) => onDeleteWord?.(raw, resource.language)} />
-          : <p className="focus-hint">{t.focusHint}</p>}
-      </aside>
     </div>
+
+    {selected && <WordPanel ui={ui} selected={selected} state={state} language={resource.language}
+      onClose={() => setSelected(null)}
+      onOpenWord={(raw) => setSelected((current) => ({ raw, sentence: current?.sentence ?? '', x: current?.x ?? 80, y: current?.y ?? 120 }))}
+      onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })}
+      onDeleteWord={(raw) => onDeleteWord?.(raw, resource.language)} />}
 
     <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={toggleWiki} />
     {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} onClose={() => setWikiOpen(false)} />}

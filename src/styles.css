@@ -3374,6 +3374,80 @@ h2 {
   color: var(--blue);
   font-size: 12px;
 }
+
+/* ===== Reader: discreet hide-info button on the cover ===== */
+.reader-aside .cover-wrap {
+  position: relative;
+}
+
+.cover-hide-info-btn {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 3;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .35);
+  border-radius: 8px;
+  background: rgba(15, 15, 14, .45);
+  color: #fffdf9;
+  opacity: 0;
+  transition: opacity .18s ease, transform .18s ease, background .18s ease;
+}
+
+.reader-aside:hover .cover-hide-info-btn,
+.cover-hide-info-btn:focus-visible {
+  opacity: 1;
+}
+
+.cover-hide-info-btn:hover {
+  background: rgba(15, 15, 14, .72);
+  transform: scale(1.06);
+}
+
+/* Wider, distraction-free reading once the info panel is hidden. */
+.reading-text.left-free {
+  max-width: 1080px;
+}
+
+/* Discreet icon toolbar above the listening theater */
+.listening-theater-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.listening-theater-bar .listening-history {
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  gap: 7px;
+}
+
+.listening-theater-bar .listening-history select {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  outline: none;
+  max-width: 320px;
+}
+
+.listening-icon-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
 .listening-word-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .listening-chip {
   font-family: 'DM Mono', monospace;
@@ -5600,12 +5674,44 @@ h2 {
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.22);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Smooth cross-fade between the idle pill and the live camera frame */
+  transition: background .55s ease, box-shadow .55s ease, border-color .55s ease;
 }
 
 .studio-camera-viewport.inactive {
   background: transparent;
   box-shadow: none;
   border: 1.5px dashed #94a3b8;
+}
+
+/* Live camera expands fluidly from the center while the frame fades in */
+.studio-camera-viewport.active .studio-live-video {
+  animation: studio-cam-expand .65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes studio-cam-expand {
+  from {
+    transform: scaleX(-1) scale(0.18);
+    opacity: 0;
+    border-radius: 56px;
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    transform: scaleX(-1) scale(1);
+    opacity: 1;
+    border-radius: 0;
+  }
+}
+
+.studio-camera-viewport.active .studio-glass-hud {
+  animation: studio-hud-fade-in .45s ease .3s both;
+}
+
+@keyframes studio-hud-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 :root[data-theme='dark'] .studio-camera-viewport.inactive {
@@ -5646,7 +5752,7 @@ h2 {
   font-size: 14px;
 }
 
-/* Inactive Camera State - Dashed Box Design */
+/* Inactive Camera State — compact pill inside the reserved frame */
 .studio-dashed-auth-box {
   position: absolute;
   inset: 0;
@@ -5658,26 +5764,37 @@ h2 {
 }
 
 .dashed-auth-inner {
-  width: 100%;
+  width: auto;
   max-width: 480px;
   border: none;
-  border-radius: 0;
-  padding: 0;
+  border-radius: 18px;
+  padding: 20px 34px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  background: transparent;
-  box-shadow: none;
+  gap: 14px;
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+
+/* Small camera glyph above the title keeps the pill visually light */
+.dashed-auth-inner::before {
+  content: '';
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, var(--coral) 0%, var(--coral) 38%, transparent 40%),
+    color-mix(in srgb, var(--coral) 14%, transparent);
 }
 
 .dashed-auth-inner h3 {
   font-family: 'Fraunces', serif;
-  font-size: 22px;
+  font-size: 17px;
   color: var(--ink);
   margin: 0;
-  max-width: 360px;
+  max-width: 300px;
   line-height: 1.35;
 }
 
@@ -10432,14 +10549,16 @@ h2 {
 
 .focus-body {
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  /* Single continuous column — the word panel now floats over the text. */
+  display: block;
   min-height: 0;
 }
 
 .focus-text {
   overflow-y: auto;
   padding: 38px 54px 120px;
+  max-width: 880px;
+  margin: 0 auto;
 }
 
 .focus-text .paragraph {
@@ -12176,15 +12295,40 @@ h2 {
   font-family: inherit;
 }
 
-.vocab-vault-filter-bar {
+.vocab-vault-toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 24px;
+  gap: 12px;
+  padding: 10px 18px;
   border-bottom: 1px solid var(--line);
-  background: var(--bg);
-  flex-wrap: wrap;
+  background: var(--white);
 }
+
+.vocab-vault-toolbar .search-field {
+  width: 250px;
+  flex-shrink: 0;
+}
+
+.vocab-vault-toolbar .vault-top-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Tag stack — capped width, scrolls horizontally when too many */
+.tags-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 40%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+
+.tags-filter-row::-webkit-scrollbar { height: 4px; }
+.tags-filter-row::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+.tags-filter-row .tag-chip-btn { white-space: nowrap; flex-shrink: 0; }
 
 .search-field {
   display: flex;
@@ -12214,22 +12358,7 @@ h2 {
   font-size: 14px;
 }
 
-.tags-filter-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  flex: 1;
-}
-
-.tag-filter-label {
-  font-size: 11px;
-  font-family: 'DM Mono', monospace;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+/* Legacy wrap layout removed: the tag row now scrolls inside a capped stack (see above). */
 
 .tag-chip-btn {
   border: 1px solid var(--line);
