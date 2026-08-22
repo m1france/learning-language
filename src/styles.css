@@ -5141,18 +5141,28 @@ h2 {
   background: var(--paper);
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  max-height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
 .focus-stage {
-  flex: 1;
-  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .focus-board {
   position: relative;
   width: 100%;
   min-height: 100%;
-  padding: 70px 0 130px;
+  height: max-content;
+  padding: 70px 0 160px;
 }
 
 .focus-text-col {
@@ -5635,7 +5645,7 @@ h2 {
 .speaking-page {
   max-width: 1480px;
   margin: 0 auto;
-  padding: 0 24px 60px;
+  padding: 48px 32px 60px;
   width: 100%;
 }
 
@@ -5752,7 +5762,7 @@ h2 {
   font-size: 14px;
 }
 
-/* Inactive Camera State — compact pill inside the reserved frame */
+/* Inactive Camera State - Dashed Box Design */
 .studio-dashed-auth-box {
   position: absolute;
   inset: 0;
@@ -5764,37 +5774,37 @@ h2 {
 }
 
 .dashed-auth-inner {
-  width: auto;
+  width: 100%;
   max-width: 480px;
   border: none;
-  border-radius: 18px;
-  padding: 20px 34px;
+  border-radius: 0;
+  padding: 0;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  background: var(--white);
-  box-shadow: var(--shadow);
+  gap: 16px;
+  background: transparent;
+  box-shadow: none;
 }
 
-/* Small camera glyph above the title keeps the pill visually light */
-.dashed-auth-inner::before {
-  content: '';
-  width: 34px;
-  height: 34px;
+.dashed-cam-icon {
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at center, var(--coral) 0%, var(--coral) 38%, transparent 40%),
-    color-mix(in srgb, var(--coral) 14%, transparent);
+  background: rgba(238, 119, 93, 0.12);
+  color: var(--coral, #ee775d);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dashed-auth-inner h3 {
   font-family: 'Fraunces', serif;
-  font-size: 17px;
+  font-size: 22px;
   color: var(--ink);
   margin: 0;
-  max-width: 300px;
+  max-width: 360px;
   line-height: 1.35;
 }
 
@@ -7446,64 +7456,47 @@ h2 {
   transform: translateX(-2px);
 }
 
-.workspace-title-area {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.workspace-title-display {
+.workspace-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  cursor: pointer;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
-.workspace-title-display h1 {
+.workspace-title-inline-heading {
   font-family: 'Fraunces', serif;
   font-size: 22px;
   margin: 0;
   color: var(--ink);
-}
-
-.workspace-icon-edit {
-  background: transparent;
-  border: 0;
-  color: var(--muted);
   cursor: pointer;
-  padding: 2px;
+  line-height: 1.2;
+  transition: opacity 0.15s ease;
 }
 
-.workspace-title-editor {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.workspace-title-inline-heading:hover {
+  opacity: 0.85;
 }
 
-.workspace-title-editor input {
+.workspace-title-inline-input {
   font-family: 'Fraunces', serif;
-  font-size: 18px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--coral);
-  background: var(--paper);
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+  padding: 0;
   color: var(--ink);
+  background: transparent;
+  border: none;
   outline: none;
+  box-shadow: none;
+  line-height: 1.2;
+  min-width: 140px;
 }
 
-.workspace-icon-save {
-  background: var(--ink);
-  color: #fff;
-  border: 0;
-  padding: 6px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.workspace-meta-row {
-  display: flex;
+.workspace-meta-inline {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .ws-chip {
@@ -8167,6 +8160,7 @@ h2 {
 .icon-action-btn {
   width: 28px;
   height: 28px;
+  padding: 0;
   border-radius: 6px;
   background: var(--paper);
   border: 1px solid var(--line);
@@ -8177,6 +8171,8 @@ h2 {
   cursor: pointer;
   transition: 0.15s;
   text-decoration: none;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .icon-action-btn:hover {

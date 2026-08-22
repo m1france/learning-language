@@ -185,31 +185,34 @@ export function SpeakingWorkspace({
             <span>{ui === 'fr' ? 'Retour aux prises' : 'Back to takes'}</span>
           </button>
 
-          <div className="workspace-title-area">
+          <div className="workspace-title-row">
             {isEditingTitle ? (
-              <div className="workspace-title-editor">
-                <input
-                  type="text"
-                  value={title}
-                  autoFocus
-                  onChange={(e) => setTitle(e.target.value)}
-                  onBlur={handleTitleSubmit}
-                  onKeyDown={(e) => e.key === 'Enter' && handleTitleSubmit()}
-                />
-                <button className="workspace-icon-save" onClick={handleTitleSubmit}>
-                  <Check size={14} />
-                </button>
-              </div>
+              <input
+                className="workspace-title-inline-input"
+                type="text"
+                value={title}
+                autoFocus
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={handleTitleSubmit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleTitleSubmit()
+                  if (e.key === 'Escape') {
+                    setTitle(session.title)
+                    setIsEditingTitle(false)
+                  }
+                }}
+              />
             ) : (
-              <div className="workspace-title-display" onClick={() => setIsEditingTitle(true)}>
-                <h1>{title}</h1>
-                <button className="workspace-icon-edit" title="Modifier le titre">
-                  <Edit2 size={14} />
-                </button>
-              </div>
+              <h1
+                className="workspace-title-inline-heading"
+                onClick={() => setIsEditingTitle(true)}
+                title={ui === 'fr' ? 'Cliquer pour modifier le titre' : 'Click to edit title'}
+              >
+                {title}
+              </h1>
             )}
 
-            <div className="workspace-meta-row">
+            <div className="workspace-meta-inline">
               <span className="ws-chip mode">
                 {session.mode === 'guided'
                   ? ui === 'fr'

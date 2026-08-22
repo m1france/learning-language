@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import type { Language, ApiSettings } from '../domain'
 import { GLOBAL_CATEGORIES, GlobalTopicCategory, NicheTopic, getPromptText } from './speaking/speakingTopics'
 import { useCamera } from './speaking/CameraContext'
@@ -219,7 +219,7 @@ export function SpeakingPage({
     setStagedWords((prev) => prev.filter((w) => w.id !== wordId))
   }
 
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
   const studioContainerRef = useRef<HTMLDivElement>(null)
 
   // If customPrompterText is passed (from Writing "Pratiquer à l'oral"), enable prompter, auto-start camera, and consume once
@@ -233,13 +233,23 @@ export function SpeakingPage({
     }
   }, [customPrompterText, setShowPrompter, cameraActive, requestMediaAccess, onConsumePrompterText])
 
-  // Attach active stream to video element
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream
-      void videoRef.current.play().catch(() => undefined)
+  const setVideoRef = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node
+    if (node && stream) {
+      node.srcObject = stream
+      void node.play().catch(() => undefined)
     }
   }, [stream])
+
+  // Attach active stream to video element whenever stream, camera status or review view changes
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream
+      }
+      void videoRef.current.play().catch(() => undefined)
+    }
+  }, [stream, cameraActive, activeReviewSession])
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -428,12 +438,6 @@ export function SpeakingPage({
       <header className="page-header">
         <div>
           <h1>{t.heading}</h1>
-          <p className="subhead">{t.sub}</p>
-        </div>
-        <div className="header-right-badges">
-          <span className="session-count-pill">
-            <Video size={14} /> {sessions.length} {ui === 'fr' ? 'prises' : 'takes'}
-          </span>
         </div>
       </header>
 
@@ -446,7 +450,7 @@ export function SpeakingPage({
           {/* Active Live Video */}
           {cameraActive && (
             <video
-              ref={videoRef}
+              ref={setVideoRef}
               className={`studio-live-video ${cameraDisabled ? 'disabled' : ''}`}
               autoPlay
               muted
@@ -466,6 +470,9 @@ export function SpeakingPage({
           {!cameraActive && (
             <div className="studio-dashed-auth-box">
               <div className="dashed-auth-inner">
+                <div className="dashed-cam-icon">
+                  <Camera size={28} />
+                </div>
                 <h3>{t.enableCamTitle}</h3>
                 {permissionError && <p className="studio-auth-error">{permissionError}</p>}
                 <button className="dashed-activate-btn" onClick={() => void requestMediaAccess()}>

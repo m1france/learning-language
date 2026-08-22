@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, Language, ListeningLesson, TranscriptCue } from '../../domain'
 import { id, normalizeWord } from '../../domain'
 import { analyzeWordWithAi, type AiWordAnalysisResult } from '../speaking/wordAiService'
-import { translateCueLines } from './subtitleTranslation'
-import { isYouTubeUrl, transcribeWithAgent } from './transcription'
+import { isYouTubeUrl } from './transcription'
 import {
   Clock3,
   FileAudio,
@@ -27,7 +26,6 @@ const text = {
     urlPlaceholder: 'https://www.youtube.com/watch?v=…', startSession: 'Lancer la session',
     history: 'Mes écoutes', newSession: 'Nouvelle écoute',
     waiting: 'Les sous-titres apparaissent ici dès que la vidéo démarre.',
-    translating: 'Traduction en cours…',
     replay: 'Réécouter la phrase', speed: 'Vitesse',
     saveWord: 'Ajouter au vocabulaire', saved: 'Ajouté', dictionary: 'Dictionnaire', analyze: 'Analyse du mot…', openDictionary: 'Ouvrir Wiktionary',
     clickWord: 'Clique sur un mot du sous-titre pour le comprendre et l’ajouter à ton vocabulaire.',
@@ -40,7 +38,6 @@ const text = {
     urlPlaceholder: 'https://www.youtube.com/watch?v=…', startSession: 'Start session',
     history: 'My listening', newSession: 'New session',
     waiting: 'Subtitles show up here as soon as the video plays.',
-    translating: 'Translating…',
     replay: 'Replay sentence', speed: 'Speed',
     saveWord: 'Add to vocabulary', saved: 'Added', dictionary: 'Dictionary', analyze: 'Analyzing word…', openDictionary: 'Open Wiktionary',
     clickWord: 'Click a word in the subtitle to understand it and add it to your vocabulary.',
@@ -86,10 +83,7 @@ export function ListeningPage({
   const [word, setWord] = useState<{ raw: string; sentence: string; start: number } | null>(null)
   const [wordAnalysis, setWordAnalysis] = useState<AiWordAnalysisResult | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
-  const [translations, setTranslations] = useState<Record<string, string>>({})
-  const [translating, setTranslating] = useState(false)
   const youtubeFrame = useRef<HTMLIFrameElement>(null)
-  const translationToken = useRef(0)
 
   const activeLesson: ListeningLesson | null = sessionOn
     ? lessons.find((lesson) => lesson.id === state.listening?.activeLessonId) ?? lessons[0] ?? null
@@ -99,7 +93,6 @@ export function ListeningPage({
     () => activeLesson?.transcript.find((cue) => playerTime >= cue.start && playerTime < cue.end) ?? null,
     [activeLesson, playerTime],
   )
-  const translatedCue = activeCue ? translations[activeCue.id] ?? '' : ''
 
   const setActiveLesson = (lessonId: string) => {
     onChange({ ...state, listening: { ...state.listening, activeLessonId: lessonId } })
@@ -127,33 +120,6 @@ export function ListeningPage({
     return () => { window.clearInterval(timer); window.removeEventListener('message', receiveTime) }
   }, [activeLesson?.id, activeLesson?.source])
 
-  // Translate the transcript progressively: each finished batch merges into
-  // `translations`, so subtitles show their translation as soon as it's ready.
-  useEffect(() => {
-    if (!activeLesson || activeLesson.source !== 'youtube') return
-    const token = ++translationToken.current
-    setTranslations({})
-    setTranslating(false)
-    if (state.settings.learningLanguage === ui) return // video language already matches the interface language
-    let cancelled = false
-    setTranslating(true)
-    const lines = activeLesson.transcript.map((cue) => cue.text)
-    translateCueLines(lines, ui, state.settings.api, (batch) => {
-      if (cancelled || token !== translationToken.current) return
-      setTranslations((previous) => {
-        const next = { ...previous }
-        batch.items.forEach((value, offset) => {
-          const cue = activeLesson.transcript[batch.start + offset]
-          if (cue && value && value !== cue.text) next[cue.id] = value
-        })
-        return next
-      })
-    })
-      .then(() => { if (!cancelled && token === translationToken.current) setTranslating(false) })
-      .catch(() => { if (!cancelled && token === translationToken.current) setTranslating(false) })
-    return () => { cancelled = true }
-  }, [activeLesson?.id, activeLesson?.source, ui, state.settings.learningLanguage, state.settings.api])
-
   const createLesson = (lesson: Omit<ListeningLesson, 'id' | 'createdAt' | 'updatedAt' | 'language'>) => persistLesson({
     ...lesson, id: id('listen'), language: state.settings.learningLanguage, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   })
@@ -169,25 +135,12 @@ export function ListeningPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: trimmed, language: state.settings.learningLanguage }),
       })
-      let payload = await response.json().catch(() => ({})) as { videoId?: string; cues?: TranscriptCue[]; title?: string; thumbnail?: string; error?: string }
+      const payload = await response.json().catch(() => ({})) as { videoId?: string; cues?: TranscriptCue[]; title?: string; thumbnail?: string; error?: string }
 
-      // No captions anywhere? Transcribe locally with whichever AI key is
-      // configured (OpenAI Whisper, else Google Gemini) instead of failing.
       if (!response.ok || !payload.cues?.length) {
-        const hasAiKey = Boolean(state.settings.api.openAiKey.trim() || state.settings.api.googleKey?.trim())
-        if (!hasAiKey) throw new Error(payload.error || t.error)
-        const audioResponse = await fetch('/api/youtube-audio', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: trimmed }),
-        })
-        const audioPayload = await audioResponse.json().catch(() => ({})) as { audioBase64?: string; error?: string }
-        if (!audioResponse.ok || !audioPayload.audioBase64) throw new Error(audioPayload.error || t.error)
-        const cues = await transcribeWithAgent(audioPayload.audioBase64, state.settings.learningLanguage, state.settings.api)
-        payload = { ...payload, cues }
+        throw new Error(payload.error || (ui === 'fr' ? 'Aucun sous-titre trouvé pour cette vidéo.' : 'No captions found for this video.'))
       }
 
-      if (!payload.cues?.length) throw new Error(t.error)
       createLesson({
         title: payload.title || `YouTube · ${payload.videoId || youtubeId(trimmed)}`,
         source: 'youtube',
@@ -245,11 +198,6 @@ export function ListeningPage({
           {activeCue
             ? activeCue.text.split(/(\s+)/).map((part, index) => /^\s+$/.test(part) ? part : <button key={`${part}-${index}`} type="button" className="cue-word" onClick={() => inspectWord(part, activeCue.text, activeCue.start)}>{part}</button>)
             : <span className="listening-sub-idle">{t.waiting}</span>}
-        </p>
-        <p className="listening-sub listening-sub-translation">
-          {translating
-            ? <span className="listening-sub-status"><Loader2 className="spin" size={13} /> {t.translating}</span>
-            : translatedCue || <span className="listening-sub-idle">&nbsp;</span>}
         </p>
       </div>
       <div className="listening-controls">

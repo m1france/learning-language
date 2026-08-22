@@ -746,14 +746,16 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         </div>
       </aside>
 
-      <button
-        className={`reader-toggle-left-btn ${leftCollapsed ? 'collapsed' : ''}`}
-        onClick={(event) => { event.stopPropagation(); toggleLeftPanel() }}
-        title={leftCollapsed ? 'Afficher les informations de la ressource' : 'Masquer les informations de la ressource'}
-        aria-label={leftCollapsed ? 'Afficher les informations de la ressource' : 'Masquer les informations de la ressource'}
-      >
-        {leftCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-      </button>
+      {leftCollapsed && (
+        <button
+          className="reader-toggle-left-btn collapsed"
+          onClick={(event) => { event.stopPropagation(); toggleLeftPanel() }}
+          title="Afficher les informations de la ressource"
+          aria-label="Afficher les informations de la ressource"
+        >
+          <ChevronRight size={16} />
+        </button>
+      )}
 
       <article className={`reading-text ${settings.readerWidth} ${leftCollapsed ? 'left-free' : ''}`}>
         {page.map((entry) => {

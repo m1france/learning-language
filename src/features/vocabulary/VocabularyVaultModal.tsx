@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import type { AppState, Language, LearnedWord, WordRelationType } from '../../domain'
 import { ObsidianWordGraph } from './ObsidianWordGraph'
 import { renderPhoneticFormatted } from './phoneticUtils'
@@ -160,6 +160,19 @@ export function VocabularyVaultModal({
   const [editingWord, setEditingWord] = useState<LearnedWord | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [speakingWord, setSpeakingWord] = useState<string | null>(null)
+
+  // Center clicked word from graph in the word list on the right
+  useEffect(() => {
+    if (selectedWord) {
+      const el = document.getElementById(`vocab-item-${selectedWord.id}`)
+      if (el) {
+        el.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
+      }
+    }
+  }, [selectedWord])
 
   // Form State (matching Reader popup fields)
   const [formRaw, setFormRaw] = useState('')
@@ -355,6 +368,7 @@ export function VocabularyVaultModal({
                       return (
                         <div
                           key={w.id}
+                          id={`vocab-item-${w.id}`}
                           className={`vocab-word-item ${isSelected ? 'selected' : ''}`}
                           onClick={() => setSelectedWord(w)}
                         >
@@ -404,7 +418,7 @@ export function VocabularyVaultModal({
                             </button>
                             <button
                               type="button"
-                              className="icon-action-btn danger"
+                              className="icon-action-btn delete"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleDelete(w)
