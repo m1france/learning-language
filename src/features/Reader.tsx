@@ -29,7 +29,11 @@ import {
   Volume2,
   ArrowRight,
   ExternalLink,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
+import { speak } from '../ai'
+import { analyzeWordWithAi } from './speaking/wordAiService'
 import {
   ResourceContextMenu,
   EditContentModal,
@@ -259,9 +263,41 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [wordContextMenu, setWordContextMenu] = useState<{ x: number; y: number; raw: string; sentence: string; isSaved: boolean } | null>(null)
   const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
   const [editingMarkValue, setEditingMarkValue] = useState('')
+  const [savingWordAi, setSavingWordAi] = useState<string | null>(null)
   const [newMarkModalOpen, setNewMarkModalOpen] = useState(false)
   const [originals, setOriginals] = useState<Record<string, string>>(() => loadOriginals(resource.id))
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleSaveWordWithAi = async (rawWord: string, sentence: string) => {
+    const cleaned = cleanRaw(rawWord)
+    if (!cleaned) return
+    setSavingWordAi(cleaned)
+    try {
+      const analysis = await analyzeWordWithAi({
+        word: cleaned,
+        targetLang: resource.language,
+        uiLang: ui,
+        existingTags: knownTags(state, resource.language),
+        api: state.settings.api,
+        contextSentence: sentence,
+      })
+      onSaveWord({
+        raw: analysis.word || cleaned,
+        sentence,
+        language: resource.language,
+        sourceResourceId: resource.id,
+        translation: analysis.translation,
+        parent: analysis.parent,
+        pronunciation: analysis.pronunciation,
+        partOfSpeech: analysis.partOfSpeech,
+        tags: analysis.tags,
+      })
+    } catch (e) {
+      console.error('[Reader] Error saving word with AI:', e)
+    } finally {
+      setSavingWordAi(null)
+    }
+  }
 
   // Resource context menu & actions state (for right-clicking cover)
   const [resourceMenuTarget, setResourceMenuTarget] = useState<ResourceContextTarget | null>(null)
@@ -960,22 +996,36 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         </button>
         <div className="word-context-sep" />
         {!wordContextMenu.isSaved ? (
-          <button
-            type="button"
-            className="word-context-item save-item"
-            onClick={() => {
-              setSelected({
-                raw: wordContextMenu.raw,
-                sentence: wordContextMenu.sentence,
-                x: wordContextMenu.x,
-                y: wordContextMenu.y,
-              })
-              setWikiWord(wikiLookup(wordContextMenu.raw))
-              setWordContextMenu(null)
-            }}
-          >
-            <i><BookmarkPlus size={14} /></i> Enregistrer le mot
-          </button>
+          <>
+            <button
+              type="button"
+              className="word-context-item save-item"
+              onClick={() => {
+                setSelected({
+                  raw: wordContextMenu.raw,
+                  sentence: wordContextMenu.sentence,
+                  x: wordContextMenu.x,
+                  y: wordContextMenu.y,
+                })
+                setWikiWord(wikiLookup(wordContextMenu.raw))
+                setWordContextMenu(null)
+              }}
+            >
+              <i><BookmarkPlus size={14} /></i> Enregistrer le mot
+            </button>
+            <button
+              type="button"
+              className="word-context-item ai-save-item"
+              onClick={() => {
+                const raw = wordContextMenu.raw
+                const sent = wordContextMenu.sentence
+                setWordContextMenu(null)
+                void handleSaveWordWithAi(raw, sent)
+              }}
+            >
+              <i>{savingWordAi === cleanRaw(wordContextMenu.raw) ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}</i> Enregistrer avec l'IA
+            </button>
+          </>
         ) : (
           <button
             type="button"
@@ -1573,7 +1623,26 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
         : <span className="wp-dots" title={`${knowledge} / 5`}>{[1, 2, 3, 4, 5].map((n) => <i key={n}
           style={n <= knowledge ? { background: KNOWLEDGE_COLORS[knowledge - 1] } : undefined} />)}</span>}
     </div>}
-    {pronunciation && <div className="wp-view-field"><span>{t.pronunciationLabel}</span><p className="wp-view-text">{renderSimpleMarkdown(pronunciation)}</p></div>}
+    {pronunciation && (
+      <div className="wp-view-field">
+        <span>{t.pronunciationLabel}</span>
+        <div className="wp-pronunciation-content-row">
+          <p className="wp-view-text">{renderSimpleMarkdown(pronunciation)}</p>
+          <button
+            type="button"
+            className="wp-view-speak-btn"
+            title="Écouter la prononciation"
+            aria-label="Écouter la prononciation"
+            onClick={(e) => {
+              e.stopPropagation()
+              void speak(word, language, state.settings.api)
+            }}
+          >
+            <Volume2 size={15} />
+          </button>
+        </div>
+      </div>
+    )}
     {translation && <div className="wp-view-field"><span>{t.translationLabel}</span><p className="wp-view-text">{renderSimpleMarkdown(translation)}</p></div>}
 
     {/* Section Accordéon Mots Liés */}

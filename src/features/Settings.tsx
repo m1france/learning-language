@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
-import { UI_LANGUAGES } from '../i18n'
+import { BUILTIN_CATEGORIES, id } from '../domain'
+import { copy, UI_LANGUAGES } from '../i18n'
 import { listVoices, speak, testOpenRouterTts } from '../ai'
 import { testAgentConnection } from './speaking/wordAiService'
 import { testDeepLConnection } from './speaking/deeplService'
@@ -29,6 +30,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Layers,
 } from 'lucide-react'
 
 type SettingsProps = {
@@ -39,7 +41,7 @@ type SettingsProps = {
   onResetData: () => void
 }
 
-type Tab = 'profile' | 'reading' | 'markings' | 'shortcuts' | 'tags' | 'connections' | 'data'
+type Tab = 'profile' | 'reading' | 'categories' | 'markings' | 'shortcuts' | 'tags' | 'connections' | 'data'
 
 const TEACHER_TOOLS_INFO = [
   { id: 'select', label: 'Sélection', desc: 'Sélectionner et déplacer des formes ou des notes' },
@@ -166,6 +168,51 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
   const [editingMarkValue, setEditingMarkValue] = useState('')
 
   const [recordingTool, setRecordingTool] = useState<string | null>(null)
+
+  // Category management states
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+  const [editingCategoryName, setEditingCategoryName] = useState('')
+
+  // Advanced AI per-task settings accordion state
+  const [showAdvancedAi, setShowAdvancedAi] = useState(false)
+
+  const handleAddCategory = () => {
+    const label = newCategoryName.trim()
+    if (!label) return
+    const categoryId = `custom-${id('cat').slice(4)}`
+    onChangeState({ ...state, customCategories: [...state.customCategories, { id: categoryId, label }] })
+    setNewCategoryName('')
+  }
+
+  const handleStartRenameCategory = (categoryId: string, label: string) => {
+    setEditingCategoryId(categoryId)
+    setEditingCategoryName(label)
+  }
+
+  const handleSaveRenameCategory = (categoryId: string) => {
+    const label = editingCategoryName.trim()
+    if (label) {
+      onChangeState({
+        ...state,
+        customCategories: state.customCategories.map((c) => (c.id === categoryId ? { ...c, label } : c)),
+      })
+    }
+    setEditingCategoryId(null)
+    setEditingCategoryName('')
+  }
+
+  const handleDeleteCategory = (categoryId: string) => {
+    onChangeState({
+      ...state,
+      customCategories: state.customCategories.filter((c) => c.id !== categoryId),
+      resources: state.resources.map((res) => (res.type === categoryId ? { ...res, type: 'article' } : res)),
+    })
+    if (editingCategoryId === categoryId) {
+      setEditingCategoryId(null)
+      setEditingCategoryName('')
+    }
+  }
 
   // Testing states
   const [testingAgent, setTestingAgent] = useState(false)
@@ -334,6 +381,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
   const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
     { id: 'profile', icon: <User size={16} />, label: 'Profil' },
     { id: 'reading', icon: <BookOpen size={16} />, label: 'Lecture' },
+    { id: 'categories', icon: <Layers size={16} />, label: 'Catégories' },
     { id: 'markings', icon: <Palette size={16} />, label: 'Marquages' },
     { id: 'shortcuts', icon: <Keyboard size={16} />, label: 'Raccourcis' },
     { id: 'tags', icon: <Tag size={16} />, label: 'Tags' },
@@ -376,6 +424,107 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
               </select>
             </label>
             <label className="toggle-field"><span><strong>Grammaire visuelle</strong><small>Surligne doucement les verbes dans le lecteur.</small></span><input type="checkbox" checked={draft.showGrammar} onChange={(event) => update('showGrammar', event.target.checked)} /></label>
+          </div>
+        </>}
+
+        {tab === 'categories' && <>
+          <SettingHeading title="Gestion des catégories" detail="Personnalise, ajoute, renomme ou supprime les catégories pour classer ta bibliothèque de ressources." />
+          <div className="settings-tags-section">
+            <div className="tags-add-bar">
+              <input
+                type="text"
+                placeholder="Nouvelle catégorie (ex. Poésie, Philosophie, Biographie...)"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }}
+              />
+              <button className="primary" disabled={!newCategoryName.trim()} onClick={handleAddCategory}>
+                <Plus size={14} /> Ajouter
+              </button>
+            </div>
+
+            <div className="settings-section-subtitle">
+              <span>Tes catégories personnalisées</span>
+            </div>
+
+            <div className="tags-grid-list">
+              {state.customCategories.length === 0 ? (
+                <div className="tags-empty-state">
+                  <p>Aucune catégorie personnalisée créée pour le moment. Ajoute ta première catégorie ci-dessus.</p>
+                </div>
+              ) : (
+                state.customCategories.map((item) => {
+                  const count = state.resources.filter((r) => r.type === item.id).length
+                  const isEditing = editingCategoryId === item.id
+
+                  return (
+                    <div key={item.id} className="tag-mgmt-card">
+                      {isEditing ? (
+                        <div className="tag-rename-box">
+                          <input
+                            autoFocus
+                            value={editingCategoryName}
+                            onChange={(e) => setEditingCategoryName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveRenameCategory(item.id)
+                              if (e.key === 'Escape') setEditingCategoryId(null)
+                            }}
+                          />
+                          <button className="tag-save-btn" title="Valider" onClick={() => handleSaveRenameCategory(item.id)}>
+                            <Check size={13} />
+                          </button>
+                          <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingCategoryId(null)}>
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="tag-card-content">
+                          <span className="wp-tag-chip active">{item.label}</span>
+                          <span className="tag-word-count">{count} {count > 1 ? 'ressources' : 'ressource'}</span>
+                        </div>
+                      )}
+                      {!isEditing && (
+                        <div className="tag-mgmt-actions">
+                          <button
+                            className="tag-icon-btn"
+                            title="Renommer la catégorie"
+                            aria-label="Renommer la catégorie"
+                            onClick={() => handleStartRenameCategory(item.id, item.label)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            className="tag-icon-btn delete"
+                            title="Supprimer la catégorie"
+                            aria-label="Supprimer la catégorie"
+                            onClick={() => handleDeleteCategory(item.id)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div className="settings-section-subtitle" style={{ marginTop: 24 }}>
+              <span>Catégories intégrées par défaut</span>
+            </div>
+
+            <div className="builtin-categories-grid">
+              {BUILTIN_CATEGORIES.map((catId) => {
+                const count = state.resources.filter((r) => r.type === catId).length
+                const label = copy[draft.uiLanguage]?.categories[catId] ?? catId
+                return (
+                  <div key={catId} className="builtin-category-card">
+                    <span className="builtin-cat-badge">{label}</span>
+                    <span className="builtin-cat-count">{count} {count > 1 ? 'ressources' : 'ressource'}</span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </>}
 
@@ -752,7 +901,6 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                       autoComplete="off"
                     />
                   </label>
-                  {activeProvider.keyHint && <p className="field-hint">{activeProvider.keyHint}</p>}
 
                   <label>
                     Modèle Agent souhaité
@@ -765,7 +913,6 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                       placeholder={activeProvider.defaultModel}
                     />
                   </label>
-                  <p className="field-hint">Exemples : <code>{activeProvider.examples}</code></p>
 
                   <div className="connection-test-row">
                     <button
@@ -783,6 +930,112 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                       <div className={`connection-status-badge ${agentTestStatus.ok ? 'success' : 'error'}`}>
                         {agentTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
                         <span>{agentTestStatus.message}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Accordéon Avancé pour les modèles par tâche */}
+                  <div className="advanced-accordion-wrapper">
+                    <button
+                      type="button"
+                      className="advanced-accordion-trigger"
+                      onClick={() => setShowAdvancedAi((prev) => !prev)}
+                    >
+                      <span className="advanced-accordion-line" />
+                      <span className="advanced-accordion-label">
+                        <span>Avancé</span>
+                        {showAdvancedAi ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </span>
+                      <span className="advanced-accordion-line" />
+                    </button>
+
+                    {showAdvancedAi && (
+                      <div className="advanced-accordion-content">
+                        <p className="advanced-accordion-intro">
+                          Choisis un modèle d’IA spécifique pour chaque tâche ou laisse vide pour utiliser le modèle principal par défaut.
+                        </p>
+
+                        <div className="advanced-task-grid">
+                          {/* Tâche 1 : Traduction dans Speaking */}
+                          <div className="advanced-task-card">
+                            <div className="advanced-task-header">
+                              <strong>Traduction dans Speaking</strong>
+                              <small>Recherche & traduction en direct lors des sessions orales</small>
+                            </div>
+                            <label className="advanced-field">
+                              <span>Moteur de traduction</span>
+                              <select
+                                value={draft.api.speakingTranslationProvider || 'deepl'}
+                                onChange={(e) => updateApi('speakingTranslationProvider', e.target.value as 'deepl' | 'ai')}
+                              >
+                                <option value="deepl">DeepL (par défaut)</option>
+                                <option value="ai">Agent IA</option>
+                              </select>
+                            </label>
+                            {draft.api.speakingTranslationProvider === 'ai' && (
+                              <label className="advanced-field">
+                                <span>Modèle IA personnalisé (optionnel)</span>
+                                <input
+                                  type="text"
+                                  value={draft.api.taskModelSpeakingTranslation || ''}
+                                  onChange={(e) => updateApi('taskModelSpeakingTranslation', e.target.value)}
+                                  placeholder={draft.api.agentModel || activeProvider.defaultModel}
+                                />
+                              </label>
+                            )}
+                          </div>
+
+                          {/* Tâche 2 : Rédaction texte ressource */}
+                          <div className="advanced-task-card">
+                            <div className="advanced-task-header">
+                              <strong>Rédaction de ressources (« Écrire avec l'IA »)</strong>
+                              <small>Création d’histoires et d’articles adaptés au niveau</small>
+                            </div>
+                            <label className="advanced-field">
+                              <span>Modèle IA personnalisé (optionnel)</span>
+                              <input
+                                type="text"
+                                value={draft.api.taskModelResourceGeneration || ''}
+                                onChange={(e) => updateApi('taskModelResourceGeneration', e.target.value)}
+                                placeholder={draft.api.agentModel || activeProvider.defaultModel}
+                              />
+                            </label>
+                          </div>
+
+                          {/* Tâche 3 : Analyse des mots enregistrés */}
+                          <div className="advanced-task-card">
+                            <div className="advanced-task-header">
+                              <strong>Analyse des mots enregistrés</strong>
+                              <small>Génération de phonétique IPA, lemmes, traductions et tags</small>
+                            </div>
+                            <label className="advanced-field">
+                              <span>Modèle IA personnalisé (optionnel)</span>
+                              <input
+                                type="text"
+                                value={draft.api.taskModelWordAnalysis || ''}
+                                onChange={(e) => updateApi('taskModelWordAnalysis', e.target.value)}
+                                placeholder={draft.api.agentModel || activeProvider.defaultModel}
+                              />
+                            </label>
+                          </div>
+
+                          {/* Tâche 4 : Extraction et nettoyage URL */}
+                          <div className="advanced-task-card">
+                            <div className="advanced-task-header">
+                              <strong>Extraction URL (Web Cleaner)</strong>
+                              <small>Nettoyage intelligent des pages web (retrait des pubs et menus)</small>
+                            </div>
+                            <label className="advanced-field">
+                              <span>Modèle IA personnalisé (optionnel)</span>
+                              <input
+                                type="text"
+                                value={draft.api.taskModelUrlExtraction || ''}
+                                onChange={(e) => updateApi('taskModelUrlExtraction', e.target.value)}
+                                placeholder={draft.api.agentModel || activeProvider.defaultModel}
+                              />
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

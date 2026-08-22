@@ -24,8 +24,12 @@ export type AiWordAnalysisResult = {
   tags: string[]
 }
 
-export function getAgentConfig(api: ApiSettings): { endpoint: string; key: string; model: string } | null {
+export function getAgentConfig(
+  api: ApiSettings,
+  overrideModel?: string,
+): { endpoint: string; key: string; model: string } | null {
   const provider = api.agentProvider || 'openrouter'
+  const customModel = overrideModel?.trim()
 
   switch (provider) {
     case 'openrouter': {
@@ -34,7 +38,7 @@ export function getAgentConfig(api: ApiSettings): { endpoint: string; key: strin
       return {
         endpoint: 'https://openrouter.ai/api/v1/chat/completions',
         key,
-        model: api.agentModel?.trim() || 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        model: customModel || api.agentModel?.trim() || 'nvidia/nemotron-3-ultra-550b-a55b:free',
       }
     }
     case 'nvidia': {
@@ -43,7 +47,7 @@ export function getAgentConfig(api: ApiSettings): { endpoint: string; key: strin
       return {
         endpoint: 'https://integrate.api.nvidia.com/v1/chat/completions',
         key,
-        model: api.agentModel?.trim() || 'meta/llama-3.3-70b-instruct',
+        model: customModel || api.agentModel?.trim() || 'meta/llama-3.3-70b-instruct',
       }
     }
     case 'kimi': {
@@ -52,7 +56,7 @@ export function getAgentConfig(api: ApiSettings): { endpoint: string; key: strin
       return {
         endpoint: 'https://api.moonshot.cn/v1/chat/completions',
         key,
-        model: api.agentModel?.trim() || 'moonshot-v1-8k',
+        model: customModel || api.agentModel?.trim() || 'moonshot-v1-8k',
       }
     }
     case 'google': {
@@ -61,7 +65,7 @@ export function getAgentConfig(api: ApiSettings): { endpoint: string; key: strin
       return {
         endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
         key,
-        model: api.agentModel?.trim() || 'gemini-2.0-flash',
+        model: customModel || api.agentModel?.trim() || 'gemini-2.0-flash',
       }
     }
     case 'openai': {
@@ -70,7 +74,7 @@ export function getAgentConfig(api: ApiSettings): { endpoint: string; key: strin
       return {
         endpoint: 'https://api.openai.com/v1/chat/completions',
         key,
-        model: api.agentModel?.trim() || 'gpt-4o-mini',
+        model: customModel || api.agentModel?.trim() || 'gpt-4o-mini',
       }
     }
     default: {
@@ -79,14 +83,14 @@ export function getAgentConfig(api: ApiSettings): { endpoint: string; key: strin
       return {
         endpoint: 'https://openrouter.ai/api/v1/chat/completions',
         key,
-        model: api.agentModel?.trim() || 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        model: customModel || api.agentModel?.trim() || 'nvidia/nemotron-3-ultra-550b-a55b:free',
       }
     }
   }
 }
 
 /**
- * Analyzes a word using the main AI agent configured in Settings.
+ * Analyzes a word using the main AI agent configured in Settings (or taskModelWordAnalysis override).
  * Generates US IPA pronunciation, accurate translation in the user's interface language,
  * and matches applicable tags strictly from the user's existing tags list.
  */
@@ -113,7 +117,7 @@ export async function analyzeWordWithAi(args: {
     }
   }
 
-  const agentConfig = getAgentConfig(api)
+  const agentConfig = getAgentConfig(api, api.taskModelWordAnalysis)
 
   if (agentConfig) {
     try {

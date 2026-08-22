@@ -137,6 +137,16 @@ export type ApiSettings = {
   deepLKey?: string
   /** DeepL target translation language (e.g. EN-US, EN-GB, ES, DE, IT...) */
   deepLTargetLang?: string
+  /** Provider for translation in speaking sessions: 'deepl' (default) or 'ai' */
+  speakingTranslationProvider?: 'deepl' | 'ai'
+  /** Custom AI model override for speaking translation (when speakingTranslationProvider === 'ai') */
+  taskModelSpeakingTranslation?: string
+  /** Custom AI model override for resource writing / story generation */
+  taskModelResourceGeneration?: string
+  /** Custom AI model override for saved words analysis and translation */
+  taskModelWordAnalysis?: string
+  /** Custom AI model override for URL web text extraction */
+  taskModelUrlExtraction?: string
 }
 
 export type CustomTool = {

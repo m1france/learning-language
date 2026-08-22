@@ -110,7 +110,15 @@ export function paragraphsToResource(args: {
   }
 }
 
-export type ImportOptions = { type?: string; difficulty?: Difficulty }
+import type { ApiSettings } from './domain'
+import { extractUrlWithAi } from './features/resourceAiService'
+
+export type ImportOptions = {
+  type?: string
+  difficulty?: Difficulty
+  api?: ApiSettings
+  customCategories?: string[]
+}
 export type ImportResult = { ok: true; resource: Resource } | { ok: false; reason: 'invalid' | 'unreadable' | 'empty' }
 
 export async function importFromUrl(rawUrl: string, language: 'en' | 'fr', options: ImportOptions = {}): Promise<ImportResult> {
@@ -129,20 +137,49 @@ export async function importFromUrl(rawUrl: string, language: 'en' | 'fr', optio
   for (const attempt of attempts) {
     try {
       const html = await fetchText(attempt)
-      const readable = extractReadable(html, url.toString())
-      if (readable && readable.paragraphs.length) {
-        const isWiki = Boolean(wiki)
-        return {
-          ok: true,
-          resource: paragraphsToResource({
-            title: readable.title,
-            author: isWiki ? 'Wikipédia' : readable.author,
-            paragraphs: readable.paragraphs,
+      if (html && html.length > 50) {
+        // 1. Try AI-powered intelligent extractor if API is available
+        if (options.api) {
+          const aiResult = await extractUrlWithAi({
+            rawHtmlOrText: html,
+            url: url.toString(),
             language,
-            type: options.type,
-            difficulty: options.difficulty,
-            sourceUrl: url.toString(),
-          }),
+            existingCategories: options.customCategories,
+            api: options.api,
+          })
+          if (aiResult && aiResult.paragraphs.length > 0) {
+            const isWiki = Boolean(wiki)
+            return {
+              ok: true,
+              resource: paragraphsToResource({
+                title: aiResult.title,
+                author: isWiki ? 'Wikipédia' : aiResult.author,
+                paragraphs: aiResult.paragraphs,
+                language,
+                type: options.type ?? aiResult.category,
+                difficulty: options.difficulty ?? aiResult.difficulty,
+                sourceUrl: url.toString(),
+              }),
+            }
+          }
+        }
+
+        // 2. Standard heuristic readable extractor
+        const readable = extractReadable(html, url.toString())
+        if (readable && readable.paragraphs.length) {
+          const isWiki = Boolean(wiki)
+          return {
+            ok: true,
+            resource: paragraphsToResource({
+              title: readable.title,
+              author: isWiki ? 'Wikipédia' : readable.author,
+              paragraphs: readable.paragraphs,
+              language,
+              type: options.type,
+              difficulty: options.difficulty,
+              sourceUrl: url.toString(),
+            }),
+          }
         }
       }
     } catch {

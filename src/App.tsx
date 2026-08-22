@@ -12,6 +12,7 @@ import { FloatingMiniCam } from './features/speaking/FloatingMiniCam'
 import { LifePage } from './features/LifePage'
 import { Settings } from './features/Settings'
 import { VocabularyVaultModal } from './features/vocabulary/VocabularyVaultModal'
+import { AddResourceModal } from './components/AddResourceModal'
 import { prompts } from './data'
 import { baseUi, copy, detectUiLanguage, UI_LANGUAGES } from './i18n'
 import { doveWhite } from './assets/doveWhite'
@@ -460,7 +461,7 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
     {editingResource && <EditContentModal resource={editingResource} onSave={(updated) => onChange(upsertResource(state, updated))} onClose={() => setEditingResource(null)} />}
     {renamingResource && <RenameModal resource={renamingResource} onSave={(updated) => onChange(upsertResource(state, updated))} onClose={() => setRenamingResource(null)} />}
     {deletingResource && <DeleteModal resource={deletingResource} onConfirm={(id) => onChange(deleteResource(state, id))} onClose={() => setDeletingResource(null)} />}
-    {adding && <AddResource t={t} state={state} close={() => setAdding(false)} onAdd={(resource) => { onAdd(resource); setAdding(false) }} onChange={onChange} />}
+    {adding && <AddResourceModal t={t} state={state} close={() => setAdding(false)} onAdd={(resource) => { onAdd(resource); setAdding(false) }} onChange={onChange} />}
     {vocabVaultOpen && (
       <VocabularyVaultModal
         state={state}
@@ -470,111 +471,5 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
         onClose={() => setVocabVaultOpen(false)}
       />
     )}
-  </div>
-}
-
-function AddResource({ t, state, close, onAdd, onChange }: { t: UI; state: AppState; close: () => void; onAdd: (r: Resource) => void; onChange: (state: AppState) => void }) {
-  const [url, setUrl] = useState('')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'failed'>('idle')
-  const [pasted, setPasted] = useState('')
-  const [showPaste, setShowPaste] = useState(false)
-  const [difficulty, setDifficulty] = useState<Difficulty | 'auto'>('auto')
-  const [category, setCategory] = useState<string>('article')
-  const [managing, setManaging] = useState(false)
-  const [newCategory, setNewCategory] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const options = { type: category, difficulty: difficulty === 'auto' ? undefined : difficulty }
-
-  const doImport = async () => {
-    if (!url.trim()) return
-    setStatus('loading')
-    const result = await importFromUrl(url.trim(), state.settings.learningLanguage, options)
-    if (result.ok) onAdd(result.resource)
-    else { setStatus('failed'); setShowPaste(true) }
-  }
-
-  const doFile = async (file: File | undefined) => {
-    if (!file) return
-    setStatus('loading')
-    const result = await importFromFile(file, state.settings.learningLanguage, options)
-    if (result.ok) onAdd(result.resource)
-    else { setStatus('failed'); setShowPaste(true) }
-  }
-
-  const doPaste = () => {
-    const paragraphs = pasted.split(/\n{2,}|\r?\n(?=\S)/).map((p) => p.replace(/\s+/g, ' ').trim()).filter((p) => p.length > 1)
-    if (!paragraphs.length) return
-    onAdd(paragraphsToResource({ title: url.trim() || t.pastedTitle, paragraphs, language: state.settings.learningLanguage, type: category, difficulty: options.difficulty }))
-  }
-
-  const addCategory = () => {
-    const label = newCategory.trim()
-    if (!label) return
-    const categoryId = `custom-${id('cat').slice(4)}`
-    onChange({ ...state, customCategories: [...state.customCategories, { id: categoryId, label }] })
-    setCategory(categoryId)
-    setNewCategory('')
-  }
-
-  const renameCategory = (categoryId: string, label: string) => {
-    if (!label.trim()) return
-    onChange({ ...state, customCategories: state.customCategories.map((item) => (item.id === categoryId ? { ...item, label: label.trim() } : item)) })
-  }
-
-  const removeCategory = (categoryId: string) => {
-    if (category === categoryId) setCategory('article')
-    onChange({
-      ...state,
-      customCategories: state.customCategories.filter((item) => item.id !== categoryId),
-      resources: state.resources.map((resource) => (resource.type === categoryId ? { ...resource, type: 'article' } : resource)),
-    })
-  }
-
-  return <div className="modal-backdrop" onMouseDown={close}>
-    <div className="add-modal" onMouseDown={(event) => event.stopPropagation()}>
-      <button className="modal-close" onClick={close} aria-label="Fermer"><X size={18} /></button>
-      <p className="eyebrow">{t.addEyebrow}</p>
-      <h2>{t.addTitle}</h2>
-      <p>{t.addSub}</p>
-      <div className="add-meta">
-        <label>{t.difficultyLabel}
-          <select value={difficulty} onChange={(event) => setDifficulty(event.target.value as Difficulty | 'auto')}>
-            <option value="auto">{t.auto}</option>
-            {(['beginner', 'intermediate', 'advanced'] as Difficulty[]).map((level) => <option value={level} key={level}>{t.difficulty[level]}</option>)}
-          </select>
-        </label>
-        <label>{t.categoryLabel}
-          <select value={category} onChange={(event) => setCategory(event.target.value)}>
-            {BUILTIN_CATEGORIES.map((categoryId) => <option value={categoryId} key={categoryId}>{t.categories[categoryId]}</option>)}
-            {state.customCategories.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}
-          </select>
-        </label>
-      </div>
-      <button className="text-button manage-link" onClick={() => setManaging(!managing)}><SettingsIcon size={14} /> {t.manageCategories}</button>
-      {managing && <div className="category-manager">
-        {state.customCategories.map((item) => <div className="category-row" key={item.id}>
-          <input defaultValue={item.label} onBlur={(event) => renameCategory(item.id, event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') renameCategory(item.id, (event.target as HTMLInputElement).value) }} />
-          <button className="tool-remove" title="Supprimer" onClick={() => removeCategory(item.id)}><Trash2 size={14} /></button>
-        </div>)}
-        <div className="category-row">
-          <input placeholder={t.categoryName} value={newCategory} onChange={(event) => setNewCategory(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addCategory() }} />
-          <button className="outline" disabled={!newCategory.trim()} onClick={addCategory}><Plus size={15} /></button>
-        </div>
-      </div>}
-      <input ref={fileRef} type="file" accept=".txt,.md,.epub,.pdf,text/plain" hidden onChange={(event) => void doFile(event.target.files?.[0])} />
-      <button className="dropzone" onClick={() => fileRef.current?.click()}><Upload size={22} /><strong>{t.pickFile}</strong><small>.txt, .md, .epub, .pdf</small></button>
-      <div className="or"><span />{t.orUrl}<span /></div>
-      <div className="url-row">
-        <input placeholder="https://" value={url} onChange={(event) => setUrl(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void doImport() }} />
-        <button className="primary" disabled={status === 'loading' || !url.trim()} onClick={() => void doImport()}>{status === 'loading' ? <Loader2 size={16} className="spin" /> : <ArrowRight size={16} />}</button>
-      </div>
-      {status === 'failed' && <p className="import-error">{t.importError}</p>}
-      {(showPaste || status === 'failed') && <>
-        <textarea className="paste-area" rows={5} placeholder={t.pastePlaceholder} value={pasted} onChange={(event) => setPasted(event.target.value)} />
-        <button className="primary full" disabled={!pasted.trim()} onClick={doPaste}>{t.createResource} <ArrowRight size={16} /></button>
-      </>}
-      {status !== 'failed' && !showPaste && <button className="text-button paste-link" onClick={() => setShowPaste(true)}>{t.pasteLink}</button>}
-    </div>
   </div>
 }

@@ -38,9 +38,50 @@ export async function translateText(
 
   const apiKey = typeof apiOrKey === 'string' ? apiOrKey : apiOrKey?.deepLKey
   const apiSettings = typeof apiOrKey === 'object' ? apiOrKey : undefined
+  const preferAi = apiSettings?.speakingTranslationProvider === 'ai'
 
-  // 1. Essai avec l'API officielle DeepL si une clé est configurée
-  if (apiKey && apiKey.trim()) {
+  const tryAiTranslate = async (): Promise<DeepLTranslationResult | null> => {
+    if (!apiSettings) return null
+    const agent = getAgentConfig(apiSettings, apiSettings.taskModelSpeakingTranslation)
+    if (!agent || !agent.key) return null
+    try {
+      const prompt = `Translate the following ${sourceLang} text into ${targetLang}. Return ONLY the translation, without any quote marks, markdown or commentary.\n\n"${trimmed}"`
+      const response = await fetch(agent.endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${agent.key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+          'X-Title': 'Language Learning App',
+        },
+        body: JSON.stringify({
+          model: agent.model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          max_tokens: 150,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const translation = data.choices?.[0]?.message?.content?.trim()?.replace(/^["'«»]+|["'«»]+$/g, '')
+        if (translation) {
+          return {
+            translatedText: translation,
+            sourceText: trimmed,
+            targetLang,
+            provider: 'ai',
+          }
+        }
+      }
+    } catch (aiErr) {
+      console.warn('[AI Translation] Échec de l’agent IA:', aiErr)
+    }
+    return null
+  }
+
+  const tryDeepLTranslate = async (): Promise<DeepLTranslationResult | null> => {
+    if (!apiKey || !apiKey.trim()) return null
     const key = apiKey.trim()
     const isFreeKey = key.endsWith(':fx')
     
@@ -52,7 +93,6 @@ export async function translateText(
     const proxyEndpoint = isFreeKey ? '/api-deepl-free/v2/translate' : '/api-deepl-pro/v2/translate'
     const directEndpoint = isFreeKey ? 'https://api-free.deepl.com/v2/translate' : 'https://api.deepl.com/v2/translate'
 
-    // En environnement local avec serveur Vite, essayer d'abord le proxy pour contourner CORS
     const endpointsToTry = isLocalhost ? [proxyEndpoint, directEndpoint] : [directEndpoint, proxyEndpoint]
 
     for (const endpoint of endpointsToTry) {
@@ -91,46 +131,20 @@ export async function translateText(
         console.warn(`[DeepL API] Requête réseau impossible sur ${endpoint} (CORS ou hors-ligne):`, e)
       }
     }
+    return null
   }
 
-  // 2. Essai avec l'Agent IA configuré (OpenRouter, Gemini, Nvidia, OpenAI...) si disponible
-  if (apiSettings) {
-    const agent = getAgentConfig(apiSettings)
-    if (agent && agent.key) {
-      try {
-        const prompt = `Translate the following ${sourceLang} text into ${targetLang}. Return ONLY the translation, without any quote marks, markdown or commentary.\n\n"${trimmed}"`
-        const response = await fetch(agent.endpoint, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${agent.key}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
-            'X-Title': 'Language Learning App',
-          },
-          body: JSON.stringify({
-            model: agent.model,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.1,
-            max_tokens: 150,
-          }),
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          const translation = data.choices?.[0]?.message?.content?.trim()?.replace(/^["'«»]+|["'«»]+$/g, '')
-          if (translation) {
-            return {
-              translatedText: translation,
-              sourceText: trimmed,
-              targetLang,
-              provider: 'ai',
-            }
-          }
-        }
-      } catch (aiErr) {
-        console.warn('[AI Translation Fallback] Échec de l’agent IA:', aiErr)
-      }
-    }
+  // 1. Essai selon la préférence utilisateur (AI ou DeepL)
+  if (preferAi) {
+    const aiRes = await tryAiTranslate()
+    if (aiRes) return aiRes
+    const deeplRes = await tryDeepLTranslate()
+    if (deeplRes) return deeplRes
+  } else {
+    const deeplRes = await tryDeepLTranslate()
+    if (deeplRes) return deeplRes
+    const aiRes = await tryAiTranslate()
+    if (aiRes) return aiRes
   }
 
   // 3. Fallback gratuit ultra-rapide (Google Translate public)

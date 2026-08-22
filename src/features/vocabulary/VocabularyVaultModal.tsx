@@ -262,7 +262,7 @@ export function VocabularyVaultModal({
   }
 
   return (
-    <div className="vocab-vault-overlay" onClick={onClose}>
+    <div className="vocab-vault-backdrop vocab-vault-overlay" onClick={onClose}>
       <div className="vocab-vault-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header Bar */}
         <header className="vocab-vault-header">
