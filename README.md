@@ -18,7 +18,7 @@ La version de production se construit avec `npm run build`. Le dossier `dist/` e
 - Bibliothèque Reading vide au départ : import de fichiers (.txt, .md, .epub, .pdf), d'URL ou de texte collé, avec difficulté et catégories personnalisables (ajout, renommage, suppression).
 - Lecteur : mots cliquables, définition contextuelle (locale, Wiktionary ou IA), marquage grammatical avec couleurs par défaut personnalisables, lettres muettes, édition du texte, couvertures.
 - Learning Focus grammar pour projeter et annoter un texte.
-- Studio vocal, Mur des mots et Contexte natif.
+- Studio vocal, Mur des mots et bibliothèque Écouter : sélections YouTube, TikTok et Instagram séparées, ressources scientifiques, conseils d’apprentissage, favoris et contenus terminés. Les sélections suivent toujours la langue cible choisie.
 - Persistance locale : tout reste dans le navigateur.
 
 ## À relier pour la mise en production

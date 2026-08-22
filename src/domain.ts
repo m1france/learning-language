@@ -158,6 +158,12 @@ export type CustomTool = {
   url?: string
 }
 
+/** Persistent choices made in the listening library. */
+export type ListeningLibraryState = {
+  savedIds: string[]
+  completedIds: string[]
+}
+
 export type GrammarMarkType = 'verb' | 'noun' | 'adjective' | 'adverb' | 'expression' | string
 export type GrammarMarkStyle = 'highlight' | 'underline' | 'overlay'
 
@@ -209,10 +215,12 @@ export type AppState = {
   silentMarks: Record<string, number[]>
   /** User-defined grammar and semantic markings in display order. */
   markings?: MarkingDefinition[]
-  /** User-added tools shown in the "Vivre" section. */
+  /** Legacy user-added tools from the former "Vivre" section. */
   customTools: CustomTool[]
   /** Tool names removed by the user from the recommended list. */
   removedTools: string[]
+  /** Saved and completed items in the listening library. */
+  listening: ListeningLibraryState
   /** User-created resource categories. */
   customCategories: CustomCategory[]
   /** User-defined or global custom tags. */
