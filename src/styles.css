@@ -11645,14 +11645,12 @@ h2 {
 .add-resource-modal {
   position: relative;
   background: var(--white);
-  color: var(--ink);
-  border-radius: 16px;
-  padding: 32px 34px;
-  width: min(520px, 94vw);
+  padding: 28px 30px;
+  width: min(500px, 94vw);
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   box-sizing: border-box;
 }
@@ -11662,9 +11660,9 @@ h2 {
 }
 
 .add-res-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.2;
   margin: 0;
   color: var(--ink);
 }
@@ -11690,23 +11688,27 @@ h2 {
   font-weight: 500;
 }
 
+.add-res-select-wrap {
+  position: relative;
+  width: 100%;
+}
+
 .add-res-format-dropdown {
   width: 100%;
-  padding: 10px 14px;
-  border-radius: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--ink);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 500;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 
 .add-res-format-dropdown:focus {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+  border-color: var(--ink);
 }
 
 .add-res-subtabs {
@@ -11760,8 +11762,8 @@ h2 {
 
 .add-res-textarea {
   width: 100%;
-  padding: 12px 42px 12px 12px;
-  border-radius: 10px;
+  padding: 10px 38px 10px 12px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--ink);
@@ -11771,29 +11773,26 @@ h2 {
   resize: vertical;
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.add-res-prompt-box.is-random .add-res-textarea {
-  background: color-mix(in srgb, var(--paper) 70%, #7c3aed 10%);
-  border-style: dashed;
-  border-color: #a855f7;
-  color: var(--muted);
-  cursor: not-allowed;
+  transition: border-color 0.15s ease;
 }
 
 .add-res-textarea:focus {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+  border-color: var(--ink);
+}
+
+.add-res-prompt-box.is-random .add-res-textarea {
+  background: var(--paper);
+  border-style: dashed;
+  border-color: var(--line);
 }
 
 .add-res-random-btn {
   position: absolute;
+  top: 10px;
   right: 10px;
-  bottom: 12px;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
   border: 1px solid var(--line);
   background: var(--white);
   color: var(--muted);
@@ -11805,21 +11804,15 @@ h2 {
 }
 
 .add-res-random-btn:hover {
-  background: #f3e8ff;
-  color: #7c3aed;
-  border-color: #d8b4fe;
-  transform: scale(1.06);
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--ink);
 }
 
 .add-res-random-btn.active {
-  background: #7c3aed;
+  background: var(--ink);
   color: #ffffff;
-  border-color: #6d28d9;
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
-}
-
-.add-res-random-tooltip {
-  display: none;
+  border-color: var(--ink);
 }
 
 .add-res-meta-row {
@@ -11846,7 +11839,7 @@ h2 {
 .add-res-meta-row select:focus,
 .add-res-content-pane input[type="text"]:focus,
 .add-res-content-pane input[type="url"]:focus {
-  border-color: #7c3aed;
+  border-color: var(--ink);
 }
 
 .add-res-hint {
@@ -11863,28 +11856,26 @@ h2 {
   display: grid;
   justify-items: center;
   gap: 6px;
-  padding: 26px;
+  padding: 24px;
   border: 2px dashed var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--paper);
   color: var(--muted);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 
 .add-res-dropzone:hover {
-  border-color: #7c3aed;
-  background: rgba(124, 58, 237, 0.04);
+  border-color: var(--ink);
 }
 
 .add-res-dropzone.has-file {
   border-color: #16a34a;
-  background: rgba(22, 163, 74, 0.05);
   color: var(--ink);
 }
 
 .add-res-dropzone strong {
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--ink);
 }
 
@@ -11896,7 +11887,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-radius: 8px;
   background: #fef2f2;
   border: 1px solid #fecaca;
@@ -11913,10 +11904,167 @@ h2 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 44px;
-  font-size: 14px;
+  height: 42px;
+  font-size: 13.5px;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: 8px;
+}
+
+/* --- Cover AI Watermark --- */
+.cover-ai-watermark {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* --- Unified Settings: Connexions Keys & Models Layout --- */
+.conn-keys-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.conn-key-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conn-key-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.conn-key-row label span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.conn-input-action-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.conn-input-action-wrap input {
+  flex: 1;
+}
+
+.connection-test-btn-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.connection-test-btn-compact:hover:not(:disabled) {
+  background: var(--white);
+  border-color: var(--ink);
+}
+
+.connection-test-btn-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Unified Models by Task List */
+.conn-models-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.conn-task-row {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+.conn-task-row.is-main {
+  background: var(--white);
+  border-color: var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.conn-task-info strong {
+  display: block;
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.conn-task-info small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.conn-task-input-wrap {
+  width: 100%;
+}
+
+.conn-task-input-wrap input,
+.conn-task-input-wrap select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+  font-size: 12.5px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.conn-task-input-wrap.dual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .conn-task-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }
 
 /* --- 4. Settings Advanced Accordion for Per-Task AI Models --- */

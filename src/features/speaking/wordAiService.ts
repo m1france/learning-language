@@ -1,4 +1,5 @@
 import type { ApiSettings, Language } from '../../domain'
+import { formatIpaPronunciation } from '../vocabulary/phoneticUtils'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
@@ -91,7 +92,8 @@ export function getAgentConfig(
 
 /**
  * Analyzes a word using the main AI agent configured in Settings (or taskModelWordAnalysis override).
- * Generates US IPA pronunciation, accurate translation in the user's interface language,
+ * Generates US IPA pronunciation (with bold markdown on stressed syllable and ' · ' separators),
+ * accurate translations in the user's interface language (up to 3 comma-separated meanings),
  * and matches applicable tags strictly from the user's existing tags list.
  */
 export async function analyzeWordWithAi(args: {
@@ -130,8 +132,8 @@ User's existing vocabulary tags: ${JSON.stringify(existingTags)}.
 
 Tasks:
 1. "word": provide the exact word or canonical form "${clean}".
-2. "translation": provide the concise and accurate translation in ${uiLang === 'fr' ? 'French' : 'English'}.
-3. "pronunciation": provide the standard General American / US IPA transcription enclosed in slashes (e.g. /həˈloʊ/, /ˈwɔːtər/).
+2. "translation": provide the concise and accurate translation in ${uiLang === 'fr' ? 'French' : 'English'}. If the word has multiple common meanings or nuances, provide up to 3 translations separated by commas and a space (e.g. "serrer, resserrer, tendre").
+3. "pronunciation": provide standard General American / US IPA transcription enclosed in slashes. Represent syllable boundaries with " · " and the primary stressed syllable formatted in markdown bold (**syllable**), without the "'" or "ˈ" stress marker (e.g. "/**taɪ** · tən/", "/kəm · **pjuː** · tər/", "/**wɔː** · tər/").
 4. "parent": if "${clean}" is an inflected/conjugated form (e.g. "went" -> "go", "speaking" -> "speak"), provide the base lemma; otherwise empty string "".
 5. "partOfSpeech": noun, verb, adjective, adverb, expression, or phrase.
 6. "tags": an array of tags. IMPORTANT: ONLY include tags that strictly exist in the User's existing vocabulary tags list (${JSON.stringify(existingTags)}). If none match or the list is empty, return an empty array [].
@@ -178,10 +180,12 @@ Return ONLY a JSON object with this exact structure (no other markdown or commen
             ? parsed.tags.filter((t) => typeof t === 'string' && existingTags.includes(t))
             : []
 
+          const formattedPronunciation = formatIpaPronunciation(parsed.pronunciation || '')
+
           return {
             word: parsed.word || clean,
             translation: parsed.translation || fallbackTranslation || clean,
-            pronunciation: parsed.pronunciation || '',
+            pronunciation: formattedPronunciation,
             parent: parsed.parent || '',
             partOfSpeech: parsed.partOfSpeech || '',
             tags: validTags,

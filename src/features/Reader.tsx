@@ -194,6 +194,7 @@ export function Cover({
   cover,
   coverImage,
   type,
+  isAiGenerated,
   onClick,
   onContextMenu,
   editHint,
@@ -201,13 +202,30 @@ export function Cover({
   cover: Resource['cover']
   coverImage?: string
   type: string
+  isAiGenerated?: boolean
   onClick?: (e: React.MouseEvent) => void
   onContextMenu?: (e: React.MouseEvent) => void
   editHint?: string
 }) {
-  const inner = coverImage
-    ? <img className="cover-img" src={coverImage} alt="" />
-    : <><span className="cover-type">{type}</span><div className="cover-shape one" /><div className="cover-shape two" /><div className="cover-line" /></>
+  const inner = (
+    <>
+      {coverImage ? (
+        <img className="cover-img" src={coverImage} alt="" />
+      ) : (
+        <>
+          <span className="cover-type">{type}</span>
+          <div className="cover-shape one" />
+          <div className="cover-shape two" />
+          <div className="cover-line" />
+        </>
+      )}
+      {isAiGenerated && (
+        <span className="cover-ai-watermark" title="Généré avec l'IA">
+          IA
+        </span>
+      )}
+    </>
+  )
   if (!onClick && !onContextMenu) return <div className={`cover ${cover}`}>{inner}</div>
   return (
     <button
@@ -222,7 +240,7 @@ export function Cover({
   )
 }
 
-export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProgress, onSaveWord, onDeleteWord, onOpenFocus, onPageSize, onWordMark, onSilentMark, onMarkColor, onAddMarking, onRenameMarking, onDeleteMarking, onResetMarks }: {
+export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProgress, onSaveWord, onDeleteWord, onOpenFocus, onPageSize, onWordMark, onSilentMark, onMarkColor, onAddMarking, onRenameMarking, onDeleteMarking, onResetMarks, onAiTaskChange }: {
   state: AppState
   resource: Resource
   ui: UiLanguage
@@ -241,6 +259,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   onRenameMarking?: (markingId: string, newLabel: string) => void
   onDeleteMarking?: (markingId: string) => void
   onResetMarks?: (language: Language) => void
+  onAiTaskChange?: (running: boolean) => void
 }) {
   const t = readerCopy[ui]
   const settings = state.settings
@@ -272,6 +291,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     const cleaned = cleanRaw(rawWord)
     if (!cleaned) return
     setSavingWordAi(cleaned)
+    onAiTaskChange?.(true)
     try {
       const analysis = await analyzeWordWithAi({
         word: cleaned,
@@ -291,11 +311,13 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         pronunciation: analysis.pronunciation,
         partOfSpeech: analysis.partOfSpeech,
         tags: analysis.tags,
+        knowledge: 1,
       })
     } catch (e) {
       console.error('[Reader] Error saving word with AI:', e)
     } finally {
       setSavingWordAi(null)
+      onAiTaskChange?.(false)
     }
   }
 
@@ -689,6 +711,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             cover={resource.cover}
             coverImage={resource.coverImage}
             type={categoryLabel(resource.type)}
+            isAiGenerated={resource.isAiGenerated}
             onClick={() => fileInputRef.current?.click()}
             onContextMenu={handleCoverContextMenu}
             editHint={t.coverChange}

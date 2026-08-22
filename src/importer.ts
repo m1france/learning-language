@@ -92,6 +92,8 @@ export function paragraphsToResource(args: {
   difficulty?: Difficulty
   language: 'en' | 'fr'
   sourceUrl?: string
+  coverImage?: string
+  isAiGenerated?: boolean
 }): Resource {
   const words = args.paragraphs.join(' ').split(/\s+/).filter(Boolean).length
   return {
@@ -102,11 +104,13 @@ export function paragraphsToResource(args: {
     difficulty: args.difficulty ?? autoDifficulty(words),
     minutes: Math.max(1, Math.round(words / 180)),
     cover: (['coral', 'blue', 'gold', 'green'] as const)[Math.floor(Math.random() * 4)],
+    coverImage: args.coverImage,
     language: args.language,
     chapters: toChapters(args.paragraphs),
     sourceUrl: args.sourceUrl,
     createdAt: new Date().toISOString(),
     imported: true,
+    isAiGenerated: args.isAiGenerated,
   }
 }
 

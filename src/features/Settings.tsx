@@ -41,7 +41,7 @@ type SettingsProps = {
   onResetData: () => void
 }
 
-type Tab = 'profile' | 'reading' | 'categories' | 'markings' | 'shortcuts' | 'tags' | 'connections' | 'data'
+type Tab = 'profile' | 'reading' | 'markings' | 'shortcuts' | 'tags-categories' | 'connections' | 'data'
 
 const TEACHER_TOOLS_INFO = [
   { id: 'select', label: 'Sélection', desc: 'Sélectionner et déplacer des formes ou des notes' },
@@ -151,6 +151,16 @@ const OPENROUTER_VOICES = [
   { id: 'shimmer', label: 'Shimmer (Clair & doux)' },
 ]
 
+const DEFAULT_CATEGORIES: { id: string; label: string }[] = [
+  { id: 'story', label: 'Histoire' },
+  { id: 'article', label: 'Article' },
+  { id: 'culture', label: 'Culture' },
+  { id: 'script', label: 'Script' },
+  { id: 'book', label: 'Livre' },
+  { id: 'news', label: 'Actualités' },
+  { id: 'scientific', label: 'Scientifique' },
+]
+
 export function Settings({ settings, state, onSave, onChangeState, onResetData }: SettingsProps) {
   const [draft, setDraft] = useState<UserSettings>(settings)
   const [tab, setTab] = useState<Tab>('profile')
@@ -169,19 +179,20 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
 
   const [recordingTool, setRecordingTool] = useState<string | null>(null)
 
-  // Category management states
+  // Unified Category management
   const [newCategoryName, setNewCategoryName] = useState('')
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [editingCategoryName, setEditingCategoryName] = useState('')
 
-  // Advanced AI per-task settings accordion state
-  const [showAdvancedAi, setShowAdvancedAi] = useState(false)
+  const currentCategories = state.customCategories && state.customCategories.length > 0
+    ? state.customCategories
+    : DEFAULT_CATEGORIES
 
   const handleAddCategory = () => {
     const label = newCategoryName.trim()
     if (!label) return
-    const categoryId = `custom-${id('cat').slice(4)}`
-    onChangeState({ ...state, customCategories: [...state.customCategories, { id: categoryId, label }] })
+    const categoryId = `cat-${id('c').slice(2)}`
+    onChangeState({ ...state, customCategories: [...currentCategories, { id: categoryId, label }] })
     setNewCategoryName('')
   }
 
@@ -195,7 +206,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
     if (label) {
       onChangeState({
         ...state,
-        customCategories: state.customCategories.map((c) => (c.id === categoryId ? { ...c, label } : c)),
+        customCategories: currentCategories.map((c) => (c.id === categoryId ? { ...c, label } : c)),
       })
     }
     setEditingCategoryId(null)
@@ -203,10 +214,12 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
   }
 
   const handleDeleteCategory = (categoryId: string) => {
+    const remaining = currentCategories.filter((c) => c.id !== categoryId)
+    const fallbackId = remaining[0]?.id || 'article'
     onChangeState({
       ...state,
-      customCategories: state.customCategories.filter((c) => c.id !== categoryId),
-      resources: state.resources.map((res) => (res.type === categoryId ? { ...res, type: 'article' } : res)),
+      customCategories: remaining,
+      resources: state.resources.map((res) => (res.type === categoryId ? { ...res, type: fallbackId } : res)),
     })
     if (editingCategoryId === categoryId) {
       setEditingCategoryId(null)
@@ -381,10 +394,9 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
   const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
     { id: 'profile', icon: <User size={16} />, label: 'Profil' },
     { id: 'reading', icon: <BookOpen size={16} />, label: 'Lecture' },
-    { id: 'categories', icon: <Layers size={16} />, label: 'Catégories' },
     { id: 'markings', icon: <Palette size={16} />, label: 'Marquages' },
     { id: 'shortcuts', icon: <Keyboard size={16} />, label: 'Raccourcis' },
-    { id: 'tags', icon: <Tag size={16} />, label: 'Tags' },
+    { id: 'tags-categories', icon: <Tag size={16} />, label: 'Tags & Catégories' },
     { id: 'connections', icon: <KeyRound size={16} />, label: 'Connexions' },
     { id: 'data', icon: <Database size={16} />, label: 'Données' },
   ]
@@ -424,107 +436,6 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
               </select>
             </label>
             <label className="toggle-field"><span><strong>Grammaire visuelle</strong><small>Surligne doucement les verbes dans le lecteur.</small></span><input type="checkbox" checked={draft.showGrammar} onChange={(event) => update('showGrammar', event.target.checked)} /></label>
-          </div>
-        </>}
-
-        {tab === 'categories' && <>
-          <SettingHeading title="Gestion des catégories" detail="Personnalise, ajoute, renomme ou supprime les catégories pour classer ta bibliothèque de ressources." />
-          <div className="settings-tags-section">
-            <div className="tags-add-bar">
-              <input
-                type="text"
-                placeholder="Nouvelle catégorie (ex. Poésie, Philosophie, Biographie...)"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }}
-              />
-              <button className="primary" disabled={!newCategoryName.trim()} onClick={handleAddCategory}>
-                <Plus size={14} /> Ajouter
-              </button>
-            </div>
-
-            <div className="settings-section-subtitle">
-              <span>Tes catégories personnalisées</span>
-            </div>
-
-            <div className="tags-grid-list">
-              {state.customCategories.length === 0 ? (
-                <div className="tags-empty-state">
-                  <p>Aucune catégorie personnalisée créée pour le moment. Ajoute ta première catégorie ci-dessus.</p>
-                </div>
-              ) : (
-                state.customCategories.map((item) => {
-                  const count = state.resources.filter((r) => r.type === item.id).length
-                  const isEditing = editingCategoryId === item.id
-
-                  return (
-                    <div key={item.id} className="tag-mgmt-card">
-                      {isEditing ? (
-                        <div className="tag-rename-box">
-                          <input
-                            autoFocus
-                            value={editingCategoryName}
-                            onChange={(e) => setEditingCategoryName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveRenameCategory(item.id)
-                              if (e.key === 'Escape') setEditingCategoryId(null)
-                            }}
-                          />
-                          <button className="tag-save-btn" title="Valider" onClick={() => handleSaveRenameCategory(item.id)}>
-                            <Check size={13} />
-                          </button>
-                          <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingCategoryId(null)}>
-                            <X size={13} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="tag-card-content">
-                          <span className="wp-tag-chip active">{item.label}</span>
-                          <span className="tag-word-count">{count} {count > 1 ? 'ressources' : 'ressource'}</span>
-                        </div>
-                      )}
-                      {!isEditing && (
-                        <div className="tag-mgmt-actions">
-                          <button
-                            className="tag-icon-btn"
-                            title="Renommer la catégorie"
-                            aria-label="Renommer la catégorie"
-                            onClick={() => handleStartRenameCategory(item.id, item.label)}
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            className="tag-icon-btn delete"
-                            title="Supprimer la catégorie"
-                            aria-label="Supprimer la catégorie"
-                            onClick={() => handleDeleteCategory(item.id)}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
-              )}
-            </div>
-
-            <div className="settings-section-subtitle" style={{ marginTop: 24 }}>
-              <span>Catégories intégrées par défaut</span>
-            </div>
-
-            <div className="builtin-categories-grid">
-              {BUILTIN_CATEGORIES.map((catId) => {
-                const count = state.resources.filter((r) => r.type === catId).length
-                const label = copy[draft.uiLanguage]?.categories[catId] ?? catId
-                return (
-                  <div key={catId} className="builtin-category-card">
-                    <span className="builtin-cat-badge">{label}</span>
-                    <span className="builtin-cat-count">{count} {count > 1 ? 'ressources' : 'ressource'}</span>
-                  </div>
-                )
-              })}
-            </div>
           </div>
         </>}
 
@@ -700,9 +611,91 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
           </div>
         </>}
 
-        {tab === 'tags' && <>
-          <SettingHeading title="Gestion des tags" detail="Organise tes mots avec des tags personnalisés. Tu peux ajouter, renommer ou supprimer des tags existants, et cliquer sur un tag pour voir les mots associés." />
+        {tab === 'tags-categories' && <>
+          <SettingHeading title="Tags & Catégories" detail="Organise ta bibliothèque avec tes catégories et classe ton vocabulaire avec tes tags." />
+          
+          {/* SECTION 1 : CATÉGORIES DE LECTURE */}
           <div className="settings-tags-section">
+            <div className="settings-section-subtitle">
+              <span>Catégories de lecture</span>
+            </div>
+
+            <div className="tags-add-bar">
+              <input
+                type="text"
+                placeholder="Nouvelle catégorie (ex. Poésie, Philosophie, Biographie...)"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }}
+              />
+              <button className="primary" disabled={!newCategoryName.trim()} onClick={handleAddCategory}>
+                <Plus size={14} /> Ajouter
+              </button>
+            </div>
+
+            <div className="tags-grid-list">
+              {currentCategories.map((item) => {
+                const count = state.resources.filter((r) => r.type === item.id).length
+                const isEditing = editingCategoryId === item.id
+
+                return (
+                  <div key={item.id} className="tag-mgmt-card">
+                    {isEditing ? (
+                      <div className="tag-rename-box">
+                        <input
+                          autoFocus
+                          value={editingCategoryName}
+                          onChange={(e) => setEditingCategoryName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveRenameCategory(item.id)
+                            if (e.key === 'Escape') setEditingCategoryId(null)
+                          }}
+                        />
+                        <button className="tag-save-btn" title="Valider" onClick={() => handleSaveRenameCategory(item.id)}>
+                          <Check size={13} />
+                        </button>
+                        <button className="tag-cancel-btn" title="Annuler" onClick={() => setEditingCategoryId(null)}>
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="tag-card-content">
+                        <span className="wp-tag-chip active">{item.label}</span>
+                        <span className="tag-word-count">{count} {count > 1 ? 'ressources' : 'ressource'}</span>
+                      </div>
+                    )}
+                    {!isEditing && (
+                      <div className="tag-mgmt-actions">
+                        <button
+                          className="tag-icon-btn"
+                          title="Renommer la catégorie"
+                          aria-label="Renommer la catégorie"
+                          onClick={() => handleStartRenameCategory(item.id, item.label)}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          className="tag-icon-btn delete"
+                          title="Supprimer la catégorie"
+                          aria-label="Supprimer la catégorie"
+                          onClick={() => handleDeleteCategory(item.id)}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* SECTION 2 : TAGS DE VOCABULAIRE */}
+          <div className="settings-tags-section" style={{ marginTop: 32 }}>
+            <div className="settings-section-subtitle">
+              <span>Tags de vocabulaire</span>
+            </div>
+
             <div className="tags-add-bar">
               <input
                 type="text"
@@ -724,6 +717,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
               ) : (
                 allTags.map((tag) => {
                   const count = state.words.filter((w) => w.tags?.includes(tag) && w.language === draft.learningLanguage).length
+                  const isCustom = state.customTags?.includes(tag)
                   const isEditing = editingTag === tag
                   const isSelected = selectedTag === tag
 
@@ -763,17 +757,19 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                           >
                             <Pencil size={13} />
                           </button>
-                          <button
-                            className="tag-icon-btn delete"
-                            title="Supprimer le tag"
-                            aria-label="Supprimer le tag"
-                            onClick={() => {
-                              if (selectedTag === tag) setSelectedTag(null)
-                              handleDeleteTag(tag)
-                            }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          {isCustom && (
+                            <button
+                              className="tag-icon-btn delete"
+                              title="Supprimer le tag"
+                              aria-label="Supprimer le tag"
+                              onClick={() => {
+                                if (selectedTag === tag) setSelectedTag(null)
+                                handleDeleteTag(tag)
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -852,13 +848,13 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
         </>}
 
         {tab === 'connections' && <>
-          <SettingHeading title="Connexions & IA" detail="Les clés restent strictement dans ce navigateur. Tu peux tester chaque service en direct." />
+          <SettingHeading title="Connexions & Modèles IA" detail="Configure tes clés d’API et personnalise les modèles d’intelligence artificielle par tâche." />
           
-          {/* CARTE 1 : AGENT PRINCIPAL (RÉFLEXION TEXTUELLE) */}
+          {/* SECTION 1 : CLÉS D'API */}
           <div className="connection-card">
             <div>
-              <h3>1. Modèle Agent Principal (Analyse & Réflexion)</h3>
-              <p>Pilote l'analyse linguistique de mots, la décomposition grammaticale et les explications. <em>(Modèle textuel pur — ne nécessite aucune fonction audio).</em></p>
+              <h3>1. Clés d'API & Fournisseurs</h3>
+              <p>Renseigne tes clés d'accès. Elles restent strictement stockées dans ce navigateur.</p>
             </div>
 
             <div className="preset-grid">
@@ -884,48 +880,36 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
               })}
             </div>
 
-            {(() => {
-              const activeProvider = AGENT_PROVIDERS.find((p) => p.id === (draft.api.agentProvider || 'openrouter')) || AGENT_PROVIDERS[0]
-              return (
-                <>
-                  <label>
-                    {activeProvider.keyLabel}
-                    <input
-                      type="password"
-                      value={(draft.api[activeProvider.keyField] as string) || ''}
-                      onChange={(event) => {
-                        updateApi(activeProvider.keyField, event.target.value)
-                        setAgentTestStatus(null)
-                      }}
-                      placeholder={activeProvider.keyPlaceholder}
-                      autoComplete="off"
-                    />
-                  </label>
-
-                  <label>
-                    Modèle Agent souhaité
-                    <input
-                      value={draft.api.agentModel || ''}
-                      onChange={(event) => {
-                        updateApi('agentModel', event.target.value)
-                        setAgentTestStatus(null)
-                      }}
-                      placeholder={activeProvider.defaultModel}
-                    />
-                  </label>
-
-                  <div className="connection-test-row">
-                    <button
-                      type="button"
-                      className="connection-test-btn"
-                      onClick={handleTestAgent}
-                      disabled={testingAgent || !(draft.api[activeProvider.keyField] as string)?.trim()}
-                      title="Envoie une requête de test rapide pour vérifier la validité de la clé et du modèle"
-                    >
-                      {testingAgent ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
-                      <span>{testingAgent ? 'Test en cours…' : 'Tester la connexion Agent'}</span>
-                    </button>
-
+            <div className="conn-keys-list">
+              {(() => {
+                const activeProvider = AGENT_PROVIDERS.find((p) => p.id === (draft.api.agentProvider || 'openrouter')) || AGENT_PROVIDERS[0]
+                return (
+                  <div className="conn-key-row">
+                    <label>
+                      <span>{activeProvider.keyLabel}</span>
+                      <div className="conn-input-action-wrap">
+                        <input
+                          type="password"
+                          value={(draft.api[activeProvider.keyField] as string) || ''}
+                          onChange={(e) => {
+                            updateApi(activeProvider.keyField, e.target.value)
+                            setAgentTestStatus(null)
+                          }}
+                          placeholder={activeProvider.keyPlaceholder}
+                          autoComplete="off"
+                        />
+                        <button
+                          type="button"
+                          className="connection-test-btn-compact"
+                          onClick={handleTestAgent}
+                          disabled={testingAgent || !(draft.api[activeProvider.keyField] as string)?.trim()}
+                          title="Tester la clé et le modèle"
+                        >
+                          {testingAgent ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+                          <span>{testingAgent ? 'Test…' : 'Tester'}</span>
+                        </button>
+                      </div>
+                    </label>
                     {agentTestStatus && (
                       <div className={`connection-status-badge ${agentTestStatus.ok ? 'success' : 'error'}`}>
                         {agentTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
@@ -933,294 +917,224 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                       </div>
                     )}
                   </div>
+                )
+              })()}
 
-                  {/* Accordéon Avancé pour les modèles par tâche */}
-                  <div className="advanced-accordion-wrapper">
+              <div className="conn-key-row">
+                <label>
+                  <span>Clé API DeepL (Traduction & Dictionnaire en direct)</span>
+                  <div className="conn-input-action-wrap">
+                    <input
+                      type="password"
+                      value={draft.api.deepLKey || ''}
+                      onChange={(e) => {
+                        updateApi('deepLKey', e.target.value)
+                        setDeepLTestStatus(null)
+                      }}
+                      placeholder="ex. 00000000-0000-0000-0000-000000000000:fx"
+                      autoComplete="off"
+                    />
                     <button
                       type="button"
-                      className="advanced-accordion-trigger"
-                      onClick={() => setShowAdvancedAi((prev) => !prev)}
+                      className="connection-test-btn-compact"
+                      onClick={handleTestDeepL}
+                      disabled={testingDeepL || !draft.api.deepLKey?.trim()}
+                      title="Tester la clé DeepL"
                     >
-                      <span className="advanced-accordion-line" />
-                      <span className="advanced-accordion-label">
-                        <span>Avancé</span>
-                        {showAdvancedAi ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </span>
-                      <span className="advanced-accordion-line" />
+                      {testingDeepL ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
+                      <span>{testingDeepL ? 'Test…' : 'Tester'}</span>
                     </button>
-
-                    {showAdvancedAi && (
-                      <div className="advanced-accordion-content">
-                        <p className="advanced-accordion-intro">
-                          Choisis un modèle d’IA spécifique pour chaque tâche ou laisse vide pour utiliser le modèle principal par défaut.
-                        </p>
-
-                        <div className="advanced-task-grid">
-                          {/* Tâche 1 : Traduction dans Speaking */}
-                          <div className="advanced-task-card">
-                            <div className="advanced-task-header">
-                              <strong>Traduction dans Speaking</strong>
-                              <small>Recherche & traduction en direct lors des sessions orales</small>
-                            </div>
-                            <label className="advanced-field">
-                              <span>Moteur de traduction</span>
-                              <select
-                                value={draft.api.speakingTranslationProvider || 'deepl'}
-                                onChange={(e) => updateApi('speakingTranslationProvider', e.target.value as 'deepl' | 'ai')}
-                              >
-                                <option value="deepl">DeepL (par défaut)</option>
-                                <option value="ai">Agent IA</option>
-                              </select>
-                            </label>
-                            {draft.api.speakingTranslationProvider === 'ai' && (
-                              <label className="advanced-field">
-                                <span>Modèle IA personnalisé (optionnel)</span>
-                                <input
-                                  type="text"
-                                  value={draft.api.taskModelSpeakingTranslation || ''}
-                                  onChange={(e) => updateApi('taskModelSpeakingTranslation', e.target.value)}
-                                  placeholder={draft.api.agentModel || activeProvider.defaultModel}
-                                />
-                              </label>
-                            )}
-                          </div>
-
-                          {/* Tâche 2 : Rédaction texte ressource */}
-                          <div className="advanced-task-card">
-                            <div className="advanced-task-header">
-                              <strong>Rédaction de ressources (« Écrire avec l'IA »)</strong>
-                              <small>Création d’histoires et d’articles adaptés au niveau</small>
-                            </div>
-                            <label className="advanced-field">
-                              <span>Modèle IA personnalisé (optionnel)</span>
-                              <input
-                                type="text"
-                                value={draft.api.taskModelResourceGeneration || ''}
-                                onChange={(e) => updateApi('taskModelResourceGeneration', e.target.value)}
-                                placeholder={draft.api.agentModel || activeProvider.defaultModel}
-                              />
-                            </label>
-                          </div>
-
-                          {/* Tâche 3 : Analyse des mots enregistrés */}
-                          <div className="advanced-task-card">
-                            <div className="advanced-task-header">
-                              <strong>Analyse des mots enregistrés</strong>
-                              <small>Génération de phonétique IPA, lemmes, traductions et tags</small>
-                            </div>
-                            <label className="advanced-field">
-                              <span>Modèle IA personnalisé (optionnel)</span>
-                              <input
-                                type="text"
-                                value={draft.api.taskModelWordAnalysis || ''}
-                                onChange={(e) => updateApi('taskModelWordAnalysis', e.target.value)}
-                                placeholder={draft.api.agentModel || activeProvider.defaultModel}
-                              />
-                            </label>
-                          </div>
-
-                          {/* Tâche 4 : Extraction et nettoyage URL */}
-                          <div className="advanced-task-card">
-                            <div className="advanced-task-header">
-                              <strong>Extraction URL (Web Cleaner)</strong>
-                              <small>Nettoyage intelligent des pages web (retrait des pubs et menus)</small>
-                            </div>
-                            <label className="advanced-field">
-                              <span>Modèle IA personnalisé (optionnel)</span>
-                              <input
-                                type="text"
-                                value={draft.api.taskModelUrlExtraction || ''}
-                                onChange={(e) => updateApi('taskModelUrlExtraction', e.target.value)}
-                                placeholder={draft.api.agentModel || activeProvider.defaultModel}
-                              />
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
-                </>
-              )
-            })()}
-          </div>
-
-          {/* CARTE 2 : SYNTHÈSE VOCALE (TTS) */}
-          <div className="connection-card">
-            <div>
-              <h3>2. Synthèse Vocale / TTS (Lecture Audio)</h3>
-              <p>Moteur dédié qui lit les mots et phrases à voix haute avec prononciation naturelle.</p>
-            </div>
-            <div className="preset-grid">
-              {TTS_PROVIDERS.map((provider) => (
-                <button
-                  key={provider.id}
-                  type="button"
-                  className={draft.api.ttsProvider === provider.id ? 'preset-card selected' : 'preset-card'}
-                  onClick={() => {
-                    updateApi('ttsProvider', provider.id)
-                    setTtsTestStatus(null)
-                  }}
-                >
-                  <strong>{provider.name}</strong>
-                  <p>{provider.detail}</p>
-                </button>
-              ))}
-            </div>
-
-            {draft.api.ttsProvider === 'openrouter' && <>
-              <label>
-                Clé API OpenRouter (TTS)
-                <input
-                  type="password"
-                  value={draft.api.openRouterKey || ''}
-                  onChange={(event) => {
-                    updateApi('openRouterKey', event.target.value)
-                    setTtsTestStatus(null)
-                  }}
-                  placeholder="sk-or-v1-…"
-                  autoComplete="off"
-                />
-              </label>
-              <p className="field-hint">Partagée avec l'agent principal OpenRouter, ou spécifique pour la voix.</p>
-
-              <label>
-                Modèle TTS OpenRouter
-                <input
-                  value={draft.api.ttsModel || ''}
-                  onChange={(event) => {
-                    updateApi('ttsModel', event.target.value)
-                    setTtsTestStatus(null)
-                  }}
-                  placeholder="openai/gpt-4o-mini-tts-2025-12-15"
-                />
-              </label>
-
-              <div className="model-preset-pills">
-                {OPENROUTER_TTS_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    className={`model-preset-pill ${draft.api.ttsModel === preset.id ? 'active' : ''}`}
-                    onClick={() => {
-                      updateApi('ttsModel', preset.id)
-                      setTtsTestStatus(null)
-                    }}
-                    title={preset.desc}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
+                </label>
+                {deepLTestStatus && (
+                  <div className={`connection-status-badge ${deepLTestStatus.ok ? 'success' : 'error'}`}>
+                    {deepLTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                    <span>{deepLTestStatus.message}</span>
+                  </div>
+                )}
               </div>
 
-              <label>
-                Voix OpenRouter
-                <select
-                  value={draft.api.ttsVoice || 'alloy'}
-                  onChange={(event) => {
-                    updateApi('ttsVoice', event.target.value)
-                    setTtsTestStatus(null)
-                  }}
-                >
-                  {OPENROUTER_VOICES.map((v) => (
-                    <option key={v.id} value={v.id}>{v.label}</option>
-                  ))}
-                </select>
-              </label>
-            </>}
+              <div className="conn-key-row">
+                <label>
+                  <span>Clé API ElevenLabs (Optionnel — Voix audio)</span>
+                  <input
+                    type="password"
+                    value={draft.api.elevenLabsKey || ''}
+                    onChange={(e) => updateApi('elevenLabsKey', e.target.value)}
+                    placeholder="sk_…"
+                    autoComplete="off"
+                  />
+                </label>
+              </div>
 
-            {draft.api.ttsProvider === 'elevenlabs' && <>
-              <label>Clé API ElevenLabs<input type="password" value={draft.api.elevenLabsKey} onChange={(event) => updateApi('elevenLabsKey', event.target.value)} placeholder="sk_…" autoComplete="off" /></label>
-              <label>ID de voix <small>ex. 21m00Tcm4TlvDq8ikWAM (Rachel)</small><input value={draft.api.elevenLabsVoice} onChange={(event) => updateApi('elevenLabsVoice', event.target.value)} /></label>
-            </>}
-
-            {draft.api.ttsProvider === 'fish' && <>
-              <label>Clé API Fish Audio<input type="password" value={draft.api.fishKey} onChange={(event) => updateApi('fishKey', event.target.value)} placeholder="Clé api.fish.audio" autoComplete="off" /></label>
-              <label>ID de voix / modèle <small>optionnel — reference_id</small><input value={draft.api.fishReferenceId} onChange={(event) => updateApi('fishReferenceId', event.target.value)} placeholder="Laisser vide pour la voix S2 par défaut" /></label>
-            </>}
-
-            {draft.api.ttsProvider === 'browser' && voices.length > 0 && (
-              <label>Voix préférée<select value={draft.api.ttsVoice} onChange={(event) => updateApi('ttsVoice', event.target.value)}>
-                <option value="">Automatique (la plus naturelle)</option>
-                {voices.map((voice) => <option key={voice.name} value={voice.name}>{voice.name} ({voice.lang})</option>)}
-              </select></label>
-            )}
-
-            <div className="connection-test-row">
-              <button
-                type="button"
-                className="connection-test-btn"
-                onClick={handleTestTts}
-                disabled={testingTts || (draft.api.ttsProvider === 'openrouter' && !draft.api.openRouterKey?.trim())}
-                title="Génère et joue un court extrait audio en direct"
-              >
-                {testingTts ? <Loader2 size={13} className="spin" /> : <Volume2 size={13} />}
-                <span>{testingTts ? 'Génération audio…' : 'Tester la synthèse vocale (TTS)'}</span>
-              </button>
-
-              {ttsTestStatus && (
-                <div className={`connection-status-badge ${ttsTestStatus.ok ? 'success' : 'error'}`}>
-                  {ttsTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
-                  <span>{ttsTestStatus.message}</span>
-                </div>
-              )}
+              <div className="conn-key-row">
+                <label>
+                  <span>Clé API Fish Audio (Optionnel — Voix S2)</span>
+                  <input
+                    type="password"
+                    value={draft.api.fishKey || ''}
+                    onChange={(e) => updateApi('fishKey', e.target.value)}
+                    placeholder="Clé api.fish.audio"
+                    autoComplete="off"
+                  />
+                </label>
+              </div>
             </div>
           </div>
 
-          {/* CARTE 3 : DEEPL */}
+          {/* SECTION 2 : MODÈLES D'IA PAR TÂCHE */}
           <div className="connection-card">
             <div>
-              <h3>3. DeepL (Traduction & Dictionnaire en direct)</h3>
-              <p>Utilisé pour la traduction instantanée et la recherche de vocabulaire durant tes sessions de parole.</p>
+              <h3>2. Modèles d'IA & Moteurs par tâche</h3>
+              <p>Le modèle principal est utilisé par défaut. Personnalise chaque tâche sur sa ligne dédiée.</p>
             </div>
-            <label>
-              Clé API DeepL <small>Free (termine par :fx) ou Pro</small>
-              <input
-                type="password"
-                value={draft.api.deepLKey || ''}
-                onChange={(event) => {
-                  updateApi('deepLKey', event.target.value)
-                  setDeepLTestStatus(null)
-                }}
-                placeholder="ex. 00000000-0000-0000-0000-000000000000:fx"
-                autoComplete="off"
-              />
-            </label>
-            <label>Langue de traduction cible
-              <select value={draft.api.deepLTargetLang || 'EN-US'} onChange={(event) => updateApi('deepLTargetLang', event.target.value)}>
-                <option value="EN-US">Anglais américain (EN-US)</option>
-                <option value="EN-GB">Anglais britannique (EN-GB)</option>
-                <option value="ES">Espagnol (ES)</option>
-                <option value="DE">Allemand (DE)</option>
-                <option value="IT">Italien (IT)</option>
-                <option value="PT-PT">Portugais européen (PT-PT)</option>
-                <option value="PT-BR">Portugais brésilien (PT-BR)</option>
-                <option value="NL">Néerlandais (NL)</option>
-                <option value="PL">Polonais (PL)</option>
-                <option value="RU">Russe (RU)</option>
-                <option value="JA">Japonais (JA)</option>
-                <option value="ZH">Chinois simplifié (ZH)</option>
-              </select>
-            </label>
-            <p className="field-hint">Obtiens une clé gratuite sur <code>deepl.com/pro-api</code>. Si vide ou indisponible, l'Agent IA ou un service de secours est utilisé.</p>
 
-            <div className="connection-test-row">
-              <button
-                type="button"
-                className="connection-test-btn"
-                onClick={handleTestDeepL}
-                disabled={testingDeepL || !draft.api.deepLKey?.trim()}
-                title="Vérifie la clé DeepL avec une traduction d'exemple"
-              >
-                {testingDeepL ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
-                <span>{testingDeepL ? 'Test en cours…' : 'Tester la clé DeepL'}</span>
-              </button>
+            <div className="conn-models-list">
+              {/* Option 1 : Modèle Principal */}
+              {(() => {
+                const activeProvider = AGENT_PROVIDERS.find((p) => p.id === (draft.api.agentProvider || 'openrouter')) || AGENT_PROVIDERS[0]
+                return (
+                  <div className="conn-task-row is-main">
+                    <div className="conn-task-info">
+                      <strong>Modèle Agent Principal (Recommandé)</strong>
+                      <small>Modèle général utilisé pour toutes les tâches par défaut</small>
+                    </div>
+                    <div className="conn-task-input-wrap">
+                      <input
+                        value={draft.api.agentModel || ''}
+                        onChange={(e) => updateApi('agentModel', e.target.value)}
+                        placeholder={activeProvider.defaultModel}
+                      />
+                    </div>
+                  </div>
+                )
+              })()}
 
-              {deepLTestStatus && (
-                <div className={`connection-status-badge ${deepLTestStatus.ok ? 'success' : 'error'}`}>
-                  {deepLTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
-                  <span>{deepLTestStatus.message}</span>
+              {/* Option 2 : Rédaction de ressources */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>Rédaction de ressources (« Écrire avec l'IA »)</strong>
+                  <small>Génération d'histoires et d'articles adaptés au niveau</small>
                 </div>
-              )}
+                <div className="conn-task-input-wrap">
+                  <input
+                    value={draft.api.taskModelResourceGeneration || ''}
+                    onChange={(e) => updateApi('taskModelResourceGeneration', e.target.value)}
+                    placeholder="Utilise le modèle principal par défaut"
+                  />
+                </div>
+              </div>
+
+              {/* Option 3 : Analyse des mots enregistrés */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>Analyse des mots enregistrés</strong>
+                  <small>Génération de phonétique IPA, lemmes, traductions et tags</small>
+                </div>
+                <div className="conn-task-input-wrap">
+                  <input
+                    value={draft.api.taskModelWordAnalysis || ''}
+                    onChange={(e) => updateApi('taskModelWordAnalysis', e.target.value)}
+                    placeholder="Utilise le modèle principal par défaut"
+                  />
+                </div>
+              </div>
+
+              {/* Option 4 : Extraction URL */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>Extraction et nettoyage URL (Web Cleaner)</strong>
+                  <small>Nettoyage intelligent des pages web (retrait des pubs et menus)</small>
+                </div>
+                <div className="conn-task-input-wrap">
+                  <input
+                    value={draft.api.taskModelUrlExtraction || ''}
+                    onChange={(e) => updateApi('taskModelUrlExtraction', e.target.value)}
+                    placeholder="Utilise le modèle principal par défaut"
+                  />
+                </div>
+              </div>
+
+              {/* Option 5 : Traduction Speaking */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>Traduction dans Speaking</strong>
+                  <small>Traduction en direct lors des sessions orales</small>
+                </div>
+                <div className="conn-task-input-wrap dual">
+                  <select
+                    value={draft.api.speakingTranslationProvider || 'deepl'}
+                    onChange={(e) => updateApi('speakingTranslationProvider', e.target.value as 'deepl' | 'ai')}
+                  >
+                    <option value="deepl">DeepL (par défaut)</option>
+                    <option value="ai">Agent IA</option>
+                  </select>
+                  {draft.api.speakingTranslationProvider === 'ai' && (
+                    <input
+                      value={draft.api.taskModelSpeakingTranslation || ''}
+                      onChange={(e) => updateApi('taskModelSpeakingTranslation', e.target.value)}
+                      placeholder="Utilise le modèle principal par défaut"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Option 6 : Synthèse Vocale (TTS) */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>Synthèse Vocale (TTS)</strong>
+                  <small>Lecture audio de la prononciation et des phrases</small>
+                </div>
+                <div className="conn-task-input-wrap dual">
+                  <select
+                    value={draft.api.ttsProvider || 'google'}
+                    onChange={(e) => {
+                      updateApi('ttsProvider', e.target.value as UserSettings['api']['ttsProvider'])
+                      setTtsTestStatus(null)
+                    }}
+                  >
+                    {TTS_PROVIDERS.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+
+                  {draft.api.ttsProvider === 'openrouter' && (
+                    <input
+                      value={draft.api.ttsModel || ''}
+                      onChange={(e) => updateApi('ttsModel', e.target.value)}
+                      placeholder="openai/gpt-4o-mini-tts-2025-12-15"
+                    />
+                  )}
+                  {draft.api.ttsProvider === 'elevenlabs' && (
+                    <input
+                      value={draft.api.elevenLabsVoice || ''}
+                      onChange={(e) => updateApi('elevenLabsVoice', e.target.value)}
+                      placeholder="ID de voix (ex. 21m00Tcm4TlvDq8ikWAM)"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Test TTS row */}
+              <div className="connection-test-row" style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="connection-test-btn"
+                  onClick={handleTestTts}
+                  disabled={testingTts || (draft.api.ttsProvider === 'openrouter' && !draft.api.openRouterKey?.trim())}
+                  title="Génère et joue un court extrait audio en direct"
+                >
+                  {testingTts ? <Loader2 size={13} className="spin" /> : <Volume2 size={13} />}
+                  <span>{testingTts ? 'Génération audio…' : 'Tester la synthèse vocale (TTS)'}</span>
+                </button>
+
+                {ttsTestStatus && (
+                  <div className={`connection-status-badge ${ttsTestStatus.ok ? 'success' : 'error'}`}>
+                    {ttsTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                    <span>{ttsTestStatus.message}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </>}

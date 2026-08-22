@@ -134,11 +134,12 @@ export default function App() {
               onAddMarking={(label, color) => change(addMarking(state, label, color))}
               onRenameMarking={(markingId, newLabel) => change(renameMarking(state, markingId, newLabel))}
               onDeleteMarking={(markingId) => change(deleteMarking(state, markingId))}
-              onResetMarks={(language) => change(resetResourceMarks(state, language))} />
+              onResetMarks={(language) => change(resetResourceMarks(state, language))}
+              onAiTaskChange={setIsAiTaskRunning} />
           ) : (
             <>
               {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}
-              {page === 'reading' && <ReadingLibrary state={state} t={t} onOpen={(resource) => setReaderId(resource.id)} onAdd={(resource) => change(upsertResource(state, resource))} onChange={change} />}
+              {page === 'reading' && <ReadingLibrary state={state} t={t} onOpen={(resource) => setReaderId(resource.id)} onAdd={(resource) => change(upsertResource(state, resource))} onChange={change} onAiTaskChange={setIsAiTaskRunning} />}
               {page === 'speaking' && (
                 <SpeakingPage
                   ui={baseUi(ui)}
@@ -320,7 +321,7 @@ function Dashboard({ name, state, ui, onUiLanguage, onWrite, onContinue, t }: { 
   </div>
 }
 
-function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState; t: UI; onOpen: (r: Resource) => void; onAdd: (r: Resource) => void; onChange: (state: AppState) => void }) {
+function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: { state: AppState; t: UI; onOpen: (r: Resource) => void; onAdd: (r: Resource) => void; onChange: (state: AppState) => void; onAiTaskChange?: (running: boolean) => void }) {
   const [type, setType] = useState('all')
   const [difficulty, setDifficulty] = useState<Difficulty | 'all'>('all')
   const [adding, setAdding] = useState(false)
@@ -441,7 +442,7 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenuTarget({ resource, x: e.clientX, y: e.clientY }) }}
               key={resource.id}
             >
-              <Cover cover={resource.cover} coverImage={resource.coverImage} type={labelFor(resource.type)} />
+              <Cover cover={resource.cover} coverImage={resource.coverImage} type={labelFor(resource.type)} isAiGenerated={resource.isAiGenerated} />
               <div className="resource-meta">
                 <span>{labelFor(resource.type)} · {t.difficulty[resource.difficulty]}</span>
                 <h3>{resource.title}</h3>
@@ -461,7 +462,7 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange }: { state: AppState
     {editingResource && <EditContentModal resource={editingResource} onSave={(updated) => onChange(upsertResource(state, updated))} onClose={() => setEditingResource(null)} />}
     {renamingResource && <RenameModal resource={renamingResource} onSave={(updated) => onChange(upsertResource(state, updated))} onClose={() => setRenamingResource(null)} />}
     {deletingResource && <DeleteModal resource={deletingResource} onConfirm={(id) => onChange(deleteResource(state, id))} onClose={() => setDeletingResource(null)} />}
-    {adding && <AddResourceModal t={t} state={state} close={() => setAdding(false)} onAdd={(resource) => { onAdd(resource); setAdding(false) }} onChange={onChange} />}
+    {adding && <AddResourceModal t={t} state={state} close={() => setAdding(false)} onAdd={(resource) => { onAdd(resource); setAdding(false) }} onChange={onChange} onAiTaskChange={onAiTaskChange} />}
     {vocabVaultOpen && (
       <VocabularyVaultModal
         state={state}

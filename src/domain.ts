@@ -29,6 +29,7 @@ export type Resource = {
   sourceUrl?: string
   createdAt: string
   imported?: boolean
+  isAiGenerated?: boolean
 }
 
 export type ReadingProgress = {

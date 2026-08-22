@@ -3,12 +3,16 @@ import { id } from '../domain'
 import { paragraphsToResource, autoDifficulty } from '../importer'
 import { getAgentConfig } from './speaking/wordAiService'
 
+export type StoryLength = 'short' | 'medium' | 'long' | 'novel'
+
 export type GeneratedResourceResult = {
   title: string
   author: string
   paragraphs: string[]
   difficulty: Difficulty
   category: string
+  coverImage?: string
+  isAiGenerated?: boolean
 }
 
 const DIFFICULTY_DESCRIPTIONS: Record<Difficulty, string> = {
@@ -18,19 +22,27 @@ const DIFFICULTY_DESCRIPTIONS: Record<Difficulty, string> = {
   native: 'Native (C2 level): Authentic, unconstrained native literary/journalistic style, rich idioms and phrasing.',
 }
 
+const LENGTH_INSTRUCTIONS: Record<StoryLength, string> = {
+  short: 'Short story (approx. 3 pages): Write 4 to 6 substantial, engaging paragraphs (approx. 350 - 500 words total).',
+  medium: 'Medium story (approx. 7 pages): Write 8 to 12 substantial, engaging paragraphs (approx. 800 - 1200 words total).',
+  long: 'Long story (approx. 15 pages): Write 16 to 22 substantial paragraphs with developed chapters (approx. 1800 - 2400 words total).',
+  novel: 'Mini-novel (approx. 30+ pages): Write 28 to 38 substantial, rich paragraphs with full story arcs and dialogue (approx. 3500 - 4500 words total).',
+}
+
 /**
- * Generates an original story or article tailored to the learner's chosen level
+ * Generates an original story or article tailored to the learner's chosen level and length
  * using the configured AI agent (or taskModelResourceGeneration override).
  */
 export async function generateResourceWithAi(args: {
   prompt?: string
   isRandom?: boolean
   difficulty: Difficulty
+  length?: StoryLength
   language: Language
   existingCategories?: string[]
   api: ApiSettings
 }): Promise<{ ok: true; resourceData: GeneratedResourceResult } | { ok: false; error: string }> {
-  const { prompt, isRandom, difficulty, language, existingCategories = [], api } = args
+  const { prompt, isRandom, difficulty, length = 'medium', language, existingCategories = [], api } = args
 
   const agentConfig = getAgentConfig(api, api.taskModelResourceGeneration)
   if (!agentConfig || !agentConfig.key) {
@@ -42,6 +54,7 @@ export async function generateResourceWithAi(args: {
 
   const langName = language === 'fr' ? 'French' : 'English (US)'
   const levelInfo = DIFFICULTY_DESCRIPTIONS[difficulty] || DIFFICULTY_DESCRIPTIONS.intermediate
+  const lengthInfo = LENGTH_INSTRUCTIONS[length] || LENGTH_INSTRUCTIONS.medium
 
   const validCategoriesList = [
     'story',
@@ -61,22 +74,24 @@ export async function generateResourceWithAi(args: {
   const systemPrompt = `You are a master creative writer and language learning author.
 Target Language for the text: ${langName}.
 Target Difficulty Level: ${levelInfo}
+Target Length: ${lengthInfo}
 Available Categories: ${JSON.stringify(validCategoriesList)}.
 
 Your mission:
-Write an engaging, well-crafted, beautifully written text in ${langName} adapted perfectly to the target level.
-- Length: 4 to 8 substantial paragraphs (approx. 250 - 600 words).
+Write an engaging, well-crafted, beautifully written text in ${langName} adapted perfectly to the target level and target length.
 - Format: Return ONLY a valid JSON object (no markdown surrounding, no conversational intro).
+- Author: Leave "author" empty ("") or set a realistic in-universe author/character name. NEVER use "AI Storyteller" or "IA".
+- Cover: Provide "coverPrompt", a short descriptive visual prompt in English for a book cover illustration matching the story theme.
 
 JSON Schema:
 {
   "title": "A captivating title in ${langName}",
-  "author": "Author name or 'AI Storyteller'",
+  "author": "",
   "category": "one category strictly from the Available Categories list",
+  "coverPrompt": "a descriptive visual theme prompt in English for the cover (e.g. rainy cobblestone streets of old Edinburgh with cozy glowing lanterns)",
   "paragraphs": [
     "First paragraph...",
-    "Second paragraph...",
-    "Third paragraph..."
+    "Second paragraph..."
   ]
 }`
 
@@ -117,9 +132,10 @@ JSON Schema:
       }
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as Partial<GeneratedResourceResult>
+    const parsed = JSON.parse(jsonMatch[0]) as Partial<GeneratedResourceResult> & { coverPrompt?: string }
     const title = (parsed.title || 'Nouvelle ressource').trim()
-    const author = (parsed.author || 'IA Storyteller').trim()
+    const rawAuthor = (parsed.author || '').trim()
+    const author = rawAuthor.toLowerCase().includes('ai') || rawAuthor.toLowerCase().includes('storyteller') || rawAuthor.toLowerCase().includes('ia') ? '' : rawAuthor
     const paragraphs = Array.isArray(parsed.paragraphs)
       ? parsed.paragraphs.map((p) => String(p).trim()).filter((p) => p.length > 5)
       : []
@@ -133,6 +149,10 @@ JSON Schema:
       category = 'story'
     }
 
+    // Generate/fetch cover image URL based on coverPrompt
+    const coverPrompt = parsed.coverPrompt?.trim() || `${title} aesthetic book cover illustration`
+    const coverImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(coverPrompt + ' high quality cinematic book cover art')}?width=600&height=800&nologo=true`
+
     return {
       ok: true,
       resourceData: {
@@ -141,6 +161,8 @@ JSON Schema:
         paragraphs,
         difficulty,
         category,
+        coverImage,
+        isAiGenerated: true,
       },
     }
   } catch (err) {

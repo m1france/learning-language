@@ -1,6 +1,61 @@
 import React from 'react'
 
 /**
+ * Formats a raw IPA pronunciation string so that:
+ * - The primary stressed syllable (originally indicated with ' or ˈ) is formatted in Markdown bold (**syllable**).
+ * - Syllable breaks (dots, commas, low commas ˌ) are replaced by ' · ' (space before and after).
+ * - Stress markers (' or ˈ) are stripped out.
+ * - Outermost slashes /.../ are preserved or normalized.
+ */
+export function formatIpaPronunciation(raw?: string): string {
+  if (!raw || !raw.trim()) return ''
+  let str = raw.trim()
+
+  // Remove outer slashes / brackets
+  if ((str.startsWith('/') && str.endsWith('/')) || (str.startsWith('[') && str.endsWith(']'))) {
+    str = str.slice(1, -1).trim()
+  }
+
+  // If already formatted with **bold**, normalize separators
+  if (str.includes('**')) {
+    const normalized = str
+      .replace(/[ˈ']/g, '')
+      .replace(/[.,ˌ]\s*/g, ' · ')
+      .replace(/\s*·\s*/g, ' · ')
+      .trim()
+    return `/${normalized}/`
+  }
+
+  // Syllable boundary detection
+  const hasSeparators = /[.,·\-\sˌ]/.test(str)
+
+  if (hasSeparators) {
+    const rawTokens = str.split(/[.,·\-\sˌ]+/).filter(Boolean)
+    const formattedSyllables = rawTokens.map((token) => {
+      if (token.includes('ˈ') || token.includes("'")) {
+        const cleaned = token.replace(/[ˈ']/g, '').trim()
+        return cleaned ? `**${cleaned}**` : ''
+      }
+      return token.replace(/[ˈ']/g, '').trim()
+    }).filter(Boolean)
+    return `/${formattedSyllables.join(' · ')}/`
+  }
+
+  // If there are no syllable separators, but has ˈ or '
+  if (str.includes('ˈ') || str.includes("'")) {
+    const stressIdx = str.search(/[ˈ']/)
+    const before = str.slice(0, stressIdx).trim()
+    const after = str.slice(stressIdx + 1).trim()
+    if (before) {
+      return `/${before} · **${after}**/`
+    }
+    return `/**${after}**/`
+  }
+
+  return `/${str}/`
+}
+
+/**
  * Parses and renders phonetic IPA strings containing Markdown emphasis (e.g. `**tʃɪ**`, `*stress*`, `__bold__`).
  * Also ensures surrounding brackets `[...]` or `/.../` are cleanly formatted without duplicates.
  */
