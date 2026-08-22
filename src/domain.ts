@@ -67,7 +67,7 @@ export type LearnedWord = {
   definitions: DictionarySense[]
   contextSentence: string
   sourceResourceId?: string
-  sourceSkill: 'reading' | 'speaking' | 'writing' | 'impromptu' | 'monologue'
+  sourceSkill: 'reading' | 'speaking' | 'writing' | 'listening' | 'impromptu' | 'monologue'
   status: 'new' | 'learning' | 'learned' | 'mastered'
   intervalDays: number
   nextReview: string
@@ -158,10 +158,32 @@ export type CustomTool = {
   url?: string
 }
 
-/** Persistent choices made in the listening library. */
+export type TranscriptCue = {
+  id: string
+  start: number
+  end: number
+  text: string
+}
+
+export type ListeningLesson = {
+  id: string
+  title: string
+  language: Language
+  source: 'youtube' | 'upload' | 'transcript'
+  sourceUrl?: string
+  youtubeId?: string
+  fileName?: string
+  transcript: TranscriptCue[]
+  createdAt: string
+  updatedAt: string
+}
+
+/** Persistent choices and lessons made in the listening module. */
 export type ListeningLibraryState = {
   savedIds: string[]
   completedIds: string[]
+  lessons: ListeningLesson[]
+  activeLessonId?: string
 }
 
 export type GrammarMarkType = 'verb' | 'noun' | 'adjective' | 'adverb' | 'expression' | string

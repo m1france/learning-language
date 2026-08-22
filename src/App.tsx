@@ -164,7 +164,7 @@ export default function App() {
                   }}
                 />
               )}
-              {page === 'listening' && <ListeningPage ui={baseUi(ui)} state={state} onChange={change} />}
+              {page === 'listening' && <ListeningPage ui={baseUi(ui)} state={state} onChange={change} onSaveWord={(args) => change(upsertWordDetails(state, args))} onOpenSettings={() => go('settings')} />}
               {page === 'settings' && <Settings settings={state.settings} state={state}
                 onSave={(settings) => change({ ...state, settings })}
                 onChangeState={change}
@@ -184,8 +184,11 @@ export default function App() {
   )
 }
 
-function Brand() {
-  return <div className="brand"><span className="brand-mark"><img src={doveWhite} alt="" /></span><span>vivre<br /><em>la langue</em></span></div>
+function Brand({ onClick }: { onClick?: () => void }) {
+  const content = <><span className="brand-mark"><img src={doveWhite} alt="" /></span><span>vivre<br /><em>la langue</em></span></>
+  return onClick
+    ? <button className="brand brand-button" type="button" onClick={onClick} aria-label="Accueil">{content}</button>
+    : <div className="brand">{content}</div>
 }
 
 function Onboarding({ onComplete }: { onComplete: (name: string, uiLanguage: UiLanguage) => void }) {
@@ -234,9 +237,9 @@ function Sidebar({
 }) {
   return (
     <aside className="sidebar">
-      <Brand />
+      <Brand onClick={() => setPage('home')} />
       <nav>
-        {navItems.map((item) => (
+        {navItems.filter((item) => item.id !== 'home').map((item) => (
           <button
             className={page === item.id ? 'active' : ''}
             onClick={() => setPage(item.id)}

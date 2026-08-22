@@ -73,7 +73,7 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   markings: DEFAULT_MARKINGS,
   customTools: [],
   removedTools: [],
-  listening: { savedIds: [], completedIds: [] },
+  listening: { savedIds: [], completedIds: [], lessons: [] },
   customCategories: [],
   customTags: [],
 })
@@ -116,6 +116,8 @@ export const loadState = (): AppState | null => {
       listening: {
         savedIds: parsed.listening?.savedIds ?? [],
         completedIds: parsed.listening?.completedIds ?? [],
+        lessons: parsed.listening?.lessons ?? [],
+        activeLessonId: parsed.listening?.activeLessonId,
       },
       customCategories: parsed.customCategories ?? [],
       customTags: parsed.customTags ?? [],
@@ -604,4 +606,3 @@ export const recordWordUsageInWriting = (state: AppState, usedWords: string[], l
   
   return { ...state, words: updatedWords }
 }
-

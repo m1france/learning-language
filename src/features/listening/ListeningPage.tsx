@@ -1,276 +1,228 @@
-import { useMemo, useState } from 'react'
-import type { AppState, Difficulty, Language } from '../../domain'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { AppState, Language, ListeningLesson, TranscriptCue } from '../../domain'
+import { id, normalizeWord } from '../../domain'
+import { analyzeWordWithAi, type AiWordAnalysisResult } from '../speaking/wordAiService'
+import { ListeningTools } from './ListeningTools'
+import { cuesFromPlainText, isYouTubeUrl, parseVtt, transcribeUploadedMedia } from './transcription'
 import {
-  Bookmark,
-  Check,
-  ExternalLink,
-  FlaskConical,
-  Heart,
-  Lightbulb,
-  Music2,
+  ChevronDown,
+  Clock3,
+  FileAudio,
+  FileUp,
+  Languages,
+  Loader2,
   Play,
-  Search,
+  RotateCcw,
+  Save,
+  Settings,
+  SlidersHorizontal,
+  Upload,
   Video,
+  Volume2,
+  X,
 } from 'lucide-react'
-import { listeningItems, type ListeningItem, type ListeningPlatform, type ListeningTopic } from './libraryData'
 
 type Ui = 'fr' | 'en'
-type LibraryView = 'all' | 'saved' | 'completed'
+type WordSave = { raw: string; sentence: string; language: Language; translation: string; parent?: string; partOfSpeech?: string; pronunciation?: string; tags?: string[]; sourceSkill: 'listening' }
 
-const copy = {
+const text = {
   fr: {
-    eyebrow: 'ÉCOUTER · BIBLIOTHÈQUE VIVANTE',
-    title: 'Fais entrer la langue dans tes oreilles.',
-    subtitleStart: 'Des vidéos et des voix choisies pour faire entrer ', subtitleEnd: ' dans ton quotidien, à ton rythme.',
-    target: 'Langue cible',
-    sources: 'sources choisies',
-    minutes: 'formats courts à longs',
-    all: 'Tout explorer', saved: 'Mes favoris', completed: 'Terminés',
-    search: 'Rechercher un thème, une source…', allTopics: 'Tous les thèmes', allLevels: 'Tous niveaux',
-    items: 'contenus à écouter', recommended: 'À lancer maintenant',
-    youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram',
-    science: 'Ressources scientifiques', advice: 'Conseils pour apprendre',
-    secondaryTitle: 'Pour aller plus loin', secondarySub: 'Des voix plus lentes, plus précises, ou des méthodes pour faire durer l’écoute.',
-    save: 'Ajouter aux favoris', unsave: 'Retirer des favoris', markDone: 'Marquer comme terminé', undoDone: 'À revoir', open: 'Ouvrir la source',
-    empty: 'Aucun contenu ne correspond à ces filtres.', reset: 'Réinitialiser les filtres',
-    result: 'contenu disponible', results: 'contenus disponibles',
-    beginner: 'Débutant', intermediate: 'Intermédiaire', advanced: 'Avancé', native: 'Natif',
-    daily: 'Quotidien', culture: 'Culture', news: 'Actualité', scienceTopic: 'Science', stories: 'Récits', methods: 'Méthode',
-    completedLabel: 'Terminé',
+    eyebrow: 'ÉCOUTER · LABORATOIRE ACTIF', title: 'Écoute. Comprends. Garde ce qui compte.',
+    subtitle: 'Importe une vidéo, un audio ou une vidéo YouTube. Chaque phrase devient un endroit où ralentir, chercher et revenir.',
+    urlLabel: 'Lien YouTube', urlPlaceholder: 'https://www.youtube.com/watch?v=…', import: 'Préparer la vidéo',
+    upload: 'Importer un audio ou une vidéo', uploadHint: 'MP3, M4A, WAV, WebM, MP4… · le fichier reste sur cet appareil', transcribe: 'Transcrire maintenant',
+    pasted: 'Coller une transcription', pastedHint: 'Tu peux aussi coller un .vtt ou le texte brut de n’importe quel contenu.', create: 'Créer la leçon',
+    noLesson: 'Ta prochaine écoute commence ici.', noLessonHint: 'Ajoute un lien ou un fichier pour obtenir des sous-titres synchronisés et un espace de travail.',
+    transcript: 'Transcription', replay: 'Réécouter la phrase', speed: 'Vitesse', saveWord: 'Sauvegarder', saved: 'Sauvegardé', dictionary: 'Dictionnaire', analyze: 'Analyser le mot', openDictionary: 'Ouvrir Wiktionary',
+    history: 'Mes écoutes', emptyHistory: 'Aucune leçon sauvegardée.', sourceCaptions: 'Sous-titres source importés', generated: 'Transcription générée', fileNeedsImport: 'Le fichier doit être réimporté après un rechargement ; la transcription, elle, est sauvegardée.',
+    loading: 'Préparation de la transcription…', error: 'Une erreur est survenue.', plusTools: 'Plus d’outils', close: 'Fermer', settings: 'Ouvrir les réglages',
+    clickWord: 'Clique sur un mot pour en voir le sens et l’ajouter à tes mots vivants.', youtubeOnly: 'Seuls les liens YouTube sont pris en charge ici.',
   },
   en: {
-    eyebrow: 'LISTEN · LIVING LIBRARY',
-    title: 'Let the language reach your ears.',
-    subtitleStart: 'Videos and voices chosen to bring ', subtitleEnd: ' into your day, at your own pace.',
-    target: 'Target language',
-    sources: 'selected sources',
-    minutes: 'short-to-long formats',
-    all: 'Explore all', saved: 'My saved items', completed: 'Completed',
-    search: 'Search a topic or source…', allTopics: 'All topics', allLevels: 'All levels',
-    items: 'items to listen to', recommended: 'Start here',
-    youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram',
-    science: 'Scientific resources', advice: 'Learning advice',
-    secondaryTitle: 'Go a little further', secondarySub: 'Slower, more precise voices and methods that help listening become a habit.',
-    save: 'Save item', unsave: 'Remove from saved', markDone: 'Mark as complete', undoDone: 'Listen again', open: 'Open source',
-    empty: 'No content matches these filters.', reset: 'Reset filters',
-    result: 'item available', results: 'items available',
-    beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced', native: 'Native',
-    daily: 'Everyday life', culture: 'Culture', news: 'News', scienceTopic: 'Science', stories: 'Stories', methods: 'Method',
-    completedLabel: 'Completed',
+    eyebrow: 'LISTEN · ACTIVE LAB', title: 'Listen. Understand. Keep what matters.',
+    subtitle: 'Import a video, audio file, or YouTube video. Every sentence becomes a place to slow down, look up, and return to.',
+    urlLabel: 'YouTube link', urlPlaceholder: 'https://www.youtube.com/watch?v=…', import: 'Prepare video',
+    upload: 'Import audio or video', uploadHint: 'MP3, M4A, WAV, WebM, MP4… · the file stays on this device', transcribe: 'Transcribe now',
+    pasted: 'Paste a transcript', pastedHint: 'You can also paste a .vtt file or raw text from any content.', create: 'Create lesson',
+    noLesson: 'Your next listening session starts here.', noLessonHint: 'Add a link or file to get synchronized subtitles and a focused workspace.',
+    transcript: 'Transcript', replay: 'Replay sentence', speed: 'Speed', saveWord: 'Save', saved: 'Saved', dictionary: 'Dictionary', analyze: 'Analyze word', openDictionary: 'Open Wiktionary',
+    history: 'My listening', emptyHistory: 'No saved lessons yet.', sourceCaptions: 'Source captions imported', generated: 'Transcript generated', fileNeedsImport: 'Re-import the file after a reload; its transcript remains saved.',
+    loading: 'Preparing transcript…', error: 'Something went wrong.', plusTools: 'More tools', close: 'Close', settings: 'Open settings',
+    clickWord: 'Click a word to see its meaning and add it to your living words.', youtubeOnly: 'Only YouTube links are supported here.',
   },
 } as const
 
-const platformLabels: Record<ListeningPlatform, keyof typeof copy.fr> = {
-  youtube: 'youtube',
-  tiktok: 'tiktok',
-  instagram: 'instagram',
-  science: 'science',
-  advice: 'advice',
+const youtubeId = (value?: string) => {
+  if (!value) return ''
+  try {
+    const parsed = new URL(value)
+    return parsed.hostname === 'youtu.be' ? parsed.pathname.slice(1).split('/')[0] : parsed.searchParams.get('v') || parsed.pathname.split('/').filter(Boolean).pop() || ''
+  } catch { return '' }
 }
 
-const topicLabels: Record<ListeningTopic, keyof Pick<typeof copy.fr, 'daily' | 'culture' | 'news' | 'scienceTopic' | 'stories' | 'methods'>> = {
-  daily: 'daily',
-  culture: 'culture',
-  news: 'news',
-  science: 'scienceTopic',
-  stories: 'stories',
-  methods: 'methods',
-}
+const formatTime = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, '0')}`
+const wiktionaryUrl = (language: Language, word: string) => `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`
 
-function languageName(language: Language, ui: Ui) {
-  if (language === 'fr') return ui === 'fr' ? 'Français' : 'French'
-  return 'English'
-}
-
-function PlatformMark({ platform }: { platform: ListeningPlatform }) {
-  if (platform === 'youtube') return <Video size={18} aria-hidden="true" />
-  if (platform === 'tiktok') return <Music2 size={18} aria-hidden="true" />
-  if (platform === 'instagram') return <span className="listen-instagram-mark" aria-hidden="true">◎</span>
-  if (platform === 'science') return <FlaskConical size={18} aria-hidden="true" />
-  return <Lightbulb size={18} aria-hidden="true" />
-}
-
-function ItemCard({
-  item,
+export function ListeningPage({
   ui,
-  saved,
-  completed,
-  onSave,
-  onComplete,
+  state,
+  onChange,
+  onSaveWord,
+  onOpenSettings,
 }: {
-  item: ListeningItem
   ui: Ui
-  saved: boolean
-  completed: boolean
-  onSave: (id: string) => void
-  onComplete: (id: string) => void
+  state: AppState
+  onChange: (state: AppState) => void
+  onSaveWord: (word: WordSave) => void
+  onOpenSettings: () => void
 }) {
-  const t = copy[ui]
-  const label = t[platformLabels[item.platform]]
-  const level = t[item.level]
-  const topic = t[topicLabels[item.topic]]
+  const t = text[ui]
+  const lessons = state.listening?.lessons ?? []
+  const activeLesson = lessons.find((lesson) => lesson.id === state.listening?.activeLessonId) ?? lessons[0]
+  const [url, setUrl] = useState('')
+  const [pastedTranscript, setPastedTranscript] = useState('')
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null)
+  const [mediaKind, setMediaKind] = useState<'audio' | 'video'>('audio')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [playerTime, setPlayerTime] = useState(0)
+  const [speed, setSpeed] = useState(1)
+  const [word, setWord] = useState<{ raw: string; sentence: string } | null>(null)
+  const [wordAnalysis, setWordAnalysis] = useState<AiWordAnalysisResult | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const media = useRef<HTMLVideoElement | HTMLAudioElement>(null)
+  const youtubeFrame = useRef<HTMLIFrameElement>(null)
 
-  return <article className={`listen-card listen-card--${item.platform} ${completed ? 'is-completed' : ''}`}>
-    <div className="listen-card-top">
-      <span className={`listen-platform-mark listen-platform-mark--${item.platform}`}><PlatformMark platform={item.platform} /></span>
-      <div className="listen-card-badges">
-        <span>{label}</span>
-        {completed && <span className="listen-completed-badge"><Check size={10} /> {t.completedLabel}</span>}
-      </div>
-      <button
-        className={`listen-save ${saved ? 'is-saved' : ''}`}
-        type="button"
-        onClick={() => onSave(item.id)}
-        aria-label={saved ? t.unsave : t.save}
-        title={saved ? t.unsave : t.save}
-      >
-        {saved ? <Heart size={16} fill="currentColor" /> : <Heart size={16} />}
-      </button>
-    </div>
-    <div className="listen-card-body">
-      <p className="listen-card-creator">{item.creator}</p>
-      <h3>{item.title}</h3>
-      <p>{item.description}</p>
-    </div>
-    <div className="listen-card-meta">
-      <span>{level}</span><i /> <span>{topic}</span><i /> <span>{item.duration}</span>
-    </div>
-    {item.accent && <span className="listen-accent">{item.accent}</span>}
-    <div className="listen-card-actions">
-      <button className={`listen-complete ${completed ? 'is-completed' : ''}`} type="button" onClick={() => onComplete(item.id)}>
-        <Check size={14} /> {completed ? t.undoDone : t.markDone}
-      </button>
-      <a href={item.url} target="_blank" rel="noreferrer" onClick={() => !completed && onComplete(item.id)}>
-        <Play size={13} fill="currentColor" /> {t.open} <ExternalLink size={12} />
-      </a>
-    </div>
-  </article>
-}
-
-function ContentSection({
-  platform,
-  title,
-  items,
-  ui,
-  savedIds,
-  completedIds,
-  onSave,
-  onComplete,
-}: {
-  platform: ListeningPlatform
-  title: string
-  items: ListeningItem[]
-  ui: Ui
-  savedIds: string[]
-  completedIds: string[]
-  onSave: (id: string) => void
-  onComplete: (id: string) => void
-}) {
-  if (!items.length) return null
-  return <section className={`listen-section listen-section--${platform}`}>
-    <div className="listen-section-heading">
-      <div><span className={`listen-platform-mark listen-platform-mark--${platform}`}><PlatformMark platform={platform} /></span><h2>{title}</h2></div>
-      <span>{items.length} {items.length > 1 ? copy[ui].results : copy[ui].result}</span>
-    </div>
-    <div className="listen-grid">
-      {items.map((item) => <ItemCard key={item.id} item={item} ui={ui} saved={savedIds.includes(item.id)} completed={completedIds.includes(item.id)} onSave={onSave} onComplete={onComplete} />)}
-    </div>
-  </section>
-}
-
-export function ListeningPage({ ui, state, onChange }: { ui: Ui; state: AppState; onChange: (state: AppState) => void }) {
-  const t = copy[ui]
-  const [view, setView] = useState<LibraryView>('all')
-  const [topic, setTopic] = useState<ListeningTopic | 'all'>('all')
-  const [level, setLevel] = useState<Difficulty | 'all'>('all')
-  const [query, setQuery] = useState('')
-  const savedIds = state.listening?.savedIds ?? []
-  const completedIds = state.listening?.completedIds ?? []
-
-  const targetItems = useMemo(
-    () => listeningItems.filter((item) => item.language === state.settings.learningLanguage),
-    [state.settings.learningLanguage],
+  const activeCue = useMemo(
+    () => activeLesson?.transcript.find((cue) => playerTime >= cue.start && playerTime < cue.end) ?? null,
+    [activeLesson, playerTime],
   )
-  const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase()
-    return targetItems.filter((item) => {
-      const fitsView = view === 'all' || (view === 'saved' ? savedIds.includes(item.id) : completedIds.includes(item.id))
-      const fitsTopic = topic === 'all' || item.topic === topic
-      const fitsLevel = level === 'all' || item.level === level
-      const haystack = `${item.title} ${item.creator} ${item.description} ${item.accent ?? ''}`.toLocaleLowerCase()
-      return fitsView && fitsTopic && fitsLevel && (!normalizedQuery || haystack.includes(normalizedQuery))
+
+  const setActiveLesson = (lessonId: string) => onChange({ ...state, listening: { ...state.listening, activeLessonId: lessonId } })
+  const persistLesson = (lesson: ListeningLesson) => onChange({
+    ...state,
+    listening: { ...state.listening, lessons: [lesson, ...lessons.filter((item) => item.id !== lesson.id)], activeLessonId: lesson.id },
+  })
+
+  useEffect(() => () => { if (mediaUrl) URL.revokeObjectURL(mediaUrl) }, [mediaUrl])
+  useEffect(() => {
+    if (!activeLesson || activeLesson.source !== 'youtube') return
+    const receiveTime = (event: MessageEvent) => {
+      if (!event.origin.includes('youtube.com')) return
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+        if (data?.event === 'infoDelivery' && typeof data.info?.currentTime === 'number') setPlayerTime(data.info.currentTime)
+      } catch {}
+    }
+    const timer = window.setInterval(() => youtubeFrame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'getCurrentTime', args: [] }), '*'), 400)
+    window.addEventListener('message', receiveTime)
+    return () => { window.clearInterval(timer); window.removeEventListener('message', receiveTime) }
+  }, [activeLesson?.id, activeLesson?.source])
+
+  const createLesson = (lesson: Omit<ListeningLesson, 'id' | 'createdAt' | 'updatedAt' | 'language'>) => persistLesson({
+    ...lesson, id: id('listen'), language: state.settings.learningLanguage, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  })
+
+  const importYoutube = async () => {
+    setError('')
+    if (!isYouTubeUrl(url)) { setError(t.youtubeOnly); return }
+    setBusy(true)
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (state.settings.api.openAiKey.trim()) headers.Authorization = `Bearer ${state.settings.api.openAiKey.trim()}`
+      const response = await fetch('/api/youtube-transcript', { method: 'POST', headers, body: JSON.stringify({ url, language: state.settings.learningLanguage }) })
+      const payload = await response.json().catch(() => ({})) as { videoId?: string; cues?: TranscriptCue[]; error?: string }
+      if (!response.ok || !payload.cues?.length) throw new Error(payload.error || t.error)
+      createLesson({ title: `YouTube · ${youtubeId(url)}`, source: 'youtube', sourceUrl: url, youtubeId: payload.videoId || youtubeId(url), transcript: payload.cues })
+      setUrl('')
+    } catch (caught) { setError(caught instanceof Error ? caught.message : t.error) } finally { setBusy(false) }
+  }
+
+  const importFile = async () => {
+    if (!uploadedFile) return
+    setError(''); setBusy(true)
+    try {
+      const cues = await transcribeUploadedMedia(uploadedFile, state.settings.learningLanguage, state.settings.api)
+      if (!cues.length) throw new Error(t.error)
+      setMediaUrl(URL.createObjectURL(uploadedFile))
+      setMediaKind(uploadedFile.type.startsWith('video/') ? 'video' : 'audio')
+      createLesson({ title: uploadedFile.name.replace(/\.[^.]+$/, ''), source: 'upload', fileName: uploadedFile.name, transcript: cues })
+      setUploadedFile(null)
+    } catch (caught) { setError(caught instanceof Error ? caught.message : t.error) } finally { setBusy(false) }
+  }
+
+  const importPasted = () => {
+    const cues = pastedTranscript.includes('-->') ? parseVtt(pastedTranscript) : cuesFromPlainText(pastedTranscript)
+    if (!cues.length) { setError(t.error); return }
+    createLesson({ title: ui === 'fr' ? 'Transcription importée' : 'Imported transcript', source: 'transcript', transcript: cues })
+    setPastedTranscript(''); setError('')
+  }
+
+  const seek = (cue: TranscriptCue, autoplay = true) => {
+    setPlayerTime(cue.start)
+    if (activeLesson?.source === 'youtube') {
+      const send = (func: string, args: unknown[]) => youtubeFrame.current?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*')
+      send('seekTo', [cue.start, true]); if (autoplay) send('playVideo', [])
+      window.setTimeout(() => send('pauseVideo', []), Math.max(500, (cue.end - cue.start) * 1000))
+    } else if (media.current) {
+      media.current.currentTime = cue.start
+      media.current.playbackRate = speed
+      if (autoplay) void media.current.play()
+      window.setTimeout(() => media.current?.pause(), Math.max(500, (cue.end - cue.start) * 1000))
+    }
+  }
+
+  const inspectWord = async (raw: string, sentence: string) => {
+    const clean = normalizeWord(raw)
+    if (!clean) return
+    setWord({ raw: clean, sentence }); setWordAnalysis(null); setAnalyzing(true)
+    const analysis = await analyzeWordWithAi({
+      word: clean, targetLang: state.settings.learningLanguage, uiLang: ui, existingTags: Array.from(new Set(state.words.flatMap((item) => item.tags))), api: state.settings.api, contextSentence: sentence,
     })
-  }, [completedIds, level, query, savedIds, targetItems, topic, view])
-
-  const toggleSaved = (id: string) => {
-    const next = savedIds.includes(id) ? savedIds.filter((itemId) => itemId !== id) : [...savedIds, id]
-    onChange({ ...state, listening: { ...state.listening, savedIds: next } })
+    setWordAnalysis(analysis); setAnalyzing(false)
   }
 
-  const toggleCompleted = (id: string) => {
-    const next = completedIds.includes(id) ? completedIds.filter((itemId) => itemId !== id) : [...completedIds, id]
-    onChange({ ...state, listening: { ...state.listening, completedIds: next } })
+  const saveCurrentWord = () => {
+    if (!word) return
+    onSaveWord({ raw: word.raw, sentence: word.sentence, language: state.settings.learningLanguage, translation: wordAnalysis?.translation ?? '', parent: wordAnalysis?.parent, partOfSpeech: wordAnalysis?.partOfSpeech, pronunciation: wordAnalysis?.pronunciation, tags: wordAnalysis?.tags, sourceSkill: 'listening' })
   }
 
-  const resetFilters = () => {
-    setView('all')
-    setTopic('all')
-    setLevel('all')
-    setQuery('')
-  }
+  const isSaved = word ? state.words.some((item) => item.language === state.settings.learningLanguage && item.normalized === normalizeWord(word.raw)) : false
 
-  const sourceCount = new Set(targetItems.map((item) => item.creator)).size
-  const videoItems = (platform: ListeningPlatform) => filteredItems.filter((item) => item.platform === platform)
-  const secondaryItems = filteredItems.filter((item) => item.platform === 'science' || item.platform === 'advice')
-
-  return <div className="page listening-page">
-    <header className="listen-hero">
-      <div>
-        <p className="eyebrow">{t.eyebrow}</p>
-        <h1>{t.title}</h1>
-        <p>{t.subtitleStart}{languageName(state.settings.learningLanguage, ui)}{t.subtitleEnd}</p>
-      </div>
-      <div className="listen-target-card">
-        <span><Music2 size={17} /></span>
-        <div><small>{t.target}</small><strong>{languageName(state.settings.learningLanguage, ui)}</strong></div>
-      </div>
+  return <div className="page listening-page listening-lab">
+    <header className="listening-lab-header">
+      <div><p className="eyebrow">{t.eyebrow}</p><h1>{t.title}</h1><p>{t.subtitle}</p></div>
+      {lessons.length > 0 && <label className="listening-history"><Clock3 size={15} /><span>{t.history}</span><select value={activeLesson?.id ?? ''} onChange={(event) => setActiveLesson(event.target.value)}><option value="" disabled>{t.history}</option>{lessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.title}</option>)}</select></label>}
     </header>
 
-    <section className="listen-overview" aria-label="Aperçu de la bibliothèque">
-      <div><strong>{targetItems.length}</strong><span>{t.items}</span></div>
-      <div><strong>{sourceCount}</strong><span>{t.sources}</span></div>
-      <div><strong>{completedIds.filter((id) => targetItems.some((item) => item.id === id)).length}</strong><span>{t.completed}</span></div>
-      <div><strong>1–60</strong><span>{t.minutes}</span></div>
+    {activeLesson ? <section className="listening-workspace">
+      <div className="listening-player-panel">
+        <div className="listening-player">
+          {activeLesson.source === 'youtube' && activeLesson.youtubeId ? <iframe ref={youtubeFrame} title={activeLesson.title} src={`https://www.youtube-nocookie.com/embed/${activeLesson.youtubeId}?enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&rel=0`} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+            : activeLesson.source === 'upload' && mediaUrl ? (mediaKind === 'video' ? <video ref={media as React.RefObject<HTMLVideoElement>} src={mediaUrl} controls onTimeUpdate={(event) => setPlayerTime(event.currentTarget.currentTime)} /> : <audio ref={media as React.RefObject<HTMLAudioElement>} src={mediaUrl} controls onTimeUpdate={(event) => setPlayerTime(event.currentTarget.currentTime)} />)
+            : <div className="listening-media-empty"><FileAudio size={28} /><strong>{activeLesson.fileName || activeLesson.title}</strong><p>{activeLesson.source === 'upload' ? t.fileNeedsImport : activeLesson.source === 'youtube' ? t.sourceCaptions : t.generated}</p></div>}
+        </div>
+        <div className="listening-controls"><button type="button" onClick={() => activeCue && seek(activeCue)}><RotateCcw size={15} /> {t.replay}</button><label><SlidersHorizontal size={14} /> {t.speed}<select value={speed} onChange={(event) => { const next = Number(event.target.value); setSpeed(next); if (media.current) media.current.playbackRate = next }}><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option></select></label></div>
+        <p className="listening-click-hint">{t.clickWord}</p>
+      </div>
+      <div className="listening-transcript-panel"><div className="listening-transcript-title"><div><p className="eyebrow">{t.transcript.toUpperCase()}</p><h2>{activeLesson.title}</h2></div><span>{activeLesson.source === 'youtube' ? t.sourceCaptions : t.generated}</span></div>
+        <div className="listening-cues">{activeLesson.transcript.map((cue) => <article key={cue.id} className={activeCue?.id === cue.id ? 'active' : ''}><button className="cue-time" type="button" onClick={() => seek(cue)}>{formatTime(cue.start)}</button><p>{cue.text.split(/(\s+)/).map((part, index) => /^\s+$/.test(part) ? part : <button key={`${part}-${index}`} type="button" className="cue-word" onClick={() => inspectWord(part, cue.text)}>{part}</button>)}</p><button className="cue-replay" type="button" onClick={() => seek(cue)} aria-label={t.replay}><Volume2 size={14} /></button></article>)}</div>
+      </div>
+    </section> : <section className="listening-empty-state"><div><Video size={28} /><h2>{t.noLesson}</h2><p>{t.noLessonHint}</p></div></section>}
+
+    <section className="listening-imports">
+      <article><label>{t.urlLabel}<div className="listening-url-row"><input value={url} onChange={(event) => setUrl(event.target.value)} placeholder={t.urlPlaceholder} /><button type="button" className="primary" onClick={importYoutube} disabled={busy}>{busy ? <Loader2 className="spin" size={15} /> : <Play size={15} />} {t.import}</button></div></label></article>
+      <article><div className="listening-import-title"><FileUp size={18} /><div><strong>{t.upload}</strong><span>{t.uploadHint}</span></div></div><input ref={fileInput} type="file" accept="audio/*,video/*" hidden onChange={(event) => setUploadedFile(event.target.files?.[0] ?? null)} /><div className="listening-file-actions"><button type="button" className="outline" onClick={() => fileInput.current?.click()}><Upload size={14} /> {uploadedFile?.name || t.upload}</button>{uploadedFile && <button type="button" className="primary" onClick={importFile} disabled={busy}>{busy ? <Loader2 className="spin" size={15} /> : <Languages size={15} />} {t.transcribe}</button>}</div></article>
+      <article className="listening-paste"><strong>{t.pasted}</strong><span>{t.pastedHint}</span><textarea value={pastedTranscript} onChange={(event) => setPastedTranscript(event.target.value)} /><button type="button" className="outline" onClick={importPasted} disabled={!pastedTranscript.trim()}>{t.create}</button></article>
+      {error && <p className="listening-error"><X size={14} /> {error}{error.includes('clé OpenAI') && <button type="button" onClick={onOpenSettings}><Settings size={13} /> {t.settings}</button>}</p>}
     </section>
 
-    <section className="listen-toolbar" aria-label="Filtres de la bibliothèque">
-      <div className="listen-view-tabs">
-        {(['all', 'saved', 'completed'] as LibraryView[]).map((item) => <button key={item} type="button" className={view === item ? 'active' : ''} onClick={() => setView(item)}>
-          {item === 'saved' && <Bookmark size={13} />} {t[item]}
-        </button>)}
-      </div>
-      <div className="listen-filters">
-        <label className="listen-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} aria-label={t.search} /></label>
-        <select value={topic} onChange={(event) => setTopic(event.target.value as ListeningTopic | 'all')} aria-label={t.allTopics}>
-          <option value="all">{t.allTopics}</option>
-          {(Object.keys(topicLabels) as ListeningTopic[]).map((item) => <option key={item} value={item}>{t[topicLabels[item]]}</option>)}
-        </select>
-        <select value={level} onChange={(event) => setLevel(event.target.value as Difficulty | 'all')} aria-label={t.allLevels}>
-          <option value="all">{t.allLevels}</option>
-          {(['beginner', 'intermediate', 'advanced', 'native'] as Difficulty[]).map((item) => <option key={item} value={item}>{t[item]}</option>)}
-        </select>
-      </div>
-    </section>
+    {word && <aside className="listening-dictionary"><button type="button" className="listening-dict-close" onClick={() => setWord(null)} aria-label={t.close}><X size={16} /></button><p className="eyebrow">{t.dictionary.toUpperCase()}</p><h2>{word.raw}</h2><p className="listening-word-context">« {word.sentence} »</p>{analyzing ? <p><Loader2 className="spin" size={15} /> {t.analyze}</p> : <>{wordAnalysis?.translation && <strong className="listening-translation">{wordAnalysis.translation}</strong>}{wordAnalysis?.pronunciation && <span>{wordAnalysis.pronunciation}</span>}<div><a href={wiktionaryUrl(state.settings.learningLanguage, word.raw)} target="_blank" rel="noreferrer">{t.openDictionary}</a><button type="button" className="primary" onClick={saveCurrentWord} disabled={isSaved}><Save size={14} /> {isSaved ? t.saved : t.saveWord}</button></div></>}</aside>}
 
-    {filteredItems.length === 0 ? <section className="listen-empty"><Search size={22} /><h2>{t.empty}</h2><button type="button" className="outline" onClick={resetFilters}>{t.reset}</button></section> : <>
-      <ContentSection platform="youtube" title={t.youtube} items={videoItems('youtube')} ui={ui} savedIds={savedIds} completedIds={completedIds} onSave={toggleSaved} onComplete={toggleCompleted} />
-      <ContentSection platform="tiktok" title={t.tiktok} items={videoItems('tiktok')} ui={ui} savedIds={savedIds} completedIds={completedIds} onSave={toggleSaved} onComplete={toggleCompleted} />
-      <ContentSection platform="instagram" title={t.instagram} items={videoItems('instagram')} ui={ui} savedIds={savedIds} completedIds={completedIds} onSave={toggleSaved} onComplete={toggleCompleted} />
-      {secondaryItems.length > 0 && <section className="listen-secondary">
-        <div className="listen-secondary-heading"><p className="eyebrow">{t.recommended.toUpperCase()}</p><h2>{t.secondaryTitle}</h2><p>{t.secondarySub}</p></div>
-        <ContentSection platform="science" title={t.science} items={secondaryItems.filter((item) => item.platform === 'science')} ui={ui} savedIds={savedIds} completedIds={completedIds} onSave={toggleSaved} onComplete={toggleCompleted} />
-        <ContentSection platform="advice" title={t.advice} items={secondaryItems.filter((item) => item.platform === 'advice')} ui={ui} savedIds={savedIds} completedIds={completedIds} onSave={toggleSaved} onComplete={toggleCompleted} />
-      </section>}
-    </>}
+    <button type="button" className="listening-tools-trigger" onClick={() => setToolsOpen(true)}><span />{t.plusTools}<ChevronDown size={14} /><span /></button>
+    {toolsOpen && <ListeningTools ui={ui} state={state} onClose={() => setToolsOpen(false)} />}
   </div>
 }
