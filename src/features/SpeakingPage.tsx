@@ -222,9 +222,12 @@ export function SpeakingPage({
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const studioContainerRef = useRef<HTMLDivElement>(null)
 
+  const [activePrompterText, setActivePrompterText] = useState<string | null>(null)
+
   // If customPrompterText is passed (from Writing "Pratiquer à l'oral"), enable prompter, auto-start camera, and consume once
   useEffect(() => {
     if (customPrompterText && customPrompterText.trim()) {
+      setActivePrompterText(customPrompterText)
       setShowPrompter(true)
       if (!cameraActive) {
         void requestMediaAccess()
@@ -232,6 +235,7 @@ export function SpeakingPage({
       onConsumePrompterText?.()
     }
   }, [customPrompterText, setShowPrompter, cameraActive, requestMediaAccess, onConsumePrompterText])
+
 
   const setVideoRef = useCallback((node: HTMLVideoElement | null) => {
     videoRef.current = node
@@ -624,9 +628,9 @@ export function SpeakingPage({
               )}
 
               {/* Minimalist Transparent Prompter Integrated with Controls */}
-              {showPrompter && (selectedNiche || customPrompterText) ? (
+              {showPrompter && (selectedNiche || activePrompterText) ? (
                 <TeleprompterOverlay
-                  text={customPrompterText || (selectedNiche ? getPromptText(selectedNiche, language) : '')}
+                  text={activePrompterText || (selectedNiche ? getPromptText(selectedNiche, language) : '')}
                   opacity={overlayOpacity}
                   onClose={() => setShowPrompter(false)}
                 >
@@ -636,6 +640,7 @@ export function SpeakingPage({
                 /* Standalone Bottom Bar when Prompter is not shown */
                 renderControls(false)
               )}
+
 
               {/* Quick Word & Phrase Lookup Drawer (Minimalist / Bottom-Left) */}
               <QuickWordLookup

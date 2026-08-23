@@ -150,6 +150,8 @@ export type ApiSettings = {
   taskModelWordAnalysis?: string
   /** Custom AI model override for URL web text extraction */
   taskModelUrlExtraction?: string
+  /** Custom AI model override for writing correction and pedagogical teacher annotations */
+  taskModelWritingCorrection?: string
 }
 
 export type CustomTool = {

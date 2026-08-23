@@ -2,30 +2,42 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, LearnedWord, WritingEntry } from '../../domain'
 import { id, todayKey } from '../../domain'
 import { WordBricksTray } from './WordBricksTray'
-import { WritingSetupModal } from './WritingSetupModal'
 import { checkUsedWords } from './wordMatcher'
-import { downloadAnkiExport } from '../vocabulary/ankiExporter'
 import { DEFAULT_PROMPTS_DATA, type DefaultPromptWord } from '../../data'
 import { renderStyledMarkdown } from '../vocabulary/phoneticUtils'
 import {
-  ArrowLeft,
+  Plus,
   Check,
   Save,
   Video,
   Clock,
   Sparkles,
-  Download,
   Copy,
+  Calendar,
+  Edit2,
+  Trash2,
+  Languages,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react'
 import type { WritingConfig } from './WritingPromptSelector'
+import {
+  analyzeWritingWithAi,
+  type WritingCorrectionResult,
+  type CorrectionItem,
+} from './writingCorrectionAiService'
+import { WritingCorrectionOverlay } from './WritingCorrectionOverlay'
 
 type WritingEditorProps = {
   config: WritingConfig
   state: AppState
   initialEntry?: WritingEntry
   onSave: (entry: WritingEntry) => void
-  onBack: () => void
+  onSelectEntry?: (entry: WritingEntry) => void
+  onDeleteEntry?: (id: string) => void
+  onNewSession?: () => void
   onNavigateToSpeaking?: (text: string) => void
+  onDraftStateChange?: (guardState: { hasDraftMoreThan10Words: boolean; saveDraft: () => void } | null) => void
 }
 
 // Common logical connectors for English and French
@@ -49,8 +61,11 @@ export function WritingEditor({
   state,
   initialEntry,
   onSave,
-  onBack,
+  onSelectEntry,
+  onDeleteEntry,
+  onNewSession,
   onNavigateToSpeaking,
+  onDraftStateChange,
 }: WritingEditorProps) {
   const learningLang = state.settings.learningLanguage
   const [title, setTitle] = useState(initialEntry?.title || config.title)
@@ -61,37 +76,37 @@ export function WritingEditor({
   const [savedBadge, setSavedBadge] = useState(false)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [activeDrawerTab, setActiveDrawerTab] = useState<'connectors' | 'vocab'>('connectors')
+  const [showNewConfirmModal, setShowNewConfirmModal] = useState(false)
 
-  // Setup modal for new writing sessions
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(() => !initialEntry)
-
-  // Sprint Timer
-  const [sprintMinutes, setSprintMinutes] = useState<number>(
-    config.sprintDurationMinutes || 5,
-  )
+  // Sprint Timer (for existing sprint entries, if any)
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(() =>
     config.mode === 'sprint' ? (config.sprintDurationMinutes || 5) * 60 : null,
   )
   const [isSprintActive, setIsSprintActive] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
+  // AI Correction State
+  const [isCorrecting, setIsCorrecting] = useState(false)
+  const [correctionError, setCorrectionError] = useState<string | null>(null)
+  const [correctionResult, setCorrectionResult] = useState<WritingCorrectionResult | null>(null)
+  const [isCorrectionOpen, setIsCorrectionOpen] = useState(false)
+  const [isEditorRawView, setIsEditorRawView] = useState(false)
+
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Map of saved word details for fast lookup (combining default prompts and user's saved words)
+  // Map of saved word details for fast lookup
   const wordDetailsMap = useMemo(() => {
     const map = new Map<string, LearnedWord | DefaultPromptWord>()
-    // 1. Seed with rich default prompt definitions
     DEFAULT_PROMPTS_DATA.forEach((dp) => {
       map.set(dp.word.toLowerCase().trim(), dp)
       map.set(dp.normalized.toLowerCase().trim(), dp)
     })
-    // 2. Override with user's saved words
-    ;(state.words ?? []).forEach((w) => {
-      if (!w.language || w.language === learningLang) {
-        map.set(w.word.toLowerCase().trim(), w)
-        map.set(w.normalized.toLowerCase().trim(), w)
-      }
-    })
+      ; (state.words ?? []).forEach((w) => {
+        if (!w.language || w.language === learningLang) {
+          map.set(w.word.toLowerCase().trim(), w)
+          map.set(w.normalized.toLowerCase().trim(), w)
+        }
+      })
     return map
   }, [state.words, learningLang])
 
@@ -107,7 +122,7 @@ export function WritingEditor({
     [promptWords, content],
   )
 
-  // Word & character stats
+  // Current session stats
   const stats = useMemo(() => {
     const trimmed = content.trim()
     const words = trimmed ? trimmed.split(/\s+/).length : 0
@@ -115,6 +130,77 @@ export function WritingEditor({
     const readingTimeMins = Math.max(1, Math.ceil(words / 180))
     return { words, chars, readingTimeMins }
   }, [content])
+
+  // Total global stats across all saved writings (unique words count)
+  const globalStats = useMemo(() => {
+    const writings = state.writings ?? []
+    const totalWritings = writings.length
+    let totalChars = 0
+    const uniqueWordsSet = new Set<string>()
+
+    writings.forEach((entry) => {
+      const text = entry.content || ''
+      totalChars += text.length
+      const words = text.toLowerCase().match(/[\p{L}\p{N}]+/gu)
+      if (words) {
+        words.forEach((w) => uniqueWordsSet.add(w))
+      }
+    })
+
+    return {
+      totalWritings,
+      totalChars,
+      totalUniqueWords: uniqueWordsSet.size,
+    }
+  }, [state.writings])
+
+  // Save current writing entry and create a new text
+  const handleSave = () => {
+    const entry: WritingEntry = {
+      id: initialEntry?.id || id('writing'),
+      title: title.trim() || 'Mon texte',
+      date: initialEntry?.date || todayKey(),
+      mode: config.mode,
+      promptWords,
+      wordsUsed: usedWords,
+      content,
+      published: true,
+      cosignCount: 0,
+      coSigned: false,
+      wordCount: stats.words,
+      timeSpentSeconds: elapsedSeconds,
+      topicId: config.topicId,
+      topicTitle: config.topicTitle,
+      createdAt: initialEntry?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    onSave(entry)
+    setSavedBadge(true)
+    handleResetText()
+    setTimeout(() => setSavedBadge(false), 2200)
+  }
+
+  // Warn on window/tab reload if text > 10 words
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (stats.words > 10) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [stats.words])
+
+  // Inform parent of draft state for in-app page navigation warnings
+  useEffect(() => {
+    if (onDraftStateChange) {
+      onDraftStateChange({
+        hasDraftMoreThan10Words: stats.words > 10,
+        saveDraft: handleSave,
+      })
+    }
+  }, [stats.words, content, title, onDraftStateChange])
 
   // Sprint timer interval
   useEffect(() => {
@@ -163,29 +249,21 @@ export function WritingEditor({
     }, 20)
   }
 
-  // Save current writing entry
-  const handleSave = () => {
-    const entry: WritingEntry = {
-      id: initialEntry?.id || id('writing'),
-      title: title.trim() || 'Sans titre',
-      date: todayKey(),
-      mode: config.mode,
-      promptWords,
-      wordsUsed: usedWords,
-      content,
-      published: true,
-      cosignCount: 0,
-      coSigned: false,
-      wordCount: stats.words,
-      timeSpentSeconds: elapsedSeconds,
-      topicId: config.topicId,
-      topicTitle: config.topicTitle,
-      createdAt: initialEntry?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+  // Clear text to start fresh
+  const handleResetText = () => {
+    setTitle('Mon texte')
+    setContent('')
+    setPromptWords([])
+    onNewSession?.()
+  }
+
+  // Handle "Nouveau texte" button click
+  const handleNewTextClick = () => {
+    if (content.trim().length > 0) {
+      setShowNewConfirmModal(true)
+    } else {
+      handleResetText()
     }
-    onSave(entry)
-    setSavedBadge(true)
-    setTimeout(() => setSavedBadge(false), 2200)
   }
 
   // Send to speaking teleprompter
@@ -196,23 +274,90 @@ export function WritingEditor({
     }
   }
 
+  // AI Writing Correction Handler
+  const handleAiCorrection = async () => {
+    if (!content.trim()) {
+      setCorrectionError('Écris d’abord quelques phrases avant de lancer la correction IA.')
+      setTimeout(() => setCorrectionError(null), 4000)
+      return
+    }
+
+    // If already open with same text and not in error, toggle view
+    if (isCorrectionOpen && correctionResult && !correctionError) {
+      setIsEditorRawView(!isEditorRawView)
+      return
+    }
+
+    setIsCorrecting(true)
+    setCorrectionError(null)
+
+    const res = await analyzeWritingWithAi({
+      text: content,
+      learningLanguage: learningLang,
+      uiLanguage: state.settings.uiLanguage,
+      api: state.settings.api,
+    })
+
+    setIsCorrecting(false)
+
+    if (res.ok) {
+      setCorrectionResult(res.result)
+      setIsCorrectionOpen(true)
+      setIsEditorRawView(false)
+    } else {
+      setCorrectionError(res.error)
+      setTimeout(() => setCorrectionError(null), 6000)
+    }
+  }
+
+  const handleApplyAllCorrection = (newFullText: string) => {
+    setContent(newFullText)
+    setSavedBadge(false)
+    if (correctionResult) {
+      setCorrectionResult({
+        ...correctionResult,
+        originalText: newFullText,
+        corrections: [],
+        overallFeedback: 'Toutes les corrections ont été appliquées avec succès ! Ton texte est impeccable.',
+      })
+    }
+  }
+
+  const handleApplySingleCorrection = (corr: CorrectionItem) => {
+    if (!corr.original) return
+    const idx = content.indexOf(corr.original)
+    if (idx !== -1) {
+      const next = content.slice(0, idx) + corr.corrected + content.slice(idx + corr.original.length)
+      setContent(next)
+      setSavedBadge(false)
+      if (correctionResult) {
+        setCorrectionResult({
+          ...correctionResult,
+          originalText: next,
+          corrections: correctionResult.corrections.filter((c) => c.id !== corr.id),
+        })
+      }
+    }
+  }
+
+  const handleDismissSingleCorrection = (idToDismiss: string) => {
+    if (correctionResult) {
+      setCorrectionResult({
+        ...correctionResult,
+        corrections: correctionResult.corrections.filter((c) => c.id !== idToDismiss),
+      })
+    }
+  }
+
+  const handleCloseCorrection = () => {
+    setIsCorrectionOpen(false)
+  }
+
   // Copy text
   const handleCopy = () => {
     void navigator.clipboard.writeText(content)
     setSavedBadge(true)
     setTimeout(() => setSavedBadge(false), 1500)
-  }
-
-  // Anki Export
-  const handleAnkiExport = () => {
-    const wordsToExport = promptWords
-      .map((pw) => wordDetailsMap.get(pw.toLowerCase().trim()))
-      .filter((w): w is LearnedWord => Boolean(w))
-    downloadAnkiExport(
-      wordsToExport.length ? wordsToExport : state.words,
-      state.resources,
-      `anki-session-${todayKey()}.tsv`,
-    )
   }
 
   // Format seconds mm:ss
@@ -227,16 +372,19 @@ export function WritingEditor({
       {/* Top Header */}
       <header className="writing-editor-header">
         <div className="header-left">
-          <button type="button" className="outline icon-btn" onClick={onBack} title="Retour">
-            <ArrowLeft size={16} />
-          </button>
           <div className="title-block">
+            {initialEntry && (
+              <span className="editing-session-badge" title="Cette session est en cours de modification">
+                <Edit2 size={11} />
+                <span>En édition</span>
+              </span>
+            )}
             <input
               type="text"
               className="editable-session-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Titre de la session..."
+              placeholder="Titre du texte..."
             />
           </div>
         </div>
@@ -254,9 +402,8 @@ export function WritingEditor({
           {promptWords.length > 0 && (
             <div className="writing-quick-stats">
               <span
-                className={`stat-pill completion ${
-                  usedWords.length === promptWords.length ? 'all-done' : ''
-                }`}
+                className={`stat-pill completion ${usedWords.length === promptWords.length ? 'all-done' : ''
+                  }`}
               >
                 {usedWords.length}/{promptWords.length} cibles
               </span>
@@ -270,20 +417,11 @@ export function WritingEditor({
             title="Boîte à outils de connecteurs et vocabulaire"
           >
             <Sparkles size={15} />
-            <span>Aide</span>
+            <span>Vocabulaire</span>
           </button>
 
-          <button
-            type="button"
-            className="outline save-btn"
-            onClick={handleSave}
-            title="Enregistrer"
-          >
-            {savedBadge ? <Check size={16} className="text-green" /> : <Save size={16} />}
-            <span>{savedBadge ? 'Enregistré !' : 'Sauvegarder'}</span>
-          </button>
-
-          {onNavigateToSpeaking && content.trim().length > 0 && (
+          {/* Show "Pratiquer à l'oral" only when text has at least 10 words */}
+          {onNavigateToSpeaking && stats.words >= 10 && (
             <button
               type="button"
               className="primary prompter-export-btn"
@@ -294,12 +432,24 @@ export function WritingEditor({
               <span>Pratiquer à l'oral</span>
             </button>
           )}
+
+          {onNewSession && (
+            <button
+              type="button"
+              className="outline new-session-btn"
+              onClick={handleNewTextClick}
+              title={initialEntry ? "Créer un nouveau texte vierge" : "Nouveau texte"}
+            >
+              <Plus size={15} />
+              <span>Nouveau texte</span>
+            </button>
+          )}
         </div>
       </header>
 
       {/* Target Word Bricks (if any) */}
       {promptWords.length > 0 && (
-        <div className={isConfigModalOpen ? 'workspace-blurred' : ''}>
+        <div>
           <WordBricksTray
             words={promptWords}
             usedWords={usedWords}
@@ -313,22 +463,48 @@ export function WritingEditor({
       )}
 
       {/* Main Workspace Layout */}
-      <div
-        className={`writing-workspace-body ${isDrawerOpen ? 'drawer-open' : ''} ${
-          isConfigModalOpen ? 'workspace-blurred' : ''
-        }`}
-      >
+      <div className={`writing-workspace-body ${isDrawerOpen ? 'drawer-open' : ''}`}>
         {/* Editor Main Textarea */}
         <div className="editor-main-area">
-          <textarea
-            ref={textareaRef}
-            className="writing-textarea"
-            placeholder="Commence à rédiger ici... Intègre les mots cibles au fur et à mesure."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            autoFocus={!isConfigModalOpen}
-            disabled={isConfigModalOpen}
-          />
+          {isCorrectionOpen && correctionResult ? (
+            <>
+              <WritingCorrectionOverlay
+                correctionResult={correctionResult}
+                onApplyAll={handleApplyAllCorrection}
+                onApplySingle={handleApplySingleCorrection}
+                onDismissSingle={handleDismissSingleCorrection}
+                onClose={handleCloseCorrection}
+                isEditorView={isEditorRawView}
+                onToggleEditorView={() => setIsEditorRawView(!isEditorRawView)}
+              />
+              {isEditorRawView && (
+                <textarea
+                  ref={textareaRef}
+                  className="writing-textarea"
+                  placeholder="Commence à rédiger ici... Exprime-toi librement dans ta langue d'apprentissage."
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  autoFocus
+                />
+              )}
+            </>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              className="writing-textarea"
+              placeholder="Commence à rédiger ici... Exprime-toi librement dans ta langue d'apprentissage."
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              autoFocus
+            />
+          )}
+
+          {correctionError && (
+            <div className="writing-error-toast">
+              <AlertCircle size={14} />
+              <span>{correctionError}</span>
+            </div>
+          )}
 
           <footer className="editor-bottom-bar">
             <div className="bottom-meta">
@@ -354,14 +530,30 @@ export function WritingEditor({
                 <Copy size={13} />
                 <span>Copier</span>
               </button>
+
+              <button
+                type="button"
+                className={`text-btn ai-correct-btn ${isCorrecting ? 'is-loading' : ''} ${isCorrectionOpen && correctionResult ? 'active' : ''}`}
+                onClick={handleAiCorrection}
+                disabled={isCorrecting}
+                title="Analyser le texte et afficher les corrections et annotations manuscrites"
+              >
+                {isCorrecting ? (
+                  <Loader2 size={13} className="spin text-brand" />
+                ) : (
+                  <Languages size={13} />
+                )}
+                <span>{isCorrecting ? 'Analyse…' : 'Correction IA'}</span>
+              </button>
+
               <button
                 type="button"
                 className="text-btn"
-                onClick={handleAnkiExport}
-                title="Télécharger l'export Anki TSV"
+                onClick={handleSave}
+                title="Enregistrer et créer un nouveau texte"
               >
-                <Download size={13} />
-                <span>Export Anki</span>
+                {savedBadge ? <Check size={13} className="text-green" /> : <Save size={13} />}
+                <span>{savedBadge ? 'Enregistré !' : 'Sauvegarder'}</span>
               </button>
             </div>
           </footer>
@@ -448,36 +640,132 @@ export function WritingEditor({
         )}
       </div>
 
-      {/* Setup Modal Overlay (if configuring new session) */}
-      {isConfigModalOpen && (
-        <WritingSetupModal
-          mode={config.mode}
-          state={state}
-          promptWords={promptWords}
-          onUpdatePromptWords={(words) => {
-            setPromptWords(words)
-            setTitle(`Défi Vocabulaire (${words.length} mots)`)
-          }}
-          sprintMinutes={sprintMinutes}
-          onUpdateSprintMinutes={(mins) => {
-            setSprintMinutes(mins)
-            setSecondsRemaining(mins * 60)
-            setTitle(`Sprint Écriture · ${mins} min`)
-          }}
-          title={title}
-          onUpdateTitle={setTitle}
-          onStart={() => {
-            setIsConfigModalOpen(false)
-            if (config.mode === 'sprint') {
-              setIsSprintActive(true)
-            }
-            setTimeout(() => {
-              textareaRef.current?.focus()
-            }, 50)
-          }}
-          onCancel={onBack}
-        />
+      {/* Fine Separation Line with Middle Stats */}
+      <div className="sessions-divider">
+        <span className="sessions-divider-line" />
+        <span className="sessions-divider-text">
+          {globalStats.totalWritings} {globalStats.totalWritings > 1 ? 'textes rédigés' : 'texte rédigé'} · {globalStats.totalChars.toLocaleString()} caractères · {globalStats.totalUniqueWords.toLocaleString()} mots uniques
+        </span>
+        <span className="sessions-divider-line" />
+      </div>
+
+      {/* Direct Sessions / Writings Cards List (Notebook Style) */}
+      <div className="sessions-section">
+        {(state.writings ?? []).length > 0 && (
+          <div className="writings-cards-grid">
+            {(state.writings ?? []).map((entry) => (
+              <article key={entry.id} className="writing-history-card">
+                {/* Notebook Visual Index Tabs on the Right Edge */}
+                <div className="notebook-tabs-edge" aria-hidden="true">
+                  <span className="notebook-tab-item tab-1" />
+                  <span className="notebook-tab-item tab-2" />
+                  <span className="notebook-tab-item tab-3" />
+                </div>
+
+                <div className="card-top-row">
+                  <div className="card-badge-row">
+                    <span className="card-date">
+                      <Calendar size={12} /> {entry.date}
+                    </span>
+                  </div>
+
+                  <div className="card-actions">
+                    {onNavigateToSpeaking && entry.content?.trim() && (
+                      <button
+                        type="button"
+                        className="card-action-btn"
+                        onClick={() => onNavigateToSpeaking(entry.content)}
+                        title="Pratiquer au prompteur"
+                      >
+                        <Video size={13} />
+                        <span>Oral</span>
+                      </button>
+                    )}
+                    {onSelectEntry && (
+                      <button
+                        type="button"
+                        className="card-action-btn"
+                        onClick={() => onSelectEntry(entry)}
+                        title="Modifier cette session"
+                      >
+                        <Edit2 size={13} />
+                        <span>Modifier</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <h3
+                  className="card-title"
+                  onClick={() => onSelectEntry?.(entry)}
+                  style={{ cursor: onSelectEntry ? 'pointer' : 'default' }}
+                >
+                  {entry.title}
+                </h3>
+
+                <p className="card-excerpt">
+                  {entry.content?.slice(0, 180)}
+                  {(entry.content?.length ?? 0) > 180 ? '...' : ''}
+                </p>
+
+                <div className="card-footer">
+                  <span>{entry.wordCount || 0} mots</span>
+                  <span>·</span>
+                  <span>{entry.content?.length || 0} caractères</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Confirmation Modal for Nouveau texte */}
+      {showNewConfirmModal && (
+        <div className="writing-setup-overlay" onClick={() => setShowNewConfirmModal(false)}>
+          <div
+            className="writing-setup-modal"
+            style={{ maxWidth: 420 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '24px 20px 16px 20px' }}>
+              <p style={{ margin: 0, fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>
+                Tu as un texte en cours, veux-tu sauvegarder avant de quitter la page ?
+              </p>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 10,
+                padding: '14px 20px',
+                borderTop: '1px solid var(--line)',
+              }}
+            >
+              <button
+                type="button"
+                className="outline"
+                onClick={() => setShowNewConfirmModal(false)}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  setShowNewConfirmModal(false)
+                  handleResetText()
+                }}
+              >
+                Quitter sans sauvegarder
+              </button>
+            </div>
+          </div>
+        </div>
       )}
+
     </div>
   )
 }
+
+
+

@@ -1,81 +1,52 @@
 import React, { useState } from 'react'
-import type { AppState, UiLanguage, WritingEntry, WritingMode } from '../../domain'
+import type { AppState, UiLanguage, WritingEntry } from '../../domain'
 import { recordWordUsageInWriting, upsertWriting, deleteWriting } from '../../store'
-import { WritingPromptSelector, type WritingConfig } from './WritingPromptSelector'
+import { type WritingConfig } from './WritingPromptSelector'
 import { WritingEditor } from './WritingEditor'
-import { WritingHistory } from './WritingHistory'
-import { prompts as defaultPrompts } from '../../data'
 
 type WritingPageProps = {
   state: AppState
   onChange: (next: AppState) => void
   ui: UiLanguage
   onNavigateToSpeaking?: (text: string) => void
+  onDraftStateChange?: (guardState: { hasDraftMoreThan10Words: boolean; saveDraft: () => void } | null) => void
 }
 
-type ViewMode = 'selector' | 'editor' | 'history'
+const DEFAULT_FREE_CONFIG: WritingConfig = {
+  mode: 'free',
+  title: 'Mon texte',
+  promptWords: [],
+}
 
 export function WritingPage({
   state,
   onChange,
   ui,
   onNavigateToSpeaking,
+  onDraftStateChange,
 }: WritingPageProps) {
-  const [view, setView] = useState<ViewMode>('selector')
-  const [activeConfig, setActiveConfig] = useState<WritingConfig | null>(null)
+  const [activeConfig, setActiveConfig] = useState<WritingConfig>(DEFAULT_FREE_CONFIG)
   const [editingEntry, setEditingEntry] = useState<WritingEntry | undefined>(undefined)
 
-  const handleSelectMode = (mode: WritingMode) => {
-    const learningLang = state.settings.learningLanguage
-    const allSavedWords = (state.words ?? []).filter((w) => w.language === learningLang)
-
-    const pickInitialWords = (count: number): string[] => {
-      if (!allSavedWords.length) return defaultPrompts.slice(0, count)
-      const shuffled = [...allSavedWords].sort(() => 0.5 - Math.random())
-      return shuffled.slice(0, Math.min(count, shuffled.length)).map((w) => w.word)
-    }
-
-    if (mode === 'reactivation') {
-      const initialWords = pickInitialWords(5)
-      setActiveConfig({
-        mode: 'reactivation',
-        title: `Défi Vocabulaire (${initialWords.length} mots)`,
-        promptWords: initialWords,
-      })
-    } else if (mode === 'sprint') {
-      const bonusWords = pickInitialWords(3)
-      setActiveConfig({
-        mode: 'sprint',
-        title: `Sprint Écriture · 5 min`,
-        promptWords: bonusWords,
-        sprintDurationMinutes: 5,
-      })
-    } else {
-      setActiveConfig({
-        mode: 'free',
-        title: 'Mon texte',
-        promptWords: [],
-      })
-    }
+  const handleNewSession = () => {
     setEditingEntry(undefined)
-    setView('editor')
+    setActiveConfig(DEFAULT_FREE_CONFIG)
   }
 
   const handleSelectEntry = (entry: WritingEntry) => {
     setEditingEntry(entry)
     setActiveConfig({
-      mode: entry.mode,
+      mode: entry.mode || 'free',
       title: entry.title,
-      promptWords: entry.promptWords,
+      promptWords: entry.promptWords || [],
       topicId: entry.topicId,
       topicTitle: entry.topicTitle,
     })
-    setView('editor')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleSaveEntry = (entry: WritingEntry) => {
     let nextState = upsertWriting(state, entry)
-    // Boost knowledge of used words in SRS
     if (entry.wordsUsed && entry.wordsUsed.length > 0) {
       nextState = recordWordUsageInWriting(
         nextState,
@@ -84,7 +55,10 @@ export function WritingPage({
       )
     }
     onChange(nextState)
+    setEditingEntry(undefined)
+    setActiveConfig(DEFAULT_FREE_CONFIG)
   }
+
 
   const handleDeleteEntry = (id: string) => {
     onChange(deleteWriting(state, id))
@@ -92,34 +66,21 @@ export function WritingPage({
 
   return (
     <div className="page writing-page-hub">
-      {view === 'selector' && (
-        <WritingPromptSelector
-          state={state}
-          onSelectMode={handleSelectMode}
-          onOpenHistory={() => setView('history')}
-        />
-      )}
-
-      {view === 'editor' && activeConfig && (
-        <WritingEditor
-          config={activeConfig}
-          state={state}
-          initialEntry={editingEntry}
-          onSave={handleSaveEntry}
-          onBack={() => setView('selector')}
-          onNavigateToSpeaking={onNavigateToSpeaking}
-        />
-      )}
-
-      {view === 'history' && (
-        <WritingHistory
-          state={state}
-          onSelectEntry={handleSelectEntry}
-          onDeleteEntry={handleDeleteEntry}
-          onNewSession={() => setView('selector')}
-          onNavigateToSpeaking={onNavigateToSpeaking}
-        />
-      )}
+      <WritingEditor
+        key={editingEntry?.id ?? 'new-session'}
+        config={activeConfig}
+        state={state}
+        initialEntry={editingEntry}
+        onSave={handleSaveEntry}
+        onSelectEntry={handleSelectEntry}
+        onDeleteEntry={handleDeleteEntry}
+        onNewSession={handleNewSession}
+        onNavigateToSpeaking={onNavigateToSpeaking}
+        onDraftStateChange={onDraftStateChange}
+      />
     </div>
   )
 }
+
+
+

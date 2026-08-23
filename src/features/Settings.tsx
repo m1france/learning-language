@@ -1057,6 +1057,21 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                 </div>
               </div>
 
+              {/* Option 5 : Correction et annotations d'écriture */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>Correction et annotations d'écriture (« Correction IA »)</strong>
+                  <small>Analyse orthographique, syntaxique, restructuration et conseils de style en temps réel</small>
+                </div>
+                <div className="conn-task-input-wrap">
+                  <input
+                    value={draft.api.taskModelWritingCorrection || ''}
+                    onChange={(e) => updateApi('taskModelWritingCorrection', e.target.value)}
+                    placeholder="Utilise le modèle principal par défaut"
+                  />
+                </div>
+              </div>
+
               {/* Option 5 : Traduction Speaking */}
               <div className="conn-task-row">
                 <div className="conn-task-info">

@@ -72,6 +72,9 @@ export default function App() {
   const [speakingPrompterText, setSpeakingPrompterText] = useState<string | null>(null)
   const [isAiTaskRunning, setIsAiTaskRunning] = useState(false)
 
+  const [pendingNavPage, setPendingNavPage] = useState<Page | null>(null)
+  const writingDraftGuardRef = useRef<{ hasDraftMoreThan10Words: boolean; saveDraft: () => void } | null>(null)
+
   const toggleSide = () => {
     const next = !sideCollapsed
     setSideCollapsed(next)
@@ -90,11 +93,20 @@ export default function App() {
   const setUiLanguage = (uiLanguage: UiLanguage) => change({ ...state, settings: { ...state.settings, uiLanguage } })
 
   const go = (next: Page) => {
+    if (page === 'writing' && next !== 'writing' && writingDraftGuardRef.current?.hasDraftMoreThan10Words) {
+      setPendingNavPage(next)
+      return
+    }
+    performPendingNav(next)
+  }
+
+  const performPendingNav = (next: Page) => {
     setReaderId(null)
     if (next !== 'speaking') {
       setSpeakingPrompterText(null)
     }
     setPage(next)
+    setPendingNavPage(null)
   }
 
   return (
@@ -157,7 +169,10 @@ export default function App() {
                   ui={ui}
                   onNavigateToSpeaking={(text) => {
                     setSpeakingPrompterText(text)
-                    go('speaking')
+                    performPendingNav('speaking')
+                  }}
+                  onDraftStateChange={(guard) => {
+                    writingDraftGuardRef.current = guard
                   }}
                 />
               )}
@@ -175,10 +190,53 @@ export default function App() {
         {(page !== 'speaking' || reader !== null) && (
           <FloatingMiniCam onNavigateToSpeaking={() => go('speaking')} />
         )}
+
+        {/* Modal for unsaved draft when leaving Writing page */}
+        {pendingNavPage && (
+          <div className="writing-setup-overlay" onClick={() => setPendingNavPage(null)}>
+            <div
+              className="writing-setup-modal"
+              style={{ maxWidth: 420 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ padding: '24px 20px 16px 20px' }}>
+                <p style={{ margin: 0, fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>
+                  Tu as un texte en cours, veux-tu sauvegarder avant de quitter la page ?
+                </p>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: 10,
+                  padding: '14px 20px',
+                  borderTop: '1px solid var(--line)',
+                }}
+              >
+                <button
+                  type="button"
+                  className="outline"
+                  onClick={() => setPendingNavPage(null)}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => performPendingNav(pendingNavPage)}
+                >
+                  Ne pas sauvegarder
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </CameraProvider>
   )
 }
+
 
 function Brand({ onClick }: { onClick?: () => void }) {
   const content = <><span className="brand-mark"><img src={doveWhite} alt="" /></span><span>vivre<br /><em>la langue</em></span></>
