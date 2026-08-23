@@ -283,16 +283,6 @@ function Sidebar({
             {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
           </button>
         </div>
-        <div className="profile-mini">
-          <span className="avatar">{name.slice(0, 1).toUpperCase()}</span>
-          <div className="side-label">
-            <strong>{name}</strong>
-            <small>{t.roleLabel}</small>
-          </div>
-          <span className="side-label">
-            <ChevronDown size={14} />
-          </span>
-        </div>
       </div>
     </aside>
   )

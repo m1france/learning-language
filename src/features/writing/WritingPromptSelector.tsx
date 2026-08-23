@@ -1,23 +1,6 @@
-import React, { useMemo, useState } from 'react'
-import type { AppState, LearnedWord, Resource, WritingMode } from '../../domain'
-import { GLOBAL_CATEGORIES, type GlobalTopicCategory, type NicheTopic } from '../speaking/speakingTopics'
-import { prompts as defaultPrompts } from '../../data'
-import {
-  Sparkles,
-  Zap,
-  BookOpen,
-  PenTool,
-  Target,
-  Compass,
-  Clock,
-  Shuffle,
-  ChevronRight,
-  Filter,
-  Check,
-  Tag,
-  ArrowRight,
-  RotateCcw,
-} from 'lucide-react'
+import React from 'react'
+import type { AppState, WritingMode } from '../../domain'
+import { BookOpen, PenTool, Target, Zap, ArrowRight } from 'lucide-react'
 
 export type WritingConfig = {
   mode: WritingMode
@@ -31,383 +14,97 @@ export type WritingConfig = {
 
 type WritingPromptSelectorProps = {
   state: AppState
-  onStartSession: (config: WritingConfig) => void
+  onSelectMode: (mode: WritingMode) => void
   onOpenHistory: () => void
 }
 
 export function WritingPromptSelector({
   state,
-  onStartSession,
+  onSelectMode,
   onOpenHistory,
 }: WritingPromptSelectorProps) {
-  const [selectedMode, setSelectedMode] = useState<WritingMode>('reactivation')
-  
-  // Reactivation Mode Filters
-  const [wordCount, setWordCount] = useState<number>(5)
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'due' | 'resource' | 'tag'>('all')
-  const [selectedResourceId, setSelectedResourceId] = useState<string>('')
-  const [selectedTag, setSelectedTag] = useState<string>('')
-  const [customSelectedWords, setCustomSelectedWords] = useState<string[]>([])
-  
-  // Guided Mode Topic Selection
-  const [selectedCategory, setSelectedCategory] = useState<GlobalTopicCategory>(GLOBAL_CATEGORIES[0])
-  const [selectedTopic, setSelectedTopic] = useState<NicheTopic>(GLOBAL_CATEGORIES[0].subtopics[0])
-
-  // Sprint Mode Duration
-  const [sprintMinutes, setSprintMinutes] = useState<number>(5)
-
-  // Free Mode Title
-  const [freeTitle, setFreeTitle] = useState<string>('')
-
-  // Filter available words from state
-  const learningLang = state.settings.learningLanguage
-  const allSavedWords = useMemo(
-    () => (state.words ?? []).filter((w) => w.language === learningLang),
-    [state.words, learningLang],
-  )
-
-  const tagsList = useMemo(() => {
-    const set = new Set<string>()
-    allSavedWords.forEach((w) => w.tags?.forEach((t) => set.add(t)))
-    return Array.from(set)
-  }, [allSavedWords])
-
-  // Filter words according to chosen filter
-  const filteredWordsPool = useMemo(() => {
-    if (sourceFilter === 'due') {
-      const today = new Date().toISOString().slice(0, 10)
-      const due = allSavedWords.filter((w) => !w.nextReview || w.nextReview <= today || (w.knowledge ?? 1) <= 3)
-      return due.length > 0 ? due : allSavedWords
-    }
-    if (sourceFilter === 'resource' && selectedResourceId) {
-      return allSavedWords.filter((w) => w.sourceResourceId === selectedResourceId)
-    }
-    if (sourceFilter === 'tag' && selectedTag) {
-      return allSavedWords.filter((w) => w.tags?.includes(selectedTag))
-    }
-    return allSavedWords
-  }, [allSavedWords, sourceFilter, selectedResourceId, selectedTag])
-
-  // Pick N random words from the pool
-  const pickWords = (count: number, pool: LearnedWord[]): string[] => {
-    if (!pool.length) {
-      // Fallback to default prompts if user hasn't saved words yet
-      return defaultPrompts.slice(0, count)
-    }
-    const shuffled = [...pool].sort(() => 0.5 - Math.random())
-    return shuffled.slice(0, Math.min(count, shuffled.length)).map((w) => w.word)
-  }
-
-  // Shuffle or initialize words
-  const [activeWords, setActiveWords] = useState<string[]>(() => pickWords(5, allSavedWords))
-
-  const handleShuffleWords = () => {
-    setActiveWords(pickWords(wordCount, filteredWordsPool))
-  }
-
-  // Update words when wordCount or filter changes
-  const handleCountChange = (count: number) => {
-    setWordCount(count)
-    setActiveWords(pickWords(count, filteredWordsPool))
-  }
-
-  const handleFilterChange = (filter: 'all' | 'due' | 'resource' | 'tag') => {
-    setSourceFilter(filter)
-    const newPool = filter === 'due' 
-      ? allSavedWords.filter((w) => (w.knowledge ?? 1) <= 3)
-      : allSavedWords
-    setActiveWords(pickWords(wordCount, newPool))
-  }
-
-  const handleStart = () => {
-    if (selectedMode === 'reactivation') {
-      const wordsToUse = customSelectedWords.length > 0 ? customSelectedWords : activeWords
-      onStartSession({
-        mode: 'reactivation',
-        title: `Défi Vocabulaire (${wordsToUse.length} mots)`,
-        promptWords: wordsToUse,
-        resourceId: selectedResourceId || undefined,
-      })
-    } else if (selectedMode === 'guided') {
-      const topicWords = pickWords(4, allSavedWords)
-      onStartSession({
-        mode: 'guided',
-        title: learningLang === 'fr' ? selectedTopic.title : selectedTopic.titleEn,
-        promptWords: topicWords,
-        topicId: selectedTopic.id,
-        topicTitle: learningLang === 'fr' ? selectedTopic.title : selectedTopic.titleEn,
-      })
-    } else if (selectedMode === 'sprint') {
-      const bonusWords = pickWords(3, allSavedWords)
-      onStartSession({
-        mode: 'sprint',
-        title: `Sprint Écriture · ${sprintMinutes} min`,
-        promptWords: bonusWords,
-        sprintDurationMinutes: sprintMinutes,
-      })
-    } else {
-      // Free essay
-      onStartSession({
-        mode: 'free',
-        title: freeTitle.trim() || 'Essai Libre',
-        promptWords: [],
-      })
-    }
-  }
+  const writingsCount = (state.writings ?? []).length
 
   return (
-    <div className="writing-prompt-selector">
+    <div className="writing-prompt-selector-centered">
       {/* Top Header */}
-      <div className="selector-hero">
+      <div className="selector-hero centered-hero">
         <div className="selector-hero-text">
           <h1>Choisis ton mode d'écriture</h1>
+          <p className="subhead">
+            Pratique ton expression écrite avec des défis de vocabulaire, des sprints ou en liberté totale.
+          </p>
         </div>
-        <button className="history-link-btn" onClick={onOpenHistory}>
+        <button className="history-link-btn" onClick={onOpenHistory} type="button">
           <BookOpen size={16} />
-          <span>Mes Écrits & Archives ({(state.writings ?? []).length})</span>
+          <span>Mon journal ({writingsCount})</span>
         </button>
       </div>
 
-      {/* Mode Navigation Cards */}
-      <div className="writing-modes-grid">
-        {/* Mode 1: Réactivation */}
+      {/* Centered 3 Modes Grid */}
+      <div className="writing-modes-grid-centered">
+        {/* Mode 1: Étudier les mots appris */}
         <button
           type="button"
-          className={`writing-mode-card ${selectedMode === 'reactivation' ? 'active' : ''}`}
-          onClick={() => setSelectedMode('reactivation')}
+          className="writing-mode-card mode-interactive-card"
+          onClick={() => onSelectMode('reactivation')}
         >
-          <div className="mode-icon-badge coral">
-            <Target size={20} />
+          <div className="mode-card-top">
+            <div className="mode-icon-badge coral">
+              <Target size={22} />
+            </div>
           </div>
           <div className="mode-meta">
             <h3>Étudier les mots appris</h3>
             <p>Intègre 3 à 10 mots enregistrés dans une histoire ou un texte cohérent.</p>
           </div>
+          <div className="mode-card-footer">
+            <span>Configurer & Écrire</span>
+            <ArrowRight size={15} />
+          </div>
         </button>
 
-        {/* Mode 2: Sprint Chronométré */}
+        {/* Mode 2: Chronométré */}
         <button
           type="button"
-          className={`writing-mode-card ${selectedMode === 'sprint' ? 'active' : ''}`}
-          onClick={() => setSelectedMode('sprint')}
+          className="writing-mode-card mode-interactive-card"
+          onClick={() => onSelectMode('sprint')}
         >
-          <div className="mode-icon-badge blue">
-            <Zap size={20} />
+          <div className="mode-card-top">
+            <div className="mode-icon-badge blue">
+              <Zap size={22} />
+            </div>
           </div>
           <div className="mode-meta">
             <h3>Chronométré</h3>
             <p>Écris sans t'arrêter pendant 3 à 10 min pour débloquer la pensée directe.</p>
           </div>
+          <div className="mode-card-footer">
+            <span>Configurer & Écrire</span>
+            <ArrowRight size={15} />
+          </div>
         </button>
 
-        {/* Mode 3: Écriture Libre */}
+        {/* Mode 3: Écriture libre */}
         <button
           type="button"
-          className={`writing-mode-card ${selectedMode === 'free' ? 'active' : ''}`}
-          onClick={() => setSelectedMode('free')}
+          className="writing-mode-card mode-interactive-card"
+          onClick={() => onSelectMode('free')}
         >
-          <div className="mode-icon-badge green">
-            <PenTool size={20} />
+          <div className="mode-card-top">
+            <div className="mode-icon-badge green">
+              <PenTool size={22} />
+            </div>
           </div>
           <div className="mode-meta">
             <h3>Écriture libre</h3>
-            <p>Page blanche avec statistiques de mots et tiroir de vocabulaire à portée de main.</p>
+            <p>Page blanche avec statistiques de mots et tiroir de connecteurs à portée de main.</p>
+          </div>
+          <div className="mode-card-footer">
+            <span>Ouvrir l'éditeur</span>
+            <ArrowRight size={15} />
           </div>
         </button>
-      </div>
-
-      {/* Mode Configuration Workspace */}
-      <div className="mode-config-panel">
-        {/* CONFIG 1: RÉACTIVATION */}
-        {selectedMode === 'reactivation' && (
-          <div className="config-reactivation">
-            <div className="config-row-head">
-              <div>
-                <h4>Personnaliser le défi de vocabulaire</h4>
-                <p>
-                  {allSavedWords.length > 0
-                    ? `${allSavedWords.length} mots disponibles dans ton coffre de vocabulaire.`
-                    : 'Aucun mot enregistré pour le moment. Quelques mots recommandés ont été sélectionnés.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="outline shuffle-btn"
-                onClick={handleShuffleWords}
-                title="Tirer de nouveaux mots au sort"
-              >
-                <Shuffle size={14} />
-                <span>Mélanger</span>
-              </button>
-            </div>
-
-            {/* Filter selectors */}
-            <div className="filters-bar">
-              <div className="filter-group">
-                <span className="filter-label">Nombre de mots :</span>
-                <div className="segmented-sm">
-                  {[3, 5, 8, 10].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      className={wordCount === n ? 'active' : ''}
-                      onClick={() => handleCountChange(n)}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="filter-group">
-                <span className="filter-label">Source des mots :</span>
-                <div className="segmented-sm">
-                  <button
-                    type="button"
-                    className={sourceFilter === 'all' ? 'active' : ''}
-                    onClick={() => handleFilterChange('all')}
-                  >
-                    Tous
-                  </button>
-                  <button
-                    type="button"
-                    className={sourceFilter === 'due' ? 'active' : ''}
-                    onClick={() => handleFilterChange('due')}
-                    title="Mots récemment découverts ou à réviser"
-                  >
-                    À réviser
-                  </button>
-                  {state.resources.length > 0 && (
-                    <button
-                      type="button"
-                      className={sourceFilter === 'resource' ? 'active' : ''}
-                      onClick={() => handleFilterChange('resource')}
-                    >
-                      Par Livre / Texte
-                    </button>
-                  )}
-                  {tagsList.length > 0 && (
-                    <button
-                      type="button"
-                      className={sourceFilter === 'tag' ? 'active' : ''}
-                      onClick={() => handleFilterChange('tag')}
-                    >
-                      Par Tag
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Sub-filters if resource or tag chosen */}
-            {sourceFilter === 'resource' && (
-              <div className="subfilter-row">
-                <label>Sélectionner le texte source :</label>
-                <select
-                  value={selectedResourceId}
-                  onChange={(e) => {
-                    setSelectedResourceId(e.target.value)
-                    const pool = allSavedWords.filter((w) => w.sourceResourceId === e.target.value)
-                    setActiveWords(pickWords(wordCount, pool.length ? pool : allSavedWords))
-                  }}
-                >
-                  <option value="">-- Choisir une ressource --</option>
-                  {state.resources.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {sourceFilter === 'tag' && (
-              <div className="subfilter-row">
-                <label>Sélectionner le tag :</label>
-                <select
-                  value={selectedTag}
-                  onChange={(e) => {
-                    setSelectedTag(e.target.value)
-                    const pool = allSavedWords.filter((w) => w.tags?.includes(e.target.value))
-                    setActiveWords(pickWords(wordCount, pool.length ? pool : allSavedWords))
-                  }}
-                >
-                  <option value="">-- Choisir un tag --</option>
-                  {tagsList.map((tag) => (
-                    <option key={tag} value={tag}>
-                      #{tag}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Live Words Preview */}
-            <div className="words-preview-tray">
-              <span className="tray-title">Mots sélectionnés pour cette session :</span>
-              <div className="tray-chips">
-                {activeWords.map((word, i) => {
-                  const item = allSavedWords.find((w) => w.word.toLowerCase() === word.toLowerCase())
-                  return (
-                    <div key={`${word}-${i}`} className="tray-chip">
-                      <span className="tray-chip-num">{i + 1}</span>
-                      <strong>{word}</strong>
-                      {item?.translation && <small>({item.translation})</small>}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-
-        {/* CONFIG 3: SPRINT */}
-        {selectedMode === 'sprint' && (
-          <div className="config-sprint">
-            <h4>Durée du sprint contre-la-montre</h4>
-            <p>
-              Pendant le sprint, un chronomètre tourne. L'objectif est d'écrire en continu sans
-              t'autocensurer ni hésiter.
-            </p>
-            <div className="sprint-duration-buttons">
-              {[3, 5, 10].map((mins) => (
-                <button
-                  key={mins}
-                  type="button"
-                  className={`sprint-time-btn ${sprintMinutes === mins ? 'active' : ''}`}
-                  onClick={() => setSprintMinutes(mins)}
-                >
-                  <Clock size={20} />
-                  <strong>{mins} minutes</strong>
-                  <span>{mins === 3 ? 'Échauffement' : mins === 5 ? 'Rythme standard' : 'Immersion profonde'}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* CONFIG 4: ESSAI LIBRE */}
-        {selectedMode === 'free' && (
-          <div className="config-free">
-            <h4>Titre ou sujet de ta rédaction (facultatif)</h4>
-            <input
-              type="text"
-              className="free-title-input"
-              placeholder="Ex: Mes réflexions sur l'architecture, Résumé de lecture..."
-              value={freeTitle}
-              onChange={(e) => setFreeTitle(e.target.value)}
-            />
-          </div>
-        )}
-
-        {/* Launch Button */}
-        <div className="config-footer">
-          <button type="button" className="primary large launch-btn" onClick={handleStart}>
-            <span>Commencer la session</span>
-            <ArrowRight size={18} />
-          </button>
-        </div>
       </div>
     </div>
   )

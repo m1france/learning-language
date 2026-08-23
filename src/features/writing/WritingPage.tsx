@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import type { AppState, UiLanguage, WritingEntry } from '../../domain'
+import type { AppState, UiLanguage, WritingEntry, WritingMode } from '../../domain'
 import { recordWordUsageInWriting, upsertWriting, deleteWriting } from '../../store'
 import { WritingPromptSelector, type WritingConfig } from './WritingPromptSelector'
 import { WritingEditor } from './WritingEditor'
 import { WritingHistory } from './WritingHistory'
+import { prompts as defaultPrompts } from '../../data'
 
 type WritingPageProps = {
   state: AppState
@@ -24,8 +25,38 @@ export function WritingPage({
   const [activeConfig, setActiveConfig] = useState<WritingConfig | null>(null)
   const [editingEntry, setEditingEntry] = useState<WritingEntry | undefined>(undefined)
 
-  const handleStartSession = (config: WritingConfig) => {
-    setActiveConfig(config)
+  const handleSelectMode = (mode: WritingMode) => {
+    const learningLang = state.settings.learningLanguage
+    const allSavedWords = (state.words ?? []).filter((w) => w.language === learningLang)
+
+    const pickInitialWords = (count: number): string[] => {
+      if (!allSavedWords.length) return defaultPrompts.slice(0, count)
+      const shuffled = [...allSavedWords].sort(() => 0.5 - Math.random())
+      return shuffled.slice(0, Math.min(count, shuffled.length)).map((w) => w.word)
+    }
+
+    if (mode === 'reactivation') {
+      const initialWords = pickInitialWords(5)
+      setActiveConfig({
+        mode: 'reactivation',
+        title: `Défi Vocabulaire (${initialWords.length} mots)`,
+        promptWords: initialWords,
+      })
+    } else if (mode === 'sprint') {
+      const bonusWords = pickInitialWords(3)
+      setActiveConfig({
+        mode: 'sprint',
+        title: `Sprint Écriture · 5 min`,
+        promptWords: bonusWords,
+        sprintDurationMinutes: 5,
+      })
+    } else {
+      setActiveConfig({
+        mode: 'free',
+        title: 'Mon texte',
+        promptWords: [],
+      })
+    }
     setEditingEntry(undefined)
     setView('editor')
   }
@@ -64,7 +95,7 @@ export function WritingPage({
       {view === 'selector' && (
         <WritingPromptSelector
           state={state}
-          onStartSession={handleStartSession}
+          onSelectMode={handleSelectMode}
           onOpenHistory={() => setView('history')}
         />
       )}

@@ -107,3 +107,35 @@ export function renderPhoneticFormatted(raw?: string): React.ReactNode {
   }
   return <span className="phonetic-wrapper">[{elements}]</span>
 }
+
+/**
+ * Safely parses simple markdown like **bold**, *italic*, __bold__, _italic_, <u>underline</u>.
+ * Returns formatted React nodes without raw markdown syntax characters.
+ */
+export function renderStyledMarkdown(text?: string): React.ReactNode {
+  if (!text || !text.trim()) return null
+  const regex = /(\*\*[\s\S]+?\*\*|__[\s\S]+?__|<u>[\s\S]*?<\/u>|\*[^*]+?\*|_[^_]+?_)/i
+  const parts = text.split(regex)
+
+  return parts.map((part, index) => {
+    const key = `md-${index}`
+    if (!part) return null
+
+    if (
+      (part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
+      (part.startsWith('__') && part.endsWith('__') && part.length >= 4)
+    ) {
+      return <strong key={key}>{part.slice(2, -2)}</strong>
+    }
+    if (part.toLowerCase().startsWith('<u>') && part.toLowerCase().endsWith('</u>') && part.length >= 7) {
+      return <u key={key}>{part.slice(3, -4)}</u>
+    }
+    if (
+      (part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
+      (part.startsWith('_') && part.endsWith('_') && part.length >= 2)
+    ) {
+      return <em key={key}>{part.slice(1, -1)}</em>
+    }
+    return part
+  })
+}

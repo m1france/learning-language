@@ -2,25 +2,20 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, LearnedWord, WritingEntry } from '../../domain'
 import { id, todayKey } from '../../domain'
 import { WordBricksTray } from './WordBricksTray'
+import { WritingSetupModal } from './WritingSetupModal'
 import { checkUsedWords } from './wordMatcher'
-import { downloadAnkiExport, syncWithAnkiConnect } from '../vocabulary/ankiExporter'
+import { downloadAnkiExport } from '../vocabulary/ankiExporter'
+import { DEFAULT_PROMPTS_DATA, type DefaultPromptWord } from '../../data'
+import { renderStyledMarkdown } from '../vocabulary/phoneticUtils'
 import {
   ArrowLeft,
   Check,
   Save,
-  Send,
   Video,
   Clock,
   Sparkles,
   Download,
   Copy,
-  BookOpen,
-  Tag,
-  Share2,
-  Layers,
-  HelpCircle,
-  Maximize2,
-  Minimize2,
 } from 'lucide-react'
 import type { WritingConfig } from './WritingPromptSelector'
 
@@ -65,31 +60,46 @@ export function WritingEditor({
   )
   const [savedBadge, setSavedBadge] = useState(false)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const [activeDrawerTab, setActiveDrawerTab] = useState<'connectors' | 'vocab' | 'anki'>('connectors')
-  const [ankiStatus, setAnkiStatus] = useState<string | null>(null)
+  const [activeDrawerTab, setActiveDrawerTab] = useState<'connectors' | 'vocab'>('connectors')
+
+  // Setup modal for new writing sessions
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(() => !initialEntry)
 
   // Sprint Timer
-  const [secondsRemaining, setSecondsRemaining] = useState<number | null>(() =>
-    config.mode === 'sprint' && config.sprintDurationMinutes
-      ? config.sprintDurationMinutes * 60
-      : null,
+  const [sprintMinutes, setSprintMinutes] = useState<number>(
+    config.sprintDurationMinutes || 5,
   )
-  const [isSprintActive, setIsSprintActive] = useState(config.mode === 'sprint')
+  const [secondsRemaining, setSecondsRemaining] = useState<number | null>(() =>
+    config.mode === 'sprint' ? (config.sprintDurationMinutes || 5) * 60 : null,
+  )
+  const [isSprintActive, setIsSprintActive] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Map of saved word details for fast lookup
+  // Map of saved word details for fast lookup (combining default prompts and user's saved words)
   const wordDetailsMap = useMemo(() => {
-    const map = new Map<string, LearnedWord>()
-    state.words.forEach((w) => {
-      if (w.language === learningLang) {
+    const map = new Map<string, LearnedWord | DefaultPromptWord>()
+    // 1. Seed with rich default prompt definitions
+    DEFAULT_PROMPTS_DATA.forEach((dp) => {
+      map.set(dp.word.toLowerCase().trim(), dp)
+      map.set(dp.normalized.toLowerCase().trim(), dp)
+    })
+    // 2. Override with user's saved words
+    ;(state.words ?? []).forEach((w) => {
+      if (!w.language || w.language === learningLang) {
         map.set(w.word.toLowerCase().trim(), w)
-        map.set(w.normalized, w)
+        map.set(w.normalized.toLowerCase().trim(), w)
       }
     })
     return map
   }, [state.words, learningLang])
+
+  // Words available for "Mon Vocabulaire" tab
+  const savedUserWords = useMemo(
+    () => (state.words ?? []).filter((w) => !w.language || w.language === learningLang),
+    [state.words, learningLang],
+  )
 
   // Live match of used target words
   const { used: usedWords } = useMemo(
@@ -124,11 +134,10 @@ export function WritingEditor({
 
   // Replace a target word
   const handleReplaceWord = (index: number) => {
-    const pool = (state.words ?? []).filter(
-      (w) => w.language === learningLang && !promptWords.includes(w.word),
-    )
-    if (!pool.length) return
-    const randomWord = pool[Math.floor(Math.random() * pool.length)].word
+    const pool = savedUserWords.length > 0 ? savedUserWords : DEFAULT_PROMPTS_DATA
+    const available = pool.filter((w) => !promptWords.includes(w.word))
+    if (!available.length) return
+    const randomWord = available[Math.floor(Math.random() * available.length)].word
     const updated = [...promptWords]
     updated[index] = randomWord
     setPromptWords(updated)
@@ -206,22 +215,6 @@ export function WritingEditor({
     )
   }
 
-  // AnkiConnect direct sync
-  const handleAnkiConnectSync = async () => {
-    setAnkiStatus('Synchronisation en cours…')
-    const wordsToExport = promptWords
-      .map((pw) => wordDetailsMap.get(pw.toLowerCase().trim()))
-      .filter((w): w is LearnedWord => Boolean(w))
-    const result = await syncWithAnkiConnect(
-      wordsToExport.length ? wordsToExport : state.words,
-    )
-    if (result.success) {
-      setAnkiStatus(`✓ ${result.count || 0} cartes synchronisées avec Anki !`)
-    } else {
-      setAnkiStatus(`⚠️ ${result.error}`)
-    }
-  }
-
   // Format seconds mm:ss
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60)
@@ -245,13 +238,6 @@ export function WritingEditor({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Titre de la session..."
             />
-            <span className="mode-pill-badge">
-              {config.mode === 'reactivation'
-                ? 'ÉTUDIER LES MOTS'
-                : config.mode === 'sprint'
-                ? 'CHRONOMÉTRÉ'
-                : 'ÉCRITURE LIBRE'}
-            </span>
           </div>
         </div>
 
@@ -264,24 +250,27 @@ export function WritingEditor({
             </div>
           )}
 
-          {/* Quick Word Count & Completion */}
-          <div className="writing-quick-stats">
-            <span className="stat-pill">{stats.words} mots</span>
-            {promptWords.length > 0 && (
-              <span className={`stat-pill completion ${usedWords.length === promptWords.length ? 'all-done' : ''}`}>
+          {/* Quick Target Words Completion */}
+          {promptWords.length > 0 && (
+            <div className="writing-quick-stats">
+              <span
+                className={`stat-pill completion ${
+                  usedWords.length === promptWords.length ? 'all-done' : ''
+                }`}
+              >
                 {usedWords.length}/{promptWords.length} cibles
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
           <button
             type="button"
             className="outline drawer-toggle-btn"
             onClick={() => setIsDrawerOpen(!isDrawerOpen)}
-            title="Boîte à outils de vocabulaire & connecteurs"
+            title="Boîte à outils de connecteurs et vocabulaire"
           >
             <Sparkles size={15} />
-            <span>Aide & Vocabulaire</span>
+            <span>Aide</span>
           </button>
 
           <button
@@ -310,19 +299,25 @@ export function WritingEditor({
 
       {/* Target Word Bricks (if any) */}
       {promptWords.length > 0 && (
-        <WordBricksTray
-          words={promptWords}
-          usedWords={usedWords}
-          wordDetailsMap={wordDetailsMap}
-          language={learningLang}
-          api={state.settings.api}
-          onReplaceWord={handleReplaceWord}
-          onRemoveWord={handleRemoveWord}
-        />
+        <div className={isConfigModalOpen ? 'workspace-blurred' : ''}>
+          <WordBricksTray
+            words={promptWords}
+            usedWords={usedWords}
+            wordDetailsMap={wordDetailsMap as unknown as Map<string, LearnedWord>}
+            language={learningLang}
+            api={state.settings.api}
+            onReplaceWord={handleReplaceWord}
+            onRemoveWord={handleRemoveWord}
+          />
+        </div>
       )}
 
       {/* Main Workspace Layout */}
-      <div className={`writing-workspace-body ${isDrawerOpen ? 'drawer-open' : ''}`}>
+      <div
+        className={`writing-workspace-body ${isDrawerOpen ? 'drawer-open' : ''} ${
+          isConfigModalOpen ? 'workspace-blurred' : ''
+        }`}
+      >
         {/* Editor Main Textarea */}
         <div className="editor-main-area">
           <textarea
@@ -331,11 +326,14 @@ export function WritingEditor({
             placeholder="Commence à rédiger ici... Intègre les mots cibles au fur et à mesure."
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            autoFocus
+            autoFocus={!isConfigModalOpen}
+            disabled={isConfigModalOpen}
           />
 
           <footer className="editor-bottom-bar">
             <div className="bottom-meta">
+              <span>{stats.words} mots</span>
+              <span>·</span>
               <span>{stats.chars} caractères</span>
               <span>·</span>
               <span>~{stats.readingTimeMins} min de lecture</span>
@@ -369,7 +367,7 @@ export function WritingEditor({
           </footer>
         </div>
 
-        {/* Side Drawer (Connectors, Vocabulary Vault, Anki) */}
+        {/* Side Drawer (Connectors & Vocabulary) */}
         {isDrawerOpen && (
           <aside className="writing-side-drawer">
             <div className="drawer-tabs">
@@ -385,14 +383,7 @@ export function WritingEditor({
                 className={`drawer-tab ${activeDrawerTab === 'vocab' ? 'active' : ''}`}
                 onClick={() => setActiveDrawerTab('vocab')}
               >
-                Mon Vocabulaire
-              </button>
-              <button
-                type="button"
-                className={`drawer-tab ${activeDrawerTab === 'anki' ? 'active' : ''}`}
-                onClick={() => setActiveDrawerTab('anki')}
-              >
-                Anki
+                Mon Vocabulaire ({savedUserWords.length || DEFAULT_PROMPTS_DATA.length})
               </button>
             </div>
 
@@ -425,12 +416,13 @@ export function WritingEditor({
               {activeDrawerTab === 'vocab' && (
                 <div className="vocab-tab">
                   <p className="tab-hint">
-                    Mots enregistrés depuis tes lectures. Clique pour insérer :
+                    {savedUserWords.length > 0
+                      ? 'Mots enregistrés depuis tes lectures. Clique pour insérer :'
+                      : 'Mots recommandés. Enregistre des mots lors de tes lectures pour enrichir ton coffre :'}
                   </p>
                   <div className="saved-vocab-list">
-                    {(state.words ?? [])
-                      .filter((w) => w.language === learningLang)
-                      .slice(0, 30)
+                    {(savedUserWords.length > 0 ? savedUserWords : DEFAULT_PROMPTS_DATA)
+                      .slice(0, 50)
                       .map((w) => (
                         <div key={w.id} className="saved-word-row">
                           <button
@@ -439,11 +431,11 @@ export function WritingEditor({
                             onClick={() => handleInsertText(w.word)}
                           >
                             <strong>{w.word}</strong>
-                            {w.translation && <small>({w.translation})</small>}
+                            {w.translation && <small>({renderStyledMarkdown(w.translation)})</small>}
                           </button>
                           {w.contextSentence && (
                             <span className="word-ctx" title={w.contextSentence}>
-                              « {w.contextSentence.slice(0, 45)}... »
+                              « {w.contextSentence.slice(0, 50)}... »
                             </span>
                           )}
                         </div>
@@ -451,42 +443,41 @@ export function WritingEditor({
                   </div>
                 </div>
               )}
-
-              {/* TAB 3: ANKI */}
-              {activeDrawerTab === 'anki' && (
-                <div className="anki-tab">
-                  <h6>Exportation & Synchronisation Anki</h6>
-                  <p className="tab-hint">
-                    Exporte les mots de cette session ou l'intégralité de ton coffre de vocabulaire.
-                  </p>
-
-                  <div className="anki-actions">
-                    <button
-                      type="button"
-                      className="primary full"
-                      onClick={handleAnkiExport}
-                    >
-                      <Download size={14} />
-                      <span>Télécharger le fichier Anki (.tsv)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="outline full"
-                      onClick={() => void handleAnkiConnectSync()}
-                    >
-                      <Sparkles size={14} />
-                      <span>Synchroniser avec AnkiConnect</span>
-                    </button>
-                  </div>
-
-                  {ankiStatus && <p className="anki-status-msg">{ankiStatus}</p>}
-                </div>
-              )}
             </div>
           </aside>
         )}
       </div>
+
+      {/* Setup Modal Overlay (if configuring new session) */}
+      {isConfigModalOpen && (
+        <WritingSetupModal
+          mode={config.mode}
+          state={state}
+          promptWords={promptWords}
+          onUpdatePromptWords={(words) => {
+            setPromptWords(words)
+            setTitle(`Défi Vocabulaire (${words.length} mots)`)
+          }}
+          sprintMinutes={sprintMinutes}
+          onUpdateSprintMinutes={(mins) => {
+            setSprintMinutes(mins)
+            setSecondsRemaining(mins * 60)
+            setTitle(`Sprint Écriture · ${mins} min`)
+          }}
+          title={title}
+          onUpdateTitle={setTitle}
+          onStart={() => {
+            setIsConfigModalOpen(false)
+            if (config.mode === 'sprint') {
+              setIsSprintActive(true)
+            }
+            setTimeout(() => {
+              textareaRef.current?.focus()
+            }, 50)
+          }}
+          onCancel={onBack}
+        />
+      )}
     </div>
   )
 }
