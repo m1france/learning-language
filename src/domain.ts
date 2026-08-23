@@ -138,6 +138,8 @@ export type ApiSettings = {
   deepLKey?: string
   /** DeepL target translation language (e.g. EN-US, EN-GB, ES, DE, IT...) */
   deepLTargetLang?: string
+  /** API token for youtube-transcript.io (https://www.youtube-transcript.io/api) */
+  youtubeTranscriptApiKey?: string
   /** Provider for translation in speaking sessions: 'deepl' (default) or 'ai' */
   speakingTranslationProvider?: 'deepl' | 'ai'
   /** Custom AI model override for speaking translation (when speakingTranslationProvider === 'ai') */
@@ -158,35 +160,7 @@ export type CustomTool = {
   url?: string
 }
 
-export type TranscriptCue = {
-  id: string
-  start: number
-  end: number
-  text: string
-}
 
-export type ListeningLesson = {
-  id: string
-  title: string
-  language: Language
-  source: 'youtube' | 'upload' | 'transcript'
-  sourceUrl?: string
-  youtubeId?: string
-  fileName?: string
-  /** Real video thumbnail URL (YouTube oEmbed), shown in the theater preview. */
-  thumbnail?: string
-  transcript: TranscriptCue[]
-  createdAt: string
-  updatedAt: string
-}
-
-/** Persistent choices and lessons made in the listening module. */
-export type ListeningLibraryState = {
-  savedIds: string[]
-  completedIds: string[]
-  lessons: ListeningLesson[]
-  activeLessonId?: string
-}
 
 export type GrammarMarkType = 'verb' | 'noun' | 'adjective' | 'adverb' | 'expression' | string
 export type GrammarMarkStyle = 'highlight' | 'underline' | 'overlay'
@@ -243,9 +217,6 @@ export type AppState = {
   customTools: CustomTool[]
   /** Tool names removed by the user from the recommended list. */
   removedTools: string[]
-  /** Saved and completed items in the listening library. */
-  listening: ListeningLibraryState
-  /** User-created resource categories. */
   customCategories: CustomCategory[]
   /** User-defined or global custom tags. */
   customTags?: string[]

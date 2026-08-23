@@ -306,6 +306,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
     }
   }
 
+
   const allTags = knownTags(state, draft.learningLanguage)
   const allMarkings = state.markings && state.markings.length > 0 ? state.markings : DEFAULT_MARKINGS
   const currentShortcuts = draft.teacherShortcuts ?? DEFAULT_TEACHER_SHORTCUTS
@@ -953,6 +954,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                   </div>
                 )}
               </div>
+
 
               <div className="conn-key-row">
                 <label>

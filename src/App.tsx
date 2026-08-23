@@ -9,7 +9,6 @@ import { SpeakingPage } from './features/SpeakingPage'
 import { WritingPage } from './features/writing/WritingPage'
 import { CameraProvider } from './features/speaking/CameraContext'
 import { FloatingMiniCam } from './features/speaking/FloatingMiniCam'
-import { ListeningPage } from './features/listening/ListeningPage'
 import { Settings } from './features/Settings'
 import { VocabularyVaultModal } from './features/vocabulary/VocabularyVaultModal'
 import { AddResourceModal } from './components/AddResourceModal'
@@ -22,7 +21,6 @@ import {
   Mic,
   PenLine,
   Sparkles,
-  Headphones,
   Settings as SettingsIcon,
   ChevronLeft,
   ChevronRight,
@@ -47,17 +45,16 @@ import {
   type ResourceContextTarget,
 } from './components/ResourceModals'
 
-type Page = 'home' | 'reading' | 'speaking' | 'writing' | 'listening' | 'settings'
+type Page = 'home' | 'reading' | 'speaking' | 'writing' | 'settings'
 
 type UI = (typeof copy)[keyof typeof copy]
-type NavLabel = 'home' | 'reading' | 'speaking' | 'writing' | 'listening'
+type NavLabel = 'home' | 'reading' | 'speaking' | 'writing'
 
 const navItems: { id: Page; icon: React.ReactNode; label: NavLabel }[] = [
   { id: 'home', icon: <Home size={18} />, label: 'home' },
   { id: 'reading', icon: <BookOpen size={18} />, label: 'reading' },
   { id: 'speaking', icon: <Mic size={18} />, label: 'speaking' },
   { id: 'writing', icon: <PenLine size={18} />, label: 'writing' },
-  { id: 'listening', icon: <Headphones size={18} />, label: 'listening' },
 ]
 
 export const isGenericImportedAuthor = (author?: string) => {
@@ -164,7 +161,6 @@ export default function App() {
                   }}
                 />
               )}
-              {page === 'listening' && <ListeningPage ui={baseUi(ui)} state={state} onChange={change} onSaveWord={(args) => change(upsertWordDetails(state, args))} onOpenSettings={() => go('settings')} />}
               {page === 'settings' && <Settings settings={state.settings} state={state}
                 onSave={(settings) => change({ ...state, settings })}
                 onChangeState={change}
