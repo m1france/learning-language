@@ -83,40 +83,6 @@ async function speakWithFish(text: string, api: ApiSettings): Promise<{ ok: bool
   }
 }
 
-async function speakWithOpenAi(
-  text: string,
-  api: ApiSettings,
-): Promise<{ ok: boolean; error?: string }> {
-  const key = (api.openAiKey || '').trim()
-  if (!key) return { ok: false, error: 'Pas de clé OpenAI renseignée' }
-  const voice = (api.ttsVoice || '').trim() || 'alloy'
-  const model = (api.ttsModel || '').includes('hd') ? 'tts-1-hd' : 'tts-1'
-
-  try {
-    const response = await fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model,
-        input: text,
-        voice,
-        response_format: 'mp3',
-      }),
-    })
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => '')
-      return { ok: false, error: `HTTP ${response.status}: ${errorText}` }
-    }
-    await playBlob(await response.blob())
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Erreur réseau OpenAI' }
-  }
-}
-
 async function speakWithOpenRouter(
   text: string,
   api: ApiSettings,
@@ -132,6 +98,38 @@ async function speakWithOpenRouter(
     Authorization: `Bearer ${key}`,
     'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
     'X-Title': 'Language Learning App',
+  }
+
+  const isChatAudio = /audio-preview|omni|chat/i.test(model)
+
+  const callSpeechEndpoint = async (): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/audio/speech', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model,
+          input: text,
+          voice,
+          response_format: 'mp3',
+        }),
+      })
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '')
+        return {
+          ok: false,
+          error: `HTTP ${response.status} (Speech API): ${errorText ? errorText.slice(0, 180) : response.statusText}`,
+        }
+      }
+      const blob = await response.blob()
+      if (!blob || blob.size === 0) {
+        return { ok: false, error: 'Fichier audio vide retourné par OpenRouter Speech' }
+      }
+      await playBlob(blob)
+      return { ok: true }
+    } catch (caught) {
+      return { ok: false, error: caught instanceof Error ? caught.message : 'Erreur réseau OpenRouter Speech' }
+    }
   }
 
   const callChatEndpoint = async (): Promise<{ ok: boolean; error?: string }> => {
@@ -181,7 +179,19 @@ async function speakWithOpenRouter(
     }
   }
 
-  return await callChatEndpoint()
+  if (isChatAudio) {
+    const res = await callChatEndpoint()
+    if (res.ok) return res
+    const fallbackRes = await callSpeechEndpoint()
+    if (fallbackRes.ok) return fallbackRes
+    return res
+  } else {
+    const res = await callSpeechEndpoint()
+    if (res.ok) return res
+    const fallbackRes = await callChatEndpoint()
+    if (fallbackRes.ok) return fallbackRes
+    return res
+  }
 }
 
 /** Directly test OpenRouter voice synthesis without falling back. */
@@ -190,10 +200,6 @@ export async function testOpenRouterTts(
   sampleText: string = 'Hello! This is a test of OpenRouter voice synthesis.',
 ): Promise<{ ok: boolean; error?: string }> {
   stopSpeaking()
-  if (api.openAiKey) {
-    const directRes = await speakWithOpenAi(sampleText, api)
-    if (directRes.ok) return directRes
-  }
   return await speakWithOpenRouter(sampleText, api, 'en')
 }
 
@@ -259,14 +265,6 @@ function speakWithGoogle(text: string, lang: Language): Promise<boolean> {
 export async function speak(text: string, lang: Language, api: ApiSettings): Promise<SpeakResult> {
   stopSpeaking()
   const errors: string[] = []
-
-  // 1. Direct OpenAI API key if available
-  if (api.openAiKey && (api.ttsProvider === 'openrouter' || (api.ttsProvider as string) === 'openai')) {
-    const attempt = await speakWithOpenAi(text, api)
-    if (attempt.ok) return { engine: 'openrouter' }
-    console.warn('[TTS OpenAI direct failed]:', attempt.error)
-  }
-
   if (api.ttsProvider === 'openrouter') {
     const attempt = await speakWithOpenRouter(text, api, lang)
     if (attempt.ok) return { engine: 'openrouter' }
