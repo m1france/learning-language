@@ -152,6 +152,8 @@ export type ApiSettings = {
   taskModelUrlExtraction?: string
   /** Custom AI model override for writing correction and pedagogical teacher annotations */
   taskModelWritingCorrection?: string
+  /** Enable dynamic advanced formatting for handwriting AI annotations */
+  writingCorrectionAdvancedFormatting?: boolean
 }
 
 export type CustomTool = {

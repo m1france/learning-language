@@ -1062,6 +1062,20 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                 <div className="conn-task-info">
                   <strong>Correction et annotations d'écriture (« Correction IA »)</strong>
                   <small>Analyse orthographique, syntaxique, restructuration et conseils de style en temps réel</small>
+                  <label className="toggle-field-inline" style={{ marginTop: 8, display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      style={{ marginTop: 2 }}
+                      checked={!!draft.api.writingCorrectionAdvancedFormatting}
+                      onChange={(e) => updateApi('writingCorrectionAdvancedFormatting', e.target.checked)}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--ink)' }}>
+                      <strong>Activer le formatage avancé</strong>
+                      <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)' }}>
+                        L'IA optimise automatiquement la taille, la disposition et l'espacement du texte manuscrit selon l'espace disponible
+                      </span>
+                    </span>
+                  </label>
                 </div>
                 <div className="conn-task-input-wrap">
                   <input

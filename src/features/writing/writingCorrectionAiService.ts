@@ -21,6 +21,7 @@ export type CorrectionItem = {
   explanation: string
   charDiffs?: CharDiff[]
   rotation?: number
+  displaySize?: 'normal' | 'large'
   severity: 'error' | 'warning' | 'style'
   startIndex?: number
   endIndex?: number
@@ -129,55 +130,41 @@ export async function analyzeWritingWithAi(args: {
   const targetLangName = learningLanguage === 'fr' ? 'French' : 'English'
   const explanationLang = UI_LANG_NAMES[uiLanguage] || 'Français'
 
-  const systemPrompt = `You are an encouraging, world-class expert language teacher and editor correcting a student's writing in ${targetLangName}.
+  const systemPrompt = `You are a helpful, expert language teacher correcting a student's writing in ${targetLangName}.
 Your explanations and advice MUST BE WRITTEN IN ${explanationLang}.
 
-The student wants realistic, pedagogical "Teacher handwritten annotations" on their text.
+CRITICAL RULES FOR ACCURACY AND CONCISENESS:
+1. STRICT LOCAL TARGETING (DO NOT SELECT FULL SENTENCES):
+   - "original" MUST target ONLY the exact specific word(s) or characters that contain the mistake (e.g., "play soccer" instead of the whole clause "listening to Brazilian music, play soccer, and hanging with friends"; "stop" instead of "I stop school"; "definitly" instead of "I definitly love").
+   - NEVER select surrounding correct words or full sentences unless the entire sentence is genuinely scrambled.
+2. DO NOT BOTHER WITH PUNCTUATION OR VULGARITY:
+   - Ignore minor punctuation (missing final periods, commas, quotation marks).
+   - Ignore vulgar, curse, or slang words used by the student (do not attempt to censor or replace them).
+3. CASUAL & INFORMAL TOLERANCE:
+   - Accept informal English/French, modern abbreviations, age formats (e.g. "I'm 18", "18yo", "18 yo"), contractions ("I'm", "wanna", "gonna", "cool").
+4. CATEGORIES:
+   - "letter_error": Spelling mistakes, typos, missing/extra letters, accents (e.g. "definitly" -> "definitely", "stop" -> "stopped").
+   - "word_error": Wrong word, wrong preposition, wrong tense, false friend (e.g. "play soccer" -> "playing soccer", "good in math" -> "good at math").
+   - "syntax_structure": Awkward word order or missing small grammatical particle (e.g. "go I" -> "I go", missing "to", "of", "n" to form "an").
+   - "unnatural_phrasing": Phrases that sound non-native (e.g. "make a walk" -> "go for a walk", "take a decision" -> "make a decision").
 
-You must identify and categorize ALL issues in the student's text:
-1. "letter_error": Spelling mistake, typo, extra/missing letters, accents, character-level bugs.
-2. "word_error": Incorrect word, bad preposition, wrong verb tense/agreement, false friend.
-3. "syntax_structure": Awkward, messy, or ungrammatical sentence structure. You will provide the elegantly restructured sentence for the teacher to write directly underneath with an arrow pointing to the fault.
-4. "unnatural_phrasing": Phrases that might be grammatically acceptable or understandable, but sound unnatural/clunky to a native speaker. Provide an idiomatic native recommendation and explanation.
-5. "punctuation": Missing/incorrect punctuation or capitalization.
+- Provide "correctedFullText": The complete text with all corrections applied smoothly.
+- Provide "overallFeedback": 1 concise encouraging sentence in ${explanationLang}.
+- Provide "score": Estimated accuracy score (0-100).
 
-CRITICAL INSTRUCTIONS:
-- Each correction's "original" field MUST EXACTLY MATCH a literal substring inside the student's text.
-- Do not make up text that doesn't exist in the input.
-- Keep explanations clear, kind, and pedagogical (explaining the *why*, e.g., "In English, 'look forward to' requires a gerund (-ing) because 'to' is a preposition here").
-- Provide "correctedFullText": The complete student text with all corrections applied smoothly.
-- Provide "overallFeedback": 1 to 2 encouraging sentences summarizing the overall quality and main points to remember.
-- Provide "score": An estimated proficiency/accuracy score from 0 to 100.
-
-Return STRICTLY a valid JSON object matching this schema (NO MARKDOWN WRAPPERS, NO COMMENTARY):
+Return STRICTLY valid JSON matching:
 {
-  "overallFeedback": "Very good text overall! Watch out for preposition choices and plural agreements.",
+  "overallFeedback": "Bon travail ! Fais attention au parallélisme des verbes en -ing.",
   "score": 85,
-  "correctedFullText": "The full corrected text...",
+  "correctedFullText": "Full text...",
   "corrections": [
     {
       "id": "c1",
-      "type": "letter_error",
-      "original": "definitly",
-      "corrected": "definitely",
-      "explanation": "Orthographe : 'definitely' s'écrit avec un 'i' et non un 'a' au milieu (de la racine 'finite').",
+      "type": "word_error",
+      "original": "play soccer",
+      "corrected": "playing soccer",
+      "explanation": "Parallélisme : après 'listening to...', les verbes coordonnés doivent être au gérondif (-ing).",
       "severity": "error"
-    },
-    {
-      "id": "c2",
-      "type": "syntax_structure",
-      "original": "Yesterday go I store for buy things",
-      "corrected": "Yesterday, I went to the store to buy some things",
-      "explanation": "Structure : L'ordre des mots en anglais est Sujet + Verbe ('I went'). Pour exprimer le but, on utilise 'to + infinitif' ('to buy').",
-      "severity": "error"
-    },
-    {
-      "id": "c3",
-      "type": "unnatural_phrasing",
-      "original": "I took a decision",
-      "corrected": "I made a decision",
-      "explanation": "Collocation naturelle : En anglais courant, on dit 'make a decision' plutôt que 'take a decision'.",
-      "severity": "style"
     }
   ]
 }`
@@ -252,8 +239,8 @@ Return STRICTLY a valid JSON object matching this schema (NO MARKDOWN WRAPPERS, 
           ? computeCharDiff(orig, corr)
           : undefined
 
-        // Slight rotation between -2.2deg and +2.2deg for authentic handwriting feel
-        const pseudoRandomRotation = (((idx * 17) % 9) - 4) * 0.5 // e.g. -2, -1.5, -1, 0, 1, 1.5, 2 deg
+        // Subtle/straight rotation
+        const pseudoRandomRotation = 0
 
         return {
           id: String(c.id || `corr_${idx + 1}`),
@@ -265,6 +252,7 @@ Return STRICTLY a valid JSON object matching this schema (NO MARKDOWN WRAPPERS, 
           explanation: String(c.explanation || ''),
           charDiffs,
           rotation: pseudoRandomRotation,
+          displaySize: c.displaySize === 'large' ? 'large' : 'normal',
           severity: (['error', 'warning', 'style'].includes(c.severity) ? c.severity : 'error') as 'error' | 'warning' | 'style',
         }
       })

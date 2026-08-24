@@ -19,6 +19,7 @@ import {
   Languages,
   Loader2,
   AlertCircle,
+  Pencil,
 } from 'lucide-react'
 import type { WritingConfig } from './WritingPromptSelector'
 import {
@@ -69,6 +70,11 @@ export function WritingEditor({
 }: WritingEditorProps) {
   const learningLang = state.settings.learningLanguage
   const [title, setTitle] = useState(initialEntry?.title || config.title)
+  const [isTitleLocked, setIsTitleLocked] = useState(() => {
+    // Lock if editing an existing entry with a real title, or if title is not default
+    const t = initialEntry?.title || config.title
+    return t !== 'Mon texte' && t.trim().length > 0
+  })
   const [content, setContent] = useState(initialEntry?.content || '')
   const [promptWords, setPromptWords] = useState<string[]>(
     initialEntry?.promptWords || config.promptWords,
@@ -368,84 +374,57 @@ export function WritingEditor({
   }
 
   return (
-    <div className="writing-editor-view">
-      {/* Top Header */}
-      <header className="writing-editor-header">
-        <div className="header-left">
-          <div className="title-block">
-            {initialEntry && (
-              <span className="editing-session-badge" title="Cette session est en cours de modification">
-                <Edit2 size={11} />
-                <span>En édition</span>
-              </span>
-            )}
-            <input
-              type="text"
-              className="editable-session-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Titre du texte..."
-            />
+    <div className={`writing-editor-view ${initialEntry ? 'is-editing-mode' : ''}`}>
+      {/* Top Header - only show when there's content to display */}
+      {(initialEntry || secondsRemaining !== null || promptWords.length > 0 || (onNavigateToSpeaking && stats.words >= 10)) && (
+        <header className="writing-editor-header">
+          <div className="header-left">
+            <div className="title-block">
+              {initialEntry && (
+                <span className="editing-session-badge" title="Cette session est en cours de modification">
+                  <Edit2 size={11} />
+                  <span>En édition</span>
+                </span>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="header-right">
-          {/* Sprint Timer Badge */}
-          {secondsRemaining !== null && (
-            <div className={`sprint-countdown-badge ${secondsRemaining < 60 ? 'urgent' : ''}`}>
-              <Clock size={14} />
-              <span>{formatTimer(secondsRemaining)}</span>
-            </div>
-          )}
+          <div className="header-right">
+            {/* Sprint Timer Badge */}
+            {secondsRemaining !== null && (
+              <div className={`sprint-countdown-badge ${secondsRemaining < 60 ? 'urgent' : ''}`}>
+                <Clock size={14} />
+                <span>{formatTimer(secondsRemaining)}</span>
+              </div>
+            )}
 
-          {/* Quick Target Words Completion */}
-          {promptWords.length > 0 && (
-            <div className="writing-quick-stats">
-              <span
-                className={`stat-pill completion ${usedWords.length === promptWords.length ? 'all-done' : ''
-                  }`}
+            {/* Quick Target Words Completion */}
+            {promptWords.length > 0 && (
+              <div className="writing-quick-stats">
+                <span
+                  className={`stat-pill completion ${usedWords.length === promptWords.length ? 'all-done' : ''
+                    }`}
+                >
+                  {usedWords.length}/{promptWords.length} cibles
+                </span>
+              </div>
+            )}
+
+            {/* Show "Pratiquer à l'oral" only when text has at least 10 words */}
+            {onNavigateToSpeaking && stats.words >= 10 && (
+              <button
+                type="button"
+                className="primary prompter-export-btn"
+                onClick={handleSendToPrompter}
+                title="Envoyer ce texte au prompteur du studio Parler"
               >
-                {usedWords.length}/{promptWords.length} cibles
-              </span>
-            </div>
-          )}
-
-          <button
-            type="button"
-            className="outline drawer-toggle-btn"
-            onClick={() => setIsDrawerOpen(!isDrawerOpen)}
-            title="Boîte à outils de connecteurs et vocabulaire"
-          >
-            <Sparkles size={15} />
-            <span>Vocabulaire</span>
-          </button>
-
-          {/* Show "Pratiquer à l'oral" only when text has at least 10 words */}
-          {onNavigateToSpeaking && stats.words >= 10 && (
-            <button
-              type="button"
-              className="primary prompter-export-btn"
-              onClick={handleSendToPrompter}
-              title="Envoyer ce texte au prompteur du studio Parler"
-            >
-              <Video size={16} />
-              <span>Pratiquer à l'oral</span>
-            </button>
-          )}
-
-          {onNewSession && (
-            <button
-              type="button"
-              className="outline new-session-btn"
-              onClick={handleNewTextClick}
-              title={initialEntry ? "Créer un nouveau texte vierge" : "Nouveau texte"}
-            >
-              <Plus size={15} />
-              <span>Nouveau texte</span>
-            </button>
-          )}
-        </div>
-      </header>
+                <Video size={16} />
+                <span>Pratiquer à l'oral</span>
+              </button>
+            )}
+          </div>
+        </header>
+      )}
 
       {/* Target Word Bricks (if any) */}
       {promptWords.length > 0 && (
@@ -499,6 +478,54 @@ export function WritingEditor({
             />
           )}
 
+          <div className="editor-floating-bottom-row">
+            <div className="floating-title-area">
+              {isTitleLocked ? (
+                <span className="locked-title-display">
+                  <span className="locked-title-text">{title || 'Mon texte'}</span>
+                  <button
+                    type="button"
+                    className="title-edit-icon-btn"
+                    onClick={() => setIsTitleLocked(false)}
+                    title="Modifier le titre"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                </span>
+              ) : (
+                <input
+                  type="text"
+                  className="inline-title-input"
+                  value={title === 'Mon texte' ? '' : title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onBlur={() => {
+                    if (title.trim().length > 0 && title !== 'Mon texte') {
+                      setIsTitleLocked(true)
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && title.trim().length > 0) {
+                      setIsTitleLocked(true)
+                    }
+                  }}
+                  placeholder="Titre de la note"
+                  autoFocus
+                />
+              )}
+            </div>
+            {onNewSession && (
+              <button
+                type="button"
+                className="new-text-corner-btn"
+                onClick={handleNewTextClick}
+                title={initialEntry ? "Créer un nouveau texte vierge" : "Nouveau texte"}
+              >
+                <Plus size={13} />
+                <span>Nouveau texte</span>
+              </button>
+            )}
+          </div>
+
           {correctionError && (
             <div className="writing-error-toast">
               <AlertCircle size={14} />
@@ -521,6 +548,20 @@ export function WritingEditor({
             </div>
 
             <div className="bottom-actions">
+              {initialEntry && onDeleteEntry && (
+                <button
+                  type="button"
+                  className="text-btn delete-text-btn"
+                  onClick={() => {
+                    onDeleteEntry(initialEntry.id)
+                    handleResetText()
+                  }}
+                  title="Supprimer cette session d'écriture"
+                >
+                  <Trash2 size={13} />
+                  <span>Supprimer</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="text-btn"
@@ -655,7 +696,7 @@ export function WritingEditor({
           <div className="writings-cards-grid">
             {(state.writings ?? []).map((entry) => (
               <article key={entry.id} className="writing-history-card">
-                {/* Notebook Visual Index Tabs on the Right Edge */}
+                {/* Notebook Visual Index Tabs on the Left Edge */}
                 <div className="notebook-tabs-edge" aria-hidden="true">
                   <span className="notebook-tab-item tab-1" />
                   <span className="notebook-tab-item tab-2" />
@@ -673,23 +714,21 @@ export function WritingEditor({
                     {onNavigateToSpeaking && entry.content?.trim() && (
                       <button
                         type="button"
-                        className="card-action-btn"
+                        className="card-action-btn icon-only"
                         onClick={() => onNavigateToSpeaking(entry.content)}
                         title="Pratiquer au prompteur"
                       >
                         <Video size={13} />
-                        <span>Oral</span>
                       </button>
                     )}
                     {onSelectEntry && (
                       <button
                         type="button"
-                        className="card-action-btn"
+                        className="card-action-btn icon-only"
                         onClick={() => onSelectEntry(entry)}
                         title="Modifier cette session"
                       >
                         <Edit2 size={13} />
-                        <span>Modifier</span>
                       </button>
                     )}
                   </div>

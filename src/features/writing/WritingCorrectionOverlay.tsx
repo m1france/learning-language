@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import type { CorrectionItem, WritingCorrectionResult } from './writingCorrectionAiService'
 import {
   Check,
@@ -39,8 +39,56 @@ export function WritingCorrectionOverlay({
 }: WritingCorrectionOverlayProps) {
   const [activePopoverId, setActivePopoverId] = useState<string | null>(null)
   const [hoveredCorrectionId, setHoveredCorrectionId] = useState<string | null>(null)
+  // Two separate refs to track whether mouse is over anchor or popover, independently
+  const isMouseInAnchorRef = useRef(false)
+  const isMouseInPopoverRef = useRef(false)
+  const hoverCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { originalText, correctedFullText, overallFeedback, score, corrections } = correctionResult
+
+  // Clean up any pending timer on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current)
+    }
+  }, [])
+
+  const scheduleClose = () => {
+    if (hoverCloseTimerRef.current) clearTimeout(hoverCloseTimerRef.current)
+    hoverCloseTimerRef.current = setTimeout(() => {
+      // Only actually close if mouse is neither in anchor nor in popover
+      if (!isMouseInAnchorRef.current && !isMouseInPopoverRef.current) {
+        setHoveredCorrectionId(null)
+      }
+    }, 300)
+  }
+
+  const handleAnchorMouseEnter = (id: string) => {
+    isMouseInAnchorRef.current = true
+    if (hoverCloseTimerRef.current) {
+      clearTimeout(hoverCloseTimerRef.current)
+      hoverCloseTimerRef.current = null
+    }
+    setHoveredCorrectionId(id)
+  }
+
+  const handleAnchorMouseLeave = () => {
+    isMouseInAnchorRef.current = false
+    scheduleClose()
+  }
+
+  const handlePopoverMouseEnter = () => {
+    isMouseInPopoverRef.current = true
+    if (hoverCloseTimerRef.current) {
+      clearTimeout(hoverCloseTimerRef.current)
+      hoverCloseTimerRef.current = null
+    }
+  }
+
+  const handlePopoverMouseLeave = () => {
+    isMouseInPopoverRef.current = false
+    scheduleClose()
+  }
 
   // Calculate parsed segments
   const segments = useMemo<TextSegment[]>(() => {
@@ -48,7 +96,6 @@ export function WritingCorrectionOverlay({
       return [{ type: 'text', text: originalText }]
     }
 
-    // Find non-overlapping occurrences of correction.original in originalText
     type Match = {
       start: number
       end: number
@@ -58,7 +105,6 @@ export function WritingCorrectionOverlay({
     const matches: Match[] = []
     let cursor = 0
 
-    // Sort corrections by where they first appear in originalText
     const sortedCorrections = [...corrections].sort((a, b) => {
       const idxA = originalText.indexOf(a.original, cursor)
       const idxB = originalText.indexOf(b.original, cursor)
@@ -118,13 +164,13 @@ export function WritingCorrectionOverlay({
       case 'letter_error':
         return 'Orthographe'
       case 'word_error':
-        return 'Grammaire & Vocabulaire'
+        return 'Grammaire'
       case 'syntax_structure':
-        return 'Structure de phrase'
+        return 'Structure'
       case 'unnatural_phrasing':
-        return 'Tournure idiomatique'
+        return 'Tournure'
       case 'punctuation':
-        return 'Ponctuation & Majuscule'
+        return 'Ponctuation'
       default:
         return 'Correction'
     }
@@ -146,17 +192,6 @@ export function WritingCorrectionOverlay({
           >
             <path d="M 0 1 L 9 5 L 0 9 z" fill="#16a34a" />
           </marker>
-          <marker
-            id="teacher-arrowhead-blue"
-            viewBox="0 0 10 10"
-            refX="6"
-            refY="5"
-            markerWidth="5"
-            markerHeight="5"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb" />
-          </marker>
         </defs>
       </svg>
 
@@ -165,7 +200,7 @@ export function WritingCorrectionOverlay({
         <div className="banner-left">
           <div className="correction-title-wrap">
             <span className="correction-ai-icon-pill">
-              <Sparkles size={14} />
+              <Sparkles size={13} />
             </span>
             <span className="banner-title">Correction du Professeur IA</span>
           </div>
@@ -173,26 +208,26 @@ export function WritingCorrectionOverlay({
           <div className="banner-badges">
             {score !== undefined && (
               <span className="score-badge" title="Note globale estimée">
-                <Award size={13} />
+                <Award size={12} />
                 <span>{score}/100</span>
               </span>
             )}
             {errorCount > 0 && (
               <span className="badge-count error">
-                <AlertCircle size={12} />
+                <AlertCircle size={11} />
                 <span>{errorCount} {errorCount === 1 ? 'faute' : 'fautes'}</span>
               </span>
             )}
             {styleCount > 0 && (
               <span className="badge-count style">
-                <Info size={12} />
+                <Info size={11} />
                 <span>{styleCount} {styleCount === 1 ? 'conseil de style' : 'conseils de style'}</span>
               </span>
             )}
             {corrections.length === 0 && (
               <span className="badge-count success">
-                <Check size={12} />
-                <span>Texte parfait ! Aucun défaut repéré.</span>
+                <Check size={11} />
+                <span>Texte impeccable !</span>
               </span>
             )}
           </div>
@@ -201,33 +236,34 @@ export function WritingCorrectionOverlay({
         <div className="banner-actions">
           <button
             type="button"
-            className="outline mode-toggle-btn"
+            className="banner-mode-toggle-btn"
             onClick={onToggleEditorView}
             title={isEditorView ? 'Afficher les annotations manuscrites' : 'Masquer les annotations et modifier le texte'}
           >
-            {isEditorView ? <Eye size={14} /> : <EyeOff size={14} />}
+            {isEditorView ? <Eye size={13} /> : <EyeOff size={13} />}
             <span>{isEditorView ? 'Voir annotations' : 'Mode texte brut'}</span>
           </button>
 
           {corrections.length > 0 && (
             <button
               type="button"
-              className="primary apply-all-btn"
+              className="banner-apply-all-btn"
               onClick={() => onApplyAll(correctedFullText)}
               title="Remplacer le texte par la version entièrement corrigée"
             >
-              <CheckCheck size={14} />
+              <CheckCheck size={13} />
               <span>Appliquer tout</span>
             </button>
           )}
 
           <button
             type="button"
-            className="outline close-btn"
+            className="banner-close-btn"
             onClick={onClose}
             title="Quitter le mode correction"
+            aria-label="Quitter le mode correction"
           >
-            <X size={15} />
+            <X size={15} strokeWidth={2} />
           </button>
         </div>
       </div>
@@ -235,7 +271,7 @@ export function WritingCorrectionOverlay({
       {/* Teacher General Feedback Note */}
       {overallFeedback && (
         <div className="correction-overall-feedback">
-          <div className="feedback-quote-icon">📝</div>
+          <span className="feedback-badge-label">Conseil :</span>
           <p className="feedback-text">{overallFeedback}</p>
         </div>
       )}
@@ -266,29 +302,24 @@ export function WritingCorrectionOverlay({
                     e.stopPropagation()
                     setActivePopoverId(isActive ? null : corr.id)
                   }}
-                  onMouseEnter={() => setHoveredCorrectionId(corr.id)}
-                  onMouseLeave={() => setHoveredCorrectionId(null)}
+                  onMouseEnter={() => handleAnchorMouseEnter(corr.id)}
+                  onMouseLeave={handleAnchorMouseLeave}
                 >
-                  {/* TYPE 1: Letter Error / Word Typo with red strike and green handwriting */}
+                  {/* TYPE 1: Letter Error / Word Typo with standard inline serif style */}
                   {(corr.type === 'letter_error' || corr.type === 'word_error' || corr.type === 'punctuation') && (
                     <span className="letter-correction-wrap">
                       {corr.charDiffs && corr.charDiffs.length > 0 ? (
                         corr.charDiffs.map((diff, dIdx) => {
                           if (diff.type === 'removed') {
                             return (
-                              <span key={dIdx} className="char-del" title="Lettre fautive">
+                              <span key={dIdx} className="char-del" title="Supprimer / Erreur">
                                 {diff.text}
                               </span>
                             )
                           }
                           if (diff.type === 'inserted') {
                             return (
-                              <span
-                                key={dIdx}
-                                className="char-ins"
-                                style={{ transform: `rotate(${rotation}deg)` }}
-                                title="Correction du professeur"
-                              >
+                              <span key={dIdx} className="char-ins" title="Remplacer / Ajouter">
                                 {diff.text}
                               </span>
                             )
@@ -298,35 +329,27 @@ export function WritingCorrectionOverlay({
                       ) : (
                         <>
                           <span className="word-del">{corr.original}</span>
-                          <span
-                            className="word-ins"
-                            style={{ transform: `rotate(${rotation}deg)` }}
-                          >
-                            {corr.corrected}
-                          </span>
+                          <span className="word-ins">{corr.corrected}</span>
                         </>
                       )}
                     </span>
                   )}
 
-                  {/* TYPE 2: Syntax Structure with hand-drawn arrow & handwriting sentence underneath */}
+                  {/* TYPE 2: Syntax Structure with hand-drawn arrow & absolute floating handwriting underneath */}
                   {corr.type === 'syntax_structure' && (
                     <span className="syntax-correction-wrap">
                       <span className="faulty-syntax-phrase">{corr.original}</span>
-                      <span
-                        className="teacher-restructure-under"
-                        style={{ transform: `rotate(${rotation}deg)` }}
-                      >
+                      <span className={`teacher-restructure-under ${corr.displaySize === 'large' ? 'large' : ''}`}>
                         <svg
                           className="teacher-arrow-svg"
-                          width="24"
-                          height="20"
-                          viewBox="0 0 24 20"
+                          width="16"
+                          height="14"
+                          viewBox="0 0 16 14"
                         >
                           <path
-                            d="M 4 18 C 10 16, 14 10, 18 4"
+                            d="M 14 13 Q 7 12 3 3"
                             stroke="#16a34a"
-                            strokeWidth="2"
+                            strokeWidth="1.5"
                             strokeLinecap="round"
                             fill="none"
                             markerEnd="url(#teacher-arrowhead-green)"
@@ -337,21 +360,28 @@ export function WritingCorrectionOverlay({
                     </span>
                   )}
 
-                  {/* TYPE 3: Unnatural phrasing with dotted underline & tooltip bubble */}
+                  {/* TYPE 3: Unnatural phrasing with wavy underline & absolute floating handwriting */}
                   {corr.type === 'unnatural_phrasing' && (
                     <span className="unnatural-correction-wrap">
                       <span className="unnatural-phrase-text">{corr.original}</span>
-                      <button
-                        type="button"
-                        className="naturalness-info-bubble"
-                        title="Conseil de formulation naturelle (clique pour voir l'explication)"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setActivePopoverId(isActive ? null : corr.id)
-                        }}
-                      >
-                        💡
-                      </button>
+                      <span className={`teacher-restructure-under ${corr.displaySize === 'large' ? 'large' : ''}`}>
+                        <svg
+                          className="teacher-arrow-svg"
+                          width="16"
+                          height="14"
+                          viewBox="0 0 16 14"
+                        >
+                          <path
+                            d="M 14 13 Q 7 12 3 3"
+                            stroke="#16a34a"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            fill="none"
+                            markerEnd="url(#teacher-arrowhead-green)"
+                          />
+                        </svg>
+                        <span className="teacher-handwriting-text">{corr.corrected}</span>
+                      </span>
                     </span>
                   )}
 
@@ -360,6 +390,8 @@ export function WritingCorrectionOverlay({
                     <div
                       className="correction-floating-popover"
                       onClick={(e) => e.stopPropagation()}
+                      onMouseEnter={handlePopoverMouseEnter}
+                      onMouseLeave={handlePopoverMouseLeave}
                     >
                       <div className="popover-header">
                         <span className={`category-tag ${corr.severity}`}>
@@ -403,7 +435,7 @@ export function WritingCorrectionOverlay({
                           }}
                         >
                           <Check size={13} />
-                          <span>Remplacer par cette correction</span>
+                          <span>Remplacer</span>
                         </button>
 
                         <button
