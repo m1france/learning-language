@@ -956,31 +956,20 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
               </div>
 
 
-              <div className="conn-key-row">
-                <label>
-                  <span>Clé API ElevenLabs (Optionnel — Voix audio)</span>
-                  <input
-                    type="password"
-                    value={draft.api.elevenLabsKey || ''}
-                    onChange={(e) => updateApi('elevenLabsKey', e.target.value)}
-                    placeholder="sk_…"
-                    autoComplete="off"
-                  />
-                </label>
-              </div>
-
-              <div className="conn-key-row">
-                <label>
-                  <span>Clé API Fish Audio (Optionnel — Voix S2)</span>
-                  <input
-                    type="password"
-                    value={draft.api.fishKey || ''}
-                    onChange={(e) => updateApi('fishKey', e.target.value)}
-                    placeholder="Clé api.fish.audio"
-                    autoComplete="off"
-                  />
-                </label>
-              </div>
+              {(draft.api.agentProvider || 'openrouter') !== 'google' && (
+                <div className="conn-key-row">
+                  <label>
+                    <span>Clé API Google AI Studio (Couvertures Nano Banana & Modèles Gemini)</span>
+                    <input
+                      type="password"
+                      value={draft.api.googleKey || ''}
+                      onChange={(e) => updateApi('googleKey', e.target.value)}
+                      placeholder="AIzaSy…"
+                      autoComplete="off"
+                    />
+                  </label>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1023,6 +1012,25 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                     value={draft.api.taskModelResourceGeneration || ''}
                     onChange={(e) => updateApi('taskModelResourceGeneration', e.target.value)}
                     placeholder="Utilise le modèle principal par défaut"
+                  />
+                </div>
+              </div>
+
+              {/* Option 3 : Génération de couvertures (Gemini Image) */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>Génération de couvertures (Nano Banana)</strong>
+                  <small>
+                    Génère les couvertures de ressources IA via Google AI Studio (nécessite une clé API Google).
+                    {!draft.api.googleKey?.trim() && <em style={{ color: '#d97706', display: 'block', marginTop: 2 }}>⚠ Aucune clé Google configurée — couvertures via Pollinations (gratuit, sans clé).</em>}
+                  </small>
+                </div>
+                <div className="conn-task-input-wrap">
+                  <input
+                    value={draft.api.googleImageModel || ''}
+                    onChange={(e) => updateApi('googleImageModel', e.target.value)}
+                    placeholder="gemini-2.5-flash-preview-image (par défaut)"
+                    disabled={!draft.api.googleKey?.trim()}
                   />
                 </div>
               </div>
@@ -1107,6 +1115,21 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                       placeholder="Utilise le modèle principal par défaut"
                     />
                   )}
+                </div>
+              </div>
+
+              {/* Option 6 : Analyse vidéo & élocution Speaking */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>Analyse vidéo & élocution (« Parler avec l'IA »)</strong>
+                  <small>Analyse automatique en arrière-plan des vidéos (&lt; 3 min) : prononciation, rythme, syntaxe et conseils horodatés via OpenRouter</small>
+                </div>
+                <div className="conn-task-input-wrap">
+                  <input
+                    value={draft.api.taskModelSpeakingAnalysis || ''}
+                    onChange={(e) => updateApi('taskModelSpeakingAnalysis', e.target.value)}
+                    placeholder="google/gemini-2.0-flash-exp:free (par défaut)"
+                  />
                 </div>
               </div>
 

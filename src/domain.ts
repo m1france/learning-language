@@ -144,6 +144,8 @@ export type ApiSettings = {
   speakingTranslationProvider?: 'deepl' | 'ai'
   /** Custom AI model override for speaking translation (when speakingTranslationProvider === 'ai') */
   taskModelSpeakingTranslation?: string
+  /** Custom AI model override for speaking video analysis and pronunciation/rhythm/structure coaching */
+  taskModelSpeakingAnalysis?: string
   /** Custom AI model override for resource writing / story generation */
   taskModelResourceGeneration?: string
   /** Custom AI model override for saved words analysis and translation */
@@ -154,6 +156,8 @@ export type ApiSettings = {
   taskModelWritingCorrection?: string
   /** Enable dynamic advanced formatting for handwriting AI annotations */
   writingCorrectionAdvancedFormatting?: boolean
+  /** Gemini model for cover image generation via Google AI Studio (e.g. gemini-2.5-flash-image) */
+  googleImageModel?: string
 }
 
 export type CustomTool = {

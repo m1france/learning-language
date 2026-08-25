@@ -10,6 +10,36 @@ export type SpeakingSessionRating = {
   confidence: number // 1 to 5
 }
 
+export type SpeakingVideoAdviceCategory =
+  | 'pronunciation'
+  | 'rhythm'
+  | 'grammar_structure'
+  | 'vocabulary'
+  | 'fluency'
+
+export type SpeakingVideoAdviceItem = {
+  id: string
+  timestamp: number // in seconds
+  category: SpeakingVideoAdviceCategory
+  severity: 'tip' | 'warning' | 'error'
+  title: string
+  originalSnippet?: string
+  improvedSnippet?: string
+  explanation: string
+  ipa?: string
+}
+
+export type SpeakingVideoAnalysis = {
+  overallFeedback: string
+  overallScore?: number
+  pronunciationSummary: string
+  rhythmSummary: string
+  structureSummary: string
+  items: SpeakingVideoAdviceItem[]
+  modelUsed?: string
+  analyzedAt: string
+}
+
 export type SpeakingSessionRecord = {
   id: string
   title: string
@@ -25,6 +55,9 @@ export type SpeakingSessionRecord = {
   ratings: SpeakingSessionRating
   blob?: Blob
   mediaUrl?: string // ephemeral object URL
+  analysis?: SpeakingVideoAnalysis
+  analysisStatus?: 'idle' | 'analyzing' | 'completed' | 'error' | 'too_long'
+  analysisError?: string
 }
 
 const DB_NAME = 'vivre_parler_db'
@@ -84,6 +117,9 @@ export async function getAllSpeakingSessions(): Promise<SpeakingSessionRecord[]>
             timestamps: item.timestamps || [],
             tags: item.tags || [],
             ratings: item.ratings || { fluency: 4, pronunciation: 4, confidence: 4 },
+            analysis: item.analysis,
+            analysisStatus: item.analysisStatus || (item.analysis ? 'completed' : 'idle'),
+            analysisError: item.analysisError,
           }
         })
         resolve(formatted)

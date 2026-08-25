@@ -311,6 +311,8 @@ export function SpeakingPage({
       <div className="page speaking-page">
         <SpeakingWorkspace
           ui={ui}
+          language={language}
+          api={api}
           session={activeReviewSession}
           onUpdate={handleUpdateSession}
           onDelete={handleDeleteSession}

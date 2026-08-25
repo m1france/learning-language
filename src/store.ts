@@ -56,6 +56,7 @@ export const defaultSettings: UserSettings = {
     deepLKey: '',
     deepLTargetLang: 'EN-US',
     youtubeTranscriptApiKey: '',
+    taskModelSpeakingAnalysis: 'google/gemini-2.0-flash-exp:free',
   },
 }
 

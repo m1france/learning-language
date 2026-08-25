@@ -110,7 +110,11 @@ export default function App() {
   }
 
   return (
-    <CameraProvider language={state.settings.learningLanguage}>
+    <CameraProvider
+      language={state.settings.learningLanguage}
+      ui={state.settings.uiLanguage}
+      api={state.settings.api}
+    >
       <main className={`app-shell ${sideCollapsed ? 'side-collapsed' : ''}`}>
         <Sidebar
           page={page}

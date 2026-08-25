@@ -1,6 +1,8 @@
-import React, { useRef, useState, useMemo } from 'react'
-import type { SpeakingSessionRecord } from './speakingStorage'
+import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react'
+import type { SpeakingSessionRecord, SpeakingVideoAdviceCategory, SpeakingVideoAdviceItem } from './speakingStorage'
+import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { NotionSpeakingEditor } from './NotionSpeakingEditor'
+import { useCamera } from './CameraContext'
 import {
   ArrowLeft,
   Play,
@@ -9,13 +11,29 @@ import {
   Trash2,
   Clock,
   Check,
-  Edit2,
   Volume2,
   VolumeX,
+  Volume1,
+  Maximize2,
+  Minimize2,
+  Sparkles,
+  RotateCcw,
+  AlertTriangle,
+  CheckCircle2,
+  Mic,
+  Activity,
+  BookOpen,
+  HelpCircle,
+  Flame,
+  Info,
+  ChevronRight,
+  Sparkle,
 } from 'lucide-react'
 
 type SpeakingWorkspaceProps = {
-  ui: 'fr' | 'en'
+  ui: UiLanguage
+  language?: Language
+  api?: ApiSettings
   session: SpeakingSessionRecord
   onUpdate: (session: SpeakingSessionRecord) => void
   onDelete: (id: string) => void
@@ -29,20 +47,74 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+const CATEGORY_META: Record<
+  SpeakingVideoAdviceCategory,
+  { labelFr: string; labelEn: string; icon: string; color: string; bg: string }
+> = {
+  pronunciation: {
+    labelFr: 'Prononciation',
+    labelEn: 'Pronunciation',
+    icon: '🎙️',
+    color: '#3b82f6',
+    bg: 'rgba(59, 130, 246, 0.12)',
+  },
+  rhythm: {
+    labelFr: 'Rythme & Débit',
+    labelEn: 'Rhythm & Flow',
+    icon: '⏱️',
+    color: '#f59e0b',
+    bg: 'rgba(245, 158, 11, 0.12)',
+  },
+  grammar_structure: {
+    labelFr: 'Structure & Grammaire',
+    labelEn: 'Structure & Grammar',
+    icon: '📐',
+    color: '#10b981',
+    bg: 'rgba(16, 185, 129, 0.12)',
+  },
+  vocabulary: {
+    labelFr: 'Vocabulaire',
+    labelEn: 'Vocabulary',
+    icon: '📚',
+    color: '#8b5cf6',
+    bg: 'rgba(139, 92, 246, 0.12)',
+  },
+  fluency: {
+    labelFr: 'Fluidité & Liaisons',
+    labelEn: 'Fluency & Connected Speech',
+    icon: '🌊',
+    color: '#06b6d4',
+    bg: 'rgba(6, 182, 212, 0.12)',
+  },
+}
+
 export function SpeakingWorkspace({
   ui,
+  language = 'en',
+  api,
   session,
   onUpdate,
   onDelete,
   onBack,
 }: SpeakingWorkspaceProps) {
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const { triggerSessionAnalysis } = useCamera()
 
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const videoWrapperRef = useRef<HTMLDivElement>(null)
+  const controlsTimeoutRef = useRef<number | null>(null)
+
+  // Playback state
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(session.duration || 0)
   const [playbackRate, setPlaybackRate] = useState(1)
+  const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
+  const [showControls, setShowControls] = useState(true)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [centerPulseIcon, setCenterPulseIcon] = useState<'play' | 'pause' | null>(null)
+
+  // Document & Rating state
   const [title, setTitle] = useState(session.title)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [notes, setNotes] = useState(session.notes || '')
@@ -51,7 +123,12 @@ export function SpeakingWorkspace({
   )
   const [savedBadge, setSavedBadge] = useState(false)
 
-  // Safe duration display without Infinity / NaN
+  // AI Advice UI state
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all')
+  const [activeAdviceId, setActiveAdviceId] = useState<string | null>(null)
+  const [activePillarTab, setActivePillarTab] = useState<'pronunciation' | 'rhythm' | 'structure'>('pronunciation')
+
+  // Safe duration display
   const displayDuration = useMemo(() => {
     if (duration && !isNaN(duration) && isFinite(duration) && duration > 0) {
       return duration
@@ -66,9 +143,39 @@ export function SpeakingWorkspace({
   const handleTimeUpdate = () => {
     if (videoRef.current) {
       setCurrentTime(videoRef.current.currentTime)
-      if (videoRef.current.duration && !isNaN(videoRef.current.duration) && isFinite(videoRef.current.duration)) {
+      if (
+        videoRef.current.duration &&
+        !isNaN(videoRef.current.duration) &&
+        isFinite(videoRef.current.duration)
+      ) {
         setDuration(videoRef.current.duration)
       }
+    }
+  }
+
+  // Auto-hide controls logic: 3 seconds after mouse movement
+  const resetControlsTimer = useCallback(() => {
+    setShowControls(true)
+    if (controlsTimeoutRef.current) {
+      window.clearTimeout(controlsTimeoutRef.current)
+    }
+    if (isPlaying) {
+      controlsTimeoutRef.current = window.setTimeout(() => {
+        setShowControls(false)
+      }, 3000)
+    }
+  }, [isPlaying])
+
+  const handleMouseMove = () => {
+    resetControlsTimer()
+  }
+
+  const handleMouseLeave = () => {
+    if (controlsTimeoutRef.current) {
+      window.clearTimeout(controlsTimeoutRef.current)
+    }
+    if (isPlaying) {
+      setShowControls(false)
     }
   }
 
@@ -77,9 +184,18 @@ export function SpeakingWorkspace({
     if (videoRef.current.paused) {
       void videoRef.current.play()
       setIsPlaying(true)
+      setCenterPulseIcon('play')
+      setTimeout(() => setCenterPulseIcon(null), 500)
+      resetControlsTimer()
     } else {
       videoRef.current.pause()
       setIsPlaying(false)
+      setShowControls(true)
+      setCenterPulseIcon('pause')
+      setTimeout(() => setCenterPulseIcon(null), 500)
+      if (controlsTimeoutRef.current) {
+        window.clearTimeout(controlsTimeoutRef.current)
+      }
     }
   }
 
@@ -89,6 +205,7 @@ export function SpeakingWorkspace({
       setCurrentTime(seconds)
       void videoRef.current.play().catch(() => undefined)
       setIsPlaying(true)
+      resetControlsTimer()
     }
   }
 
@@ -97,14 +214,51 @@ export function SpeakingWorkspace({
     if (videoRef.current) {
       videoRef.current.playbackRate = rate
     }
+    resetControlsTimer()
+  }
+
+  const handleVolumeChange = (newVolume: number) => {
+    setVolume(newVolume)
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume
+      videoRef.current.muted = newVolume === 0
+      setIsMuted(newVolume === 0)
+    }
+    resetControlsTimer()
   }
 
   const toggleMute = () => {
     if (videoRef.current) {
-      videoRef.current.muted = !isMuted
-      setIsMuted(!isMuted)
+      const nextMuted = !isMuted
+      videoRef.current.muted = nextMuted
+      setIsMuted(nextMuted)
+      if (nextMuted) {
+        videoRef.current.volume = 0
+      } else {
+        videoRef.current.volume = volume || 1
+      }
+    }
+    resetControlsTimer()
+  }
+
+  const toggleFullscreen = () => {
+    if (!videoWrapperRef.current) return
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined)
+    } else {
+      void videoWrapperRef.current.requestFullscreen().catch(() => undefined)
     }
   }
+
+  useEffect(() => {
+    const onFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange)
+    }
+  }, [])
 
   const triggerAutosave = (override?: Partial<SpeakingSessionRecord>) => {
     const updatedRecord: SpeakingSessionRecord = {
@@ -135,35 +289,43 @@ export function SpeakingWorkspace({
     triggerAutosave({ ratings: updated })
   }
 
-  // Global keyboard shortcuts for video playback when not typing
-  React.useEffect(() => {
+  // Keyboard shortcuts
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement
       const isTyping =
         activeEl instanceof HTMLInputElement ||
         activeEl instanceof HTMLTextAreaElement ||
-        (activeEl && (activeEl.getAttribute('contenteditable') === 'true' || activeEl.classList.contains('notion-speaking-content')))
+        (activeEl &&
+          (activeEl.getAttribute('contenteditable') === 'true' ||
+            activeEl.classList.contains('notion-speaking-content')))
 
       if (!isTyping) {
-        if (e.key === 'Backspace' || e.key === ' ' || e.code === 'Space') {
+        if (e.key === ' ' || e.code === 'Space') {
           e.preventDefault()
           togglePlay()
         } else if (e.key === 'ArrowRight') {
           e.preventDefault()
           const maxDur = duration || session.duration || 999999
           const curr = videoRef.current?.currentTime ?? currentTime
-          seekTo(Math.min(maxDur, curr + 10))
+          seekTo(Math.min(maxDur, curr + 5))
         } else if (e.key === 'ArrowLeft') {
           e.preventDefault()
           const curr = videoRef.current?.currentTime ?? currentTime
-          seekTo(Math.max(0, curr - 10))
+          seekTo(Math.max(0, curr - 5))
+        } else if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault()
+          toggleMute()
+        } else if (e.key === 'f' || e.key === 'F') {
+          e.preventDefault()
+          toggleFullscreen()
         }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [duration, session.duration, currentTime])
+  }, [duration, session.duration, currentTime, isPlaying, isMuted])
 
   const downloadMedia = () => {
     if (!session.mediaUrl) return
@@ -174,6 +336,18 @@ export function SpeakingWorkspace({
     a.click()
     document.body.removeChild(a)
   }
+
+  // Analysis helpers
+  const analysis = session.analysis
+  const analysisStatus = session.analysisStatus || (analysis ? 'completed' : 'idle')
+  const isAnalyzing = analysisStatus === 'analyzing'
+  const isTooLong = analysisStatus === 'too_long' || session.duration > 180
+
+  const filteredAdviceItems = useMemo(() => {
+    if (!analysis || !Array.isArray(analysis.items)) return []
+    if (selectedCategoryFilter === 'all') return analysis.items
+    return analysis.items.filter((item) => item.category === selectedCategoryFilter)
+  }, [analysis, selectedCategoryFilter])
 
   return (
     <div className="speaking-workspace-page">
@@ -265,18 +439,31 @@ export function SpeakingWorkspace({
         </div>
       </header>
 
-      {/* Main Split Grid (Video Left / Notion Editor Right) */}
+      {/* Main Split Grid (Left: YouTube Player + AI Advice / Right: Notion Editor) */}
       <main className="workspace-body-grid">
-        {/* Left Column: Video Player with External Controls Underneath */}
+        {/* Left Column */}
         <section className="workspace-video-pane">
-          <div className="workspace-video-wrapper">
+          {/* YouTube Style Video Player Container with Integrated Overlay Controls */}
+          <div
+            ref={videoWrapperRef}
+            className={`yt-video-container ${!showControls && isPlaying ? 'controls-hidden' : ''} ${
+              isFullscreen ? 'is-fullscreen' : ''
+            }`}
+            onMouseMove={handleMouseMove}
+            onMouseEnter={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+          >
             {session.mediaUrl ? (
               <video
                 ref={videoRef}
                 src={session.mediaUrl}
-                className="ws-video-player"
+                className="yt-video-element"
                 playsInline
                 onTimeUpdate={handleTimeUpdate}
+                onEnded={() => {
+                  setIsPlaying(false)
+                  setShowControls(true)
+                }}
                 onClick={togglePlay}
               />
             ) : (
@@ -284,52 +471,414 @@ export function SpeakingWorkspace({
                 <p>Aucun flux vidéo disponible</p>
               </div>
             )}
+
+            {/* Center Play / Pause Feedback Animation */}
+            {centerPulseIcon && (
+              <div className="yt-center-pulse">
+                {centerPulseIcon === 'play' ? (
+                  <Play size={44} fill="currentColor" />
+                ) : (
+                  <Pause size={44} fill="currentColor" />
+                )}
+              </div>
+            )}
+
+            {/* YouTube Overlay Controls Bar (Inside the Video Container) */}
+            <div className={`yt-controls-overlay ${showControls ? 'visible' : 'hidden'}`}>
+              {/* Full-width Scrubber Progress Bar */}
+              <div className="yt-scrubber-row">
+                <input
+                  type="range"
+                  className="yt-scrubber-range"
+                  min="0"
+                  max={displayDuration || 100}
+                  step="0.05"
+                  value={currentTime}
+                  onChange={(e) => seekTo(Number(e.target.value))}
+                  style={{
+                    background: `linear-gradient(to right, var(--coral, #ee775d) ${(currentTime / (displayDuration || 1)) * 100}%, rgba(255, 255, 255, 0.28) ${(currentTime / (displayDuration || 1)) * 100}%)`,
+                  }}
+                />
+              </div>
+
+              {/* Bottom Controls Row: Play, Volume, Time on left / Speed, Fullscreen on right */}
+              <div className="yt-buttons-row">
+                {/* Left Controls */}
+                <div className="yt-left-controls">
+                  <button
+                    className="yt-btn"
+                    onClick={togglePlay}
+                    title={isPlaying ? 'Pause (Espace)' : 'Lecture (Espace)'}
+                  >
+                    {isPlaying ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
+                  </button>
+
+                  <div className="yt-volume-wrap">
+                    <button
+                      className="yt-btn volume-btn"
+                      onClick={toggleMute}
+                      title={isMuted ? 'Activer le son (M)' : 'Couper le son (M)'}
+                    >
+                      {isMuted || volume === 0 ? (
+                        <VolumeX size={18} />
+                      ) : volume < 0.5 ? (
+                        <Volume1 size={18} />
+                      ) : (
+                        <Volume2 size={18} />
+                      )}
+                    </button>
+                    <input
+                      type="range"
+                      className="yt-volume-slider"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={isMuted ? 0 : volume}
+                      onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                    />
+                  </div>
+
+                  <div className="yt-time-badge">
+                    <span className="current">{formatTime(currentTime)}</span>
+                    <span className="sep">/</span>
+                    <span className="total">{formatTime(displayDuration)}</span>
+                  </div>
+                </div>
+
+                {/* Right Controls */}
+                <div className="yt-right-controls">
+                  <div className="yt-speed-chips-group">
+                    {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
+                      <button
+                        key={rate}
+                        className={`yt-speed-chip ${playbackRate === rate ? 'active' : ''}`}
+                        onClick={() => changeSpeed(rate)}
+                      >
+                        {rate}x
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    className="yt-btn"
+                    onClick={toggleFullscreen}
+                    title={isFullscreen ? 'Quitter le plein écran (F)' : 'Plein écran (F)'}
+                  >
+                    {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* External Controls Bar Underneath the Video (Not taking 1/3 of the video) */}
-          <div className="ws-video-external-controls">
-            <button
-              className={`ws-play-btn ${isPlaying ? 'playing' : ''}`}
-              onClick={togglePlay}
-              title={isPlaying ? 'Pause' : 'Lecture'}
-            >
-              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-            </button>
+          {/* New AI Speaking Advice & Analysis Section (Under the Video) */}
+          <section className="speaking-ai-analysis-card">
+            {/* Header with Title, Status & Refresh */}
+            <div className="ai-analysis-header-row">
+              <div className="ai-analysis-title-group">
+                <div className="ai-sparkle-circle">
+                  <Sparkles size={16} />
+                </div>
+                <div>
+                  <h3 className="ai-analysis-title">
+                    {ui === 'fr' ? 'Conseils & Analyse IA' : 'AI Speech Coaching & Analysis'}
+                  </h3>
+                  <p className="ai-analysis-subtitle">
+                    {ui === 'fr'
+                      ? 'Prononciation, débit, structure et horodatages précis'
+                      : 'Pronunciation, pacing, syntax and precise timestamps'}
+                  </p>
+                </div>
+              </div>
 
-            <div className="ws-scrubber-box">
-              <input
-                type="range"
-                min="0"
-                max={displayDuration || 100}
-                step="0.1"
-                value={currentTime}
-                onChange={(e) => seekTo(Number(e.target.value))}
-              />
-              <span className="ws-time-display">
-                {formatTime(currentTime)} / {formatTime(displayDuration)}
-              </span>
-            </div>
+              <div className="ai-analysis-actions">
+                {analysis?.overallScore !== undefined && (
+                  <div className="ai-score-pill" title="Score global d’élocution et de maîtrise">
+                    <span className="score-num">{analysis.overallScore}</span>
+                    <span className="score-max">/100</span>
+                  </div>
+                )}
 
-            <div className="ws-speed-group">
-              {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
                 <button
-                  key={rate}
-                  className={`ws-speed-chip ${playbackRate === rate ? 'active' : ''}`}
-                  onClick={() => changeSpeed(rate)}
+                  className={`ai-reanalyze-btn ${isAnalyzing ? 'loading' : ''}`}
+                  onClick={() => void triggerSessionAnalysis(session.id)}
+                  disabled={isAnalyzing}
+                  title="Relancer une analyse IA sur cette prise"
                 >
-                  {rate}x
+                  <RotateCcw size={13} className={isAnalyzing ? 'spin' : ''} />
+                  <span>
+                    {isAnalyzing
+                      ? ui === 'fr'
+                        ? 'Analyse en cours…'
+                        : 'Analyzing…'
+                      : ui === 'fr'
+                      ? 'Relancer'
+                      : 'Re-analyze'}
+                  </span>
                 </button>
-              ))}
+              </div>
             </div>
 
-            <button
-              className="ws-mute-btn"
-              onClick={toggleMute}
-              title={isMuted ? 'Activer le son' : 'Muet'}
-            >
-              {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-            </button>
-          </div>
+            {/* STATE 1: Analyzing Loader */}
+            {isAnalyzing && (
+              <div className="ai-analyzing-box">
+                <div className="ai-radar-pulse">
+                  <div className="radar-circle c1" />
+                  <div className="radar-circle c2" />
+                  <div className="radar-circle c3" />
+                  <Mic size={22} className="radar-mic" />
+                </div>
+                <div className="ai-analyzing-text">
+                  <strong>{ui === 'fr' ? 'Analyse de ta vidéo en cours…' : 'Analyzing your recording…'}</strong>
+                  <p>
+                    {ui === 'fr'
+                      ? 'L’IA écoute ta prononciation, mesure ton rythme et vérifie la syntaxe avec OpenRouter.'
+                      : 'The AI is listening to your phonetics, measuring pacing, and verifying syntax via OpenRouter.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* STATE 2: Video Too Long Banner */}
+            {!isAnalyzing && isTooLong && (
+              <div className="ai-limit-alert">
+                <Info size={18} className="limit-icon" />
+                <div className="limit-content">
+                  <strong>
+                    {ui === 'fr' ? 'Prise de plus de 3 minutes' : 'Take longer than 3 minutes'}
+                  </strong>
+                  <p>
+                    {ui === 'fr'
+                      ? 'Pour garantir une analyse instantanée et détaillée, l’analyse IA automatique est réservée aux vidéos de moins de 3 minutes (180s).'
+                      : 'To ensure instant and in-depth feedback, automatic AI coaching is reserved for takes under 3 minutes (180s).'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* STATE 3: Error Banner */}
+            {!isAnalyzing && !isTooLong && analysisStatus === 'error' && (
+              <div className="ai-error-alert">
+                <AlertTriangle size={18} className="error-icon" />
+                <div className="error-content">
+                  <strong>
+                    {ui === 'fr' ? 'Échec de l’analyse' : 'Analysis failed'}
+                  </strong>
+                  <p>{session.analysisError || 'Une erreur est survenue lors de l’appel à OpenRouter.'}</p>
+                  <button
+                    className="error-retry-btn"
+                    onClick={() => void triggerSessionAnalysis(session.id)}
+                  >
+                    <RotateCcw size={12} /> {ui === 'fr' ? 'Réessayer' : 'Retry'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STATE 4: Idle / Not Analyzed Yet */}
+            {!isAnalyzing && !isTooLong && analysisStatus === 'idle' && !analysis && (
+              <div className="ai-idle-box">
+                <p>
+                  {ui === 'fr'
+                    ? 'Aucune analyse IA effectuée pour le moment. Lance l’analyse pour obtenir des conseils détaillés sur ta voix, ton rythme et tes phrases.'
+                    : 'No AI analysis yet. Launch the analysis to get detailed coaching on your voice, pacing, and syntax.'}
+                </p>
+                <button
+                  className="primary-analyze-trigger-btn"
+                  onClick={() => void triggerSessionAnalysis(session.id)}
+                >
+                  <Sparkles size={14} />
+                  <span>{ui === 'fr' ? 'Analyser cette vidéo avec l’IA' : 'Analyze this video with AI'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* STATE 5: Analysis Completed */}
+            {!isAnalyzing && analysis && (
+              <div className="ai-completed-container">
+                {/* Global Motivational Feedback */}
+                <div className="ai-global-feedback-box">
+                  <p className="global-quote">“{analysis.overallFeedback}”</p>
+                </div>
+
+                {/* 3 Core Pillars Tabs */}
+                <div className="ai-pillars-tabs">
+                  <button
+                    className={`pillar-tab ${activePillarTab === 'pronunciation' ? 'active' : ''}`}
+                    onClick={() => setActivePillarTab('pronunciation')}
+                  >
+                    <span>🎙️</span>
+                    <b>{ui === 'fr' ? 'Prononciation' : 'Pronunciation'}</b>
+                  </button>
+                  <button
+                    className={`pillar-tab ${activePillarTab === 'rhythm' ? 'active' : ''}`}
+                    onClick={() => setActivePillarTab('rhythm')}
+                  >
+                    <span>⏱️</span>
+                    <b>{ui === 'fr' ? 'Rythme & Débit' : 'Rhythm & Flow'}</b>
+                  </button>
+                  <button
+                    className={`pillar-tab ${activePillarTab === 'structure' ? 'active' : ''}`}
+                    onClick={() => setActivePillarTab('structure')}
+                  >
+                    <span>📐</span>
+                    <b>{ui === 'fr' ? 'Structure & Syntaxe' : 'Structure & Syntax'}</b>
+                  </button>
+                </div>
+
+                {/* Pillar Summary Card */}
+                <div className="ai-pillar-content-card">
+                  {activePillarTab === 'pronunciation' && (
+                    <div className="pillar-detail">
+                      <p>{analysis.pronunciationSummary}</p>
+                    </div>
+                  )}
+                  {activePillarTab === 'rhythm' && (
+                    <div className="pillar-detail">
+                      <p>{analysis.rhythmSummary}</p>
+                    </div>
+                  )}
+                  {activePillarTab === 'structure' && (
+                    <div className="pillar-detail">
+                      <p>{analysis.structureSummary}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Timestamped Advice List */}
+                <div className="ai-advice-items-section">
+                  <div className="advice-items-header">
+                    <h4>
+                      {ui === 'fr'
+                        ? `Conseils horodatés (${analysis.items?.length || 0})`
+                        : `Timestamped Advice (${analysis.items?.length || 0})`}
+                    </h4>
+
+                    {/* Filter Category Chips */}
+                    <div className="advice-filter-chips">
+                      <button
+                        className={`filter-chip ${selectedCategoryFilter === 'all' ? 'active' : ''}`}
+                        onClick={() => setSelectedCategoryFilter('all')}
+                      >
+                        {ui === 'fr' ? 'Tous' : 'All'}
+                      </button>
+                      {(['pronunciation', 'rhythm', 'grammar_structure', 'vocabulary'] as const).map(
+                        (cat) => {
+                          const meta = CATEGORY_META[cat]
+                          const count = analysis.items?.filter((i) => i.category === cat).length || 0
+                          if (count === 0) return null
+                          return (
+                            <button
+                              key={cat}
+                              className={`filter-chip ${selectedCategoryFilter === cat ? 'active' : ''}`}
+                              onClick={() => setSelectedCategoryFilter(cat)}
+                            >
+                              <span>{meta.icon}</span>
+                              <span>{ui === 'fr' ? meta.labelFr : meta.labelEn}</span>
+                              <span className="count">({count})</span>
+                            </button>
+                          )
+                        },
+                      )}
+                    </div>
+                  </div>
+
+                  {/* List of interactive Advice Cards */}
+                  <div className="advice-cards-list">
+                    {filteredAdviceItems.length === 0 ? (
+                      <p className="no-advice-filter-msg">
+                        {ui === 'fr' ? 'Aucun conseil dans cette catégorie.' : 'No advice in this category.'}
+                      </p>
+                    ) : (
+                      filteredAdviceItems.map((item) => {
+                        const meta = CATEGORY_META[item.category] || CATEGORY_META.pronunciation
+                        const isCurrentActive = activeAdviceId === item.id
+
+                        return (
+                          <article
+                            key={item.id}
+                            className={`advice-item-card ${isCurrentActive ? 'is-selected' : ''}`}
+                            onClick={() => {
+                              seekTo(item.timestamp)
+                              setActiveAdviceId(item.id)
+                            }}
+                          >
+                            <div className="advice-card-top-row">
+                              {/* Clickable Timestamp jump button */}
+                              <button
+                                className="advice-timestamp-pill"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  seekTo(item.timestamp)
+                                  setActiveAdviceId(item.id)
+                                }}
+                                title="Cliquer pour sauter à ce moment dans la vidéo"
+                              >
+                                <Play size={10} fill="currentColor" />
+                                <span>{formatTime(item.timestamp)}</span>
+                              </button>
+
+                              <span
+                                className="advice-cat-badge"
+                                style={{ color: meta.color, backgroundColor: meta.bg }}
+                              >
+                                <span>{meta.icon}</span>
+                                <span>{ui === 'fr' ? meta.labelFr : meta.labelEn}</span>
+                              </span>
+
+                              <span className={`advice-severity-chip ${item.severity}`}>
+                                {item.severity === 'error'
+                                  ? ui === 'fr'
+                                    ? 'À corriger'
+                                    : 'Error'
+                                  : item.severity === 'warning'
+                                  ? ui === 'fr'
+                                    ? 'Attention'
+                                    : 'Warning'
+                                  : ui === 'fr'
+                                  ? 'Astuce'
+                                  : 'Tip'}
+                              </span>
+                            </div>
+
+                            <h5 className="advice-card-title">{item.title}</h5>
+
+                            {/* Comparison Box (if original and improved snippets provided) */}
+                            {(item.originalSnippet || item.improvedSnippet) && (
+                              <div className="advice-snippet-compare">
+                                {item.originalSnippet && (
+                                  <div className="snippet-box original">
+                                    <span className="lbl">{ui === 'fr' ? 'Entendu :' : 'Heard:'}</span>
+                                    <span className="val">{item.originalSnippet}</span>
+                                  </div>
+                                )}
+                                {item.improvedSnippet && (
+                                  <div className="snippet-box improved">
+                                    <span className="lbl">{ui === 'fr' ? 'Suggéré :' : 'Better:'}</span>
+                                    <span className="val">{item.improvedSnippet}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* IPA Phonetic Tag if provided */}
+                            {item.ipa && (
+                              <div className="advice-ipa-tag">
+                                <span className="ipa-lbl">IPA :</span>
+                                <code className="ipa-code">{item.ipa}</code>
+                              </div>
+                            )}
+
+                            <p className="advice-explanation-text">{item.explanation}</p>
+                          </article>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
         </section>
 
         {/* Right Column: Unified Notion-style Notes Editor */}
@@ -353,7 +902,7 @@ export function SpeakingWorkspace({
             />
           </div>
 
-          {/* Discreet Star Ratings at the Very Bottom (No "Auto-évaluation" label) */}
+          {/* Discreet Star Ratings at the Very Bottom */}
           <footer className="ws-discreet-ratings-footer">
             <div className="ws-rating-row">
               <span className="ws-rating-name">{ui === 'fr' ? 'Fluidité' : 'Fluency'}</span>

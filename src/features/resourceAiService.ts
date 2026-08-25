@@ -79,6 +79,14 @@ Available Categories: ${JSON.stringify(validCategoriesList)}.
 
 Your mission:
 Write an engaging, well-crafted, beautifully written text in ${langName} adapted perfectly to the target level and target length.
+
+MANDATORY WRITING RULES (you MUST follow these at all times):
+1. Always describe scenes in rich detail, especially emotionally charged scenes. Detail every gesture, behavior, expression, and surrounding atmosphere of the main characters so the reader is fully immersed in the narrative.
+2. NEVER use em-dashes (—). Use commas (,) instead, or better yet restructure the sentence using line breaks (see rule 4).
+3. Include dialogues, emotional tension, suspense and emotion in the narrative. The reader must be able to vividly picture every scene in their mind. For dialogues, use line breaks and present them in a fluid, airy way (see rule 4).
+4. Do NOT compress all text into dense blocks. Create line breaks and paragraph variety: some paragraphs should be very long and immersive, others very short and punchy, following the rhythm of the narrative. This is especially important for dialogues but also for key information, revelations, or emotional beats. In the JSON paragraphs array, each dialogue line or short beat should be its own paragraph entry.
+
+Additional format rules:
 - Format: Return ONLY a valid JSON object (no markdown surrounding, no conversational intro).
 - Author: ALWAYS set "author" to an empty string "". Never invent an author, character name or byline — AI-generated texts stay authorless in this app.
 - Cover: Provide "coverPrompt", a short descriptive visual prompt in English for a book cover illustration matching the story theme.
@@ -149,9 +157,15 @@ JSON Schema:
       category = 'story'
     }
 
-    // Generate/fetch cover image URL based on coverPrompt
+    // Generate cover image: try Gemini (Nano Banana) first, fall back to Pollinations
     const coverPrompt = parsed.coverPrompt?.trim() || `${title} aesthetic book cover illustration`
-    const coverImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(coverPrompt + ' high quality cinematic book cover art')}?width=600&height=800&nologo=true`
+    let coverImage: string | undefined
+    if (api.googleKey?.trim()) {
+      coverImage = await generateCoverWithGemini(coverPrompt, api)
+    }
+    if (!coverImage) {
+      coverImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(coverPrompt + ' high quality cinematic book cover art')}?width=600&height=800&nologo=true`
+    }
 
     return {
       ok: true,
@@ -170,6 +184,54 @@ JSON Schema:
       ok: false,
       error: err instanceof Error ? err.message : 'Erreur de communication avec l’IA.',
     }
+  }
+}
+
+/**
+ * Generates a cover image using the Gemini image generation API (Nano Banana).
+ * Returns a data URL (data:image/png;base64,…) on success, or undefined on failure.
+ */
+async function generateCoverWithGemini(prompt: string, api: ApiSettings): Promise<string | undefined> {
+  const key = api.googleKey?.trim()
+  if (!key) return undefined
+
+  const model = api.googleImageModel?.trim() || 'gemini-2.5-flash-preview-image'
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: `Generate a beautiful, high quality cinematic book cover illustration for the following theme. The image should be artistic, evocative, and suitable as a book cover (portrait orientation): ${prompt}` }],
+        }],
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      console.warn('[generateCoverWithGemini] API error:', response.status, await response.text().catch(() => ''))
+      return undefined
+    }
+
+    const data = await response.json()
+    const parts = data.candidates?.[0]?.content?.parts
+    if (!Array.isArray(parts)) return undefined
+
+    for (const part of parts) {
+      if (part.inlineData?.data && part.inlineData?.mimeType) {
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`
+      }
+    }
+
+    console.warn('[generateCoverWithGemini] No image data in response')
+    return undefined
+  } catch (err) {
+    console.warn('[generateCoverWithGemini] Failed:', err)
+    return undefined
   }
 }
 
@@ -262,9 +324,9 @@ Return ONLY a JSON object:
         if (Array.isArray(parsed.paragraphs) && parsed.paragraphs.length > 0) {
           const validDifficulty: Difficulty =
             parsed.difficulty === 'beginner' ||
-            parsed.difficulty === 'intermediate' ||
-            parsed.difficulty === 'advanced' ||
-            parsed.difficulty === 'native'
+              parsed.difficulty === 'intermediate' ||
+              parsed.difficulty === 'advanced' ||
+              parsed.difficulty === 'native'
               ? parsed.difficulty
               : 'intermediate'
 

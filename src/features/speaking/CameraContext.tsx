@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
-import type { Language } from '../../domain'
+import type { Language, ApiSettings, UiLanguage } from '../../domain'
 import { GlobalTopicCategory, NicheTopic, getPromptText } from './speakingTopics'
 import {
   SpeakingSessionRecord,
@@ -8,6 +8,7 @@ import {
   deleteSpeakingSession,
   updateSpeakingSession,
 } from './speakingStorage'
+import { analyzeSpeakingVideo } from './speakingVideoAiService'
 
 type CameraContextType = {
   stream: MediaStream | null
@@ -50,6 +51,7 @@ type CameraContextType = {
   setActiveReviewSession: (session: SpeakingSessionRecord | null) => void
   handleUpdateSession: (updated: SpeakingSessionRecord) => Promise<void>
   handleDeleteSession: (id: string) => Promise<void>
+  triggerSessionAnalysis: (sessionId: string) => Promise<void>
 }
 
 const CameraContext = createContext<CameraContextType | null>(null)
@@ -57,9 +59,13 @@ const CameraContext = createContext<CameraContextType | null>(null)
 export function CameraProvider({
   children,
   language,
+  ui = 'fr',
+  api,
 }: {
   children: React.ReactNode
   language: Language
+  ui?: UiLanguage
+  api?: ApiSettings
 }) {
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [cameraActive, setCameraActive] = useState(false)
@@ -238,6 +244,18 @@ export function CameraProvider({
           const finalDuration = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000))
           const topicName = selectedNiche ? selectedNiche.title : 'Session libre'
           const sessionTitle = topicName
+          const isTooLong = finalDuration > 180
+          const hasApiKey = !!api?.openRouterKey?.trim()
+
+          const initialStatus: 'too_long' | 'analyzing' | 'idle' = isTooLong
+            ? 'too_long'
+            : hasApiKey
+            ? 'analyzing'
+            : 'idle'
+
+          const initialError = isTooLong
+            ? 'La vidéo dépasse 3 minutes (180s). L’analyse IA est limitée aux vidéos de moins de 3 minutes.'
+            : undefined
 
           const newSessionRecord = await saveSpeakingSession({
             id: `rec-${Date.now()}`,
@@ -253,9 +271,84 @@ export function CameraProvider({
             tags: [selectedNiche ? 'Guidé' : 'Libre'],
             ratings: { fluency: 4, pronunciation: 4, confidence: 4 },
             blob,
+            analysisStatus: initialStatus,
+            analysisError: initialError,
           })
 
           setSessions((prev) => [newSessionRecord, ...prev])
+
+          // Trigger background AI analysis if <= 3 minutes and API key is configured
+          if (initialStatus === 'analyzing' && api) {
+            void analyzeSpeakingVideo({
+              blob,
+              durationSeconds: finalDuration,
+              targetLanguage: language,
+              uiLanguage: ui,
+              api,
+              topicTitle: selectedNiche?.title,
+              topicAngles: selectedNiche ? (ui === 'fr' ? selectedNiche.angles : selectedNiche.anglesEn) : [],
+              referenceText: selectedNiche ? getPromptText(selectedNiche, language) : undefined,
+              mode: selectedNiche ? 'guided' : 'free',
+            })
+              .then(async (res) => {
+                if (res.ok) {
+                  await updateSpeakingSession(newSessionRecord.id, {
+                    analysis: res.analysis,
+                    analysisStatus: 'completed',
+                    analysisError: undefined,
+                  })
+                  setSessions((prev) =>
+                    prev.map((s) =>
+                      s.id === newSessionRecord.id
+                        ? { ...s, analysis: res.analysis, analysisStatus: 'completed', analysisError: undefined }
+                        : s,
+                    ),
+                  )
+                  setActiveReviewSession((prev) =>
+                    prev?.id === newSessionRecord.id
+                      ? { ...prev, analysis: res.analysis, analysisStatus: 'completed', analysisError: undefined }
+                      : prev,
+                  )
+                } else {
+                  const status = res.tooLong ? 'too_long' : 'error'
+                  await updateSpeakingSession(newSessionRecord.id, {
+                    analysisStatus: status,
+                    analysisError: res.error,
+                  })
+                  setSessions((prev) =>
+                    prev.map((s) =>
+                      s.id === newSessionRecord.id
+                        ? { ...s, analysisStatus: status, analysisError: res.error }
+                        : s,
+                    ),
+                  )
+                  setActiveReviewSession((prev) =>
+                    prev?.id === newSessionRecord.id
+                      ? { ...prev, analysisStatus: status, analysisError: res.error }
+                      : prev,
+                  )
+                }
+              })
+              .catch(async (err) => {
+                const errMsg = err instanceof Error ? err.message : 'Erreur d’analyse IA'
+                await updateSpeakingSession(newSessionRecord.id, {
+                  analysisStatus: 'error',
+                  analysisError: errMsg,
+                })
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === newSessionRecord.id
+                      ? { ...s, analysisStatus: 'error', analysisError: errMsg }
+                      : s,
+                  ),
+                )
+                setActiveReviewSession((prev) =>
+                  prev?.id === newSessionRecord.id
+                    ? { ...prev, analysisStatus: 'error', analysisError: errMsg }
+                    : prev,
+                )
+              })
+          }
         }
 
         setRecording(false)
@@ -277,7 +370,7 @@ export function CameraProvider({
     } catch (err) {
       console.error('Error starting MediaRecorder:', err)
     }
-  }, [selectedNiche])
+  }, [selectedNiche, api, language, ui])
 
   const startRecordingWithCountdown = useCallback(async (onBeforeStart?: () => void) => {
     if (!streamRef.current) {
@@ -349,6 +442,9 @@ export function CameraProvider({
       timestamps: updated.timestamps,
       tags: updated.tags,
       ratings: updated.ratings,
+      analysis: updated.analysis,
+      analysisStatus: updated.analysisStatus,
+      analysisError: updated.analysisError,
     })
     setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
     setActiveReviewSession(updated)
@@ -359,6 +455,102 @@ export function CameraProvider({
     setSessions((prev) => prev.filter((s) => s.id !== id))
     setActiveReviewSession((prev) => (prev?.id === id ? null : prev))
   }, [])
+
+  const triggerSessionAnalysis = useCallback(
+    async (sessionId: string) => {
+      const session =
+        sessions.find((s) => s.id === sessionId) ||
+        (activeReviewSession?.id === sessionId ? activeReviewSession : null)
+      if (!session) return
+
+      if (session.duration > 180) {
+        const tooLongMsg =
+          'La vidéo dépasse 3 minutes (180s). L’analyse IA est limitée aux vidéos de moins de 3 minutes.'
+        await updateSpeakingSession(session.id, {
+          analysisStatus: 'too_long',
+          analysisError: tooLongMsg,
+        })
+        const updated: SpeakingSessionRecord = {
+          ...session,
+          analysisStatus: 'too_long',
+          analysisError: tooLongMsg,
+        }
+        setSessions((prev) => prev.map((s) => (s.id === session.id ? updated : s)))
+        if (activeReviewSession?.id === session.id) setActiveReviewSession(updated)
+        return
+      }
+
+      if (!api) return
+
+      // Set analyzing state
+      await updateSpeakingSession(session.id, {
+        analysisStatus: 'analyzing',
+        analysisError: undefined,
+      })
+      const analyzingSession: SpeakingSessionRecord = {
+        ...session,
+        analysisStatus: 'analyzing',
+        analysisError: undefined,
+      }
+      setSessions((prev) => prev.map((s) => (s.id === session.id ? analyzingSession : s)))
+      if (activeReviewSession?.id === session.id) setActiveReviewSession(analyzingSession)
+
+      try {
+        const res = await analyzeSpeakingVideo({
+          blob: session.blob,
+          durationSeconds: session.duration,
+          targetLanguage: language,
+          uiLanguage: ui,
+          api,
+          topicTitle: session.topicName,
+          mode: session.mode,
+        })
+
+        if (res.ok) {
+          await updateSpeakingSession(session.id, {
+            analysis: res.analysis,
+            analysisStatus: 'completed',
+            analysisError: undefined,
+          })
+          const completed: SpeakingSessionRecord = {
+            ...session,
+            analysis: res.analysis,
+            analysisStatus: 'completed',
+            analysisError: undefined,
+          }
+          setSessions((prev) => prev.map((s) => (s.id === session.id ? completed : s)))
+          if (activeReviewSession?.id === session.id) setActiveReviewSession(completed)
+        } else {
+          const status = res.tooLong ? 'too_long' : 'error'
+          await updateSpeakingSession(session.id, {
+            analysisStatus: status,
+            analysisError: res.error,
+          })
+          const errored: SpeakingSessionRecord = {
+            ...session,
+            analysisStatus: status,
+            analysisError: res.error,
+          }
+          setSessions((prev) => prev.map((s) => (s.id === session.id ? errored : s)))
+          if (activeReviewSession?.id === session.id) setActiveReviewSession(errored)
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Erreur d’analyse IA'
+        await updateSpeakingSession(session.id, {
+          analysisStatus: 'error',
+          analysisError: errMsg,
+        })
+        const errored: SpeakingSessionRecord = {
+          ...session,
+          analysisStatus: 'error',
+          analysisError: errMsg,
+        }
+        setSessions((prev) => prev.map((s) => (s.id === session.id ? errored : s)))
+        if (activeReviewSession?.id === session.id) setActiveReviewSession(errored)
+      }
+    },
+    [sessions, activeReviewSession, api, language, ui],
+  )
 
   return (
     <CameraContext.Provider
@@ -397,6 +589,7 @@ export function CameraProvider({
         setActiveReviewSession,
         handleUpdateSession,
         handleDeleteSession,
+        triggerSessionAnalysis,
       }}
     >
       {children}

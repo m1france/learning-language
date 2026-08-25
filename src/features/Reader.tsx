@@ -281,6 +281,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; markingId: string } | null>(null)
   const [pageContextMenu, setPageContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [wordContextMenu, setWordContextMenu] = useState<{ x: number; y: number; raw: string; sentence: string; isSaved: boolean } | null>(null)
+  const [multiWordMenu, setMultiWordMenu] = useState<{ x: number; y: number; raw: string; sentence: string } | null>(null)
   const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
   const [editingMarkValue, setEditingMarkValue] = useState('')
   const [savingWordAi, setSavingWordAi] = useState<string | null>(null)
@@ -354,13 +355,14 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   useEffect(() => {
     const handleGlobalPointerDown = (e: Event) => {
       const target = e.target as HTMLElement | null
-      if (target?.closest('.mark-context-menu, .page-context-menu, .word-context-menu, .resource-context-menu')) {
+      if (target?.closest('.mark-context-menu, .page-context-menu, .word-context-menu, .resource-context-menu, .multi-word-menu')) {
         return
       }
       setContextMenu(null)
       setPageContextMenu(null)
       setResourceMenuTarget(null)
       setWordContextMenu(null)
+      setMultiWordMenu(null)
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -369,6 +371,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         setPageContextMenu(null)
         setResourceMenuTarget(null)
         setWordContextMenu(null)
+        setMultiWordMenu(null)
       }
     }
 
@@ -535,6 +538,12 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
     const x = Math.min(window.innerWidth - 160, Math.max(160, 'clientX' in event ? event.clientX : window.innerWidth / 2))
     const y = Math.min(window.innerHeight - 100, 'clientY' in event ? event.clientY + 12 : 200)
+
+    // Multi-word: show a small contextual menu instead of opening WordPanel directly
+    if (cleaned.includes(' ')) {
+      setMultiWordMenu({ raw: cleaned, sentence: sentenceOf(cleaned, entry.text), x, y })
+      return
+    }
     setSelected({
       raw: cleaned,
       sentence: sentenceOf(cleaned, entry.text),
@@ -584,13 +593,9 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       }
 
       const parText = target.closest('.paragraph')?.textContent ?? cleaned
-      setSelected({
-        raw: cleaned,
-        sentence: sentenceOf(cleaned, parText),
-        x,
-        y,
-      })
-      setWikiWord(wikiLookup(cleaned))
+
+      // Multi-word drag: show contextual menu instead of opening WordPanel
+      setMultiWordMenu({ raw: cleaned, sentence: sentenceOf(cleaned, parText), x, y })
     }
 
     document.addEventListener('mouseup', handleWindowSelection)
@@ -688,7 +693,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   return <div className={`reader-page ${markMode === 'silent' ? 'arm-silent' : ''} ${markMode && markMode !== 'silent' ? 'arm-word' : ''}`}
     onClick={() => {
       if (Date.now() - lastMultiWordDragTimestamp < 500) return
-      setSelected(null); setContextMenu(null); setPageContextMenu(null); setResourceMenuTarget(null); setWordContextMenu(null); if (wikiArmed) setWikiArmed(false)
+      setSelected(null); setContextMenu(null); setPageContextMenu(null); setResourceMenuTarget(null); setWordContextMenu(null); setMultiWordMenu(null); if (wikiArmed) setWikiArmed(false)
     }}
     onContextMenu={handlePageContextMenu}>
     <header className="reader-top">
@@ -972,6 +977,45 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       onOpenWord={(raw) => setSelected((current) => ({ raw, sentence: current?.sentence ?? '', x: current?.x ?? 80, y: current?.y ?? 120 }))}
       onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })}
       onDeleteWord={(raw) => onDeleteWord?.(raw, resource.language)} />}
+
+    {multiWordMenu && (() => {
+      const wordCount = multiWordMenu.raw.split(/\s+/).filter(Boolean).length
+      const pronounceLabel = wordCount >= 4 ? 'Prononcer la phrase' : 'Prononcer les mots'
+      return (
+        <div
+          className="multi-word-menu"
+          style={{ left: multiWordMenu.x, top: multiWordMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="multi-word-menu-item"
+            onClick={() => {
+              void speak(multiWordMenu.raw, resource.language, state.settings.api)
+              setMultiWordMenu(null)
+            }}
+          >
+            <Volume2 size={14} /> {pronounceLabel}
+          </button>
+          <button
+            type="button"
+            className="multi-word-menu-item save"
+            onClick={() => {
+              setSelected({
+                raw: multiWordMenu.raw,
+                sentence: multiWordMenu.sentence,
+                x: multiWordMenu.x,
+                y: multiWordMenu.y,
+              })
+              setWikiWord(wikiLookup(multiWordMenu.raw))
+              setMultiWordMenu(null)
+            }}
+          >
+            <BookmarkPlus size={14} /> Enregistrer les mots
+          </button>
+        </div>
+      )
+    })()}
 
     {markMode && markMode !== 'silent' && activeType && <MarkMenu ui={ui} type={activeType} name={getMarkingLabel(activeType)} color={typeColor(activeType)}
       style={markStyle} markColor={markColor} toolbarStyle={settings.readerToolbarStyle}
@@ -2364,6 +2408,7 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
   const t = readerCopy[ui]
   const settings = state.settings
   const [selected, setSelected] = useState<{ raw: string; sentence: string; x?: number; y?: number } | null>(null)
+  const [multiWordMenu, setMultiWordMenu] = useState<{ x: number; y: number; raw: string; sentence: string } | null>(null)
   const [wikiWord, setWikiWord] = useState('')
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiArmed, setWikiArmed] = useState(false)
@@ -2402,8 +2447,8 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
       setWikiOpen(true)
       return
     }
-    setSelected({ raw: cleaned, sentence: sentenceOf(cleaned, text) })
-    setWikiWord(wikiLookup(cleaned))
+    // Multi-word: show contextual menu
+    setMultiWordMenu({ raw: cleaned, sentence: sentenceOf(cleaned, text), x: window.innerWidth / 2, y: 200 })
   }
 
   const toggleWiki = () => {
@@ -2432,7 +2477,7 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
 
   return <div className="focus-reader" onClick={() => {
     if (Date.now() - lastMultiWordDragTimestamp < 500) return
-    setSelected(null); if (wikiArmed) setWikiArmed(false)
+    setSelected(null); setMultiWordMenu(null); if (wikiArmed) setWikiArmed(false)
   }}>
     <header className="focus-top">
       <strong className="focus-title">{resource.title}</strong>
@@ -2478,6 +2523,45 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
       onOpenWord={(raw) => setSelected((current) => ({ raw, sentence: current?.sentence ?? '', x: current?.x ?? 80, y: current?.y ?? 120 }))}
       onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })}
       onDeleteWord={(raw) => onDeleteWord?.(raw, resource.language)} />}
+
+    {multiWordMenu && (() => {
+      const wordCount = multiWordMenu.raw.split(/\s+/).filter(Boolean).length
+      const pronounceLabel = wordCount >= 4 ? 'Prononcer la phrase' : 'Prononcer les mots'
+      return (
+        <div
+          className="multi-word-menu"
+          style={{ left: multiWordMenu.x, top: multiWordMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="multi-word-menu-item"
+            onClick={() => {
+              void speak(multiWordMenu.raw, resource.language, state.settings.api)
+              setMultiWordMenu(null)
+            }}
+          >
+            <Volume2 size={14} /> {pronounceLabel}
+          </button>
+          <button
+            type="button"
+            className="multi-word-menu-item save"
+            onClick={() => {
+              setSelected({
+                raw: multiWordMenu.raw,
+                sentence: multiWordMenu.sentence,
+                x: multiWordMenu.x,
+                y: multiWordMenu.y,
+              })
+              setWikiWord(wikiLookup(multiWordMenu.raw))
+              setMultiWordMenu(null)
+            }}
+          >
+            <BookmarkPlus size={14} /> Enregistrer les mots
+          </button>
+        </div>
+      )
+    })()}
 
     <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={toggleWiki} />
     {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} onClose={() => setWikiOpen(false)} />}
