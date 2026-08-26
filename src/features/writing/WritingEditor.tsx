@@ -509,7 +509,6 @@ export function WritingEditor({
                     }
                   }}
                   placeholder="Titre de la note"
-                  autoFocus
                 />
               )}
             </div>
