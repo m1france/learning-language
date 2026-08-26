@@ -154,6 +154,8 @@ export type ApiSettings = {
   taskModelUrlExtraction?: string
   /** Custom AI model override for writing correction and pedagogical teacher annotations */
   taskModelWritingCorrection?: string
+  /** Custom AI model override for Exercise Builder interactive exercise generation */
+  taskModelExerciseBuilder?: string
   /** Enable dynamic advanced formatting for handwriting AI annotations */
   writingCorrectionAdvancedFormatting?: boolean
   /** Gemini model for cover image generation via Google AI Studio (e.g. gemini-2.5-flash-image) */

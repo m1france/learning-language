@@ -1133,6 +1133,21 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
                 </div>
               </div>
 
+              {/* Option 7 : Exercices Builder */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>Générateur d'exercices sur mesure (« Exercices Builder »)</strong>
+                  <small>Génération d'exercices interactifs selon tes difficultés (mots croisés, textes à trous, paires, leçons manuscrites…)</small>
+                </div>
+                <div className="conn-task-input-wrap">
+                  <input
+                    value={draft.api.taskModelExerciseBuilder || ''}
+                    onChange={(e) => updateApi('taskModelExerciseBuilder', e.target.value)}
+                    placeholder="Utilise le modèle principal par défaut"
+                  />
+                </div>
+              </div>
+
               {/* Option 6 : Synthèse Vocale (TTS) */}
               <div className="conn-task-row">
                 <div className="conn-task-info">

@@ -7,6 +7,7 @@ import { Reader, Cover } from './features/Reader'
 import { LearningFocus } from './features/LearningFocus'
 import { SpeakingPage } from './features/SpeakingPage'
 import { WritingPage } from './features/writing/WritingPage'
+import { ExercisesPage } from './features/exercises/ExercisesPage'
 import { CameraProvider } from './features/speaking/CameraContext'
 import { FloatingMiniCam } from './features/speaking/FloatingMiniCam'
 import { Settings } from './features/Settings'
@@ -45,16 +46,20 @@ import {
   type ResourceContextTarget,
 } from './components/ResourceModals'
 
-type Page = 'home' | 'reading' | 'speaking' | 'writing' | 'settings'
+type Page = 'home' | 'reading' | 'speaking' | 'writing' | 'exercises' | 'settings'
 
 type UI = (typeof copy)[keyof typeof copy]
-type NavLabel = 'home' | 'reading' | 'speaking' | 'writing'
+type NavLabel = 'home' | 'reading' | 'speaking' | 'writing' | 'exercises'
 
 const navItems: { id: Page; icon: React.ReactNode; label: NavLabel }[] = [
   { id: 'home', icon: <Home size={18} />, label: 'home' },
   { id: 'reading', icon: <BookOpen size={18} />, label: 'reading' },
   { id: 'speaking', icon: <Mic size={18} />, label: 'speaking' },
   { id: 'writing', icon: <PenLine size={18} />, label: 'writing' },
+]
+
+const extraNavItems: { id: Page; icon: React.ReactNode; label: NavLabel }[] = [
+  { id: 'exercises', icon: <Sparkles size={18} />, label: 'exercises' },
 ]
 
 export const isGenericImportedAuthor = (author?: string) => {
@@ -180,6 +185,14 @@ export default function App() {
                   }}
                 />
               )}
+              {page === 'exercises' && (
+                <ExercisesPage
+                  state={state}
+                  onChange={change}
+                  ui={ui}
+                  onAiTaskChange={setIsAiTaskRunning}
+                />
+              )}
               {page === 'settings' && <Settings settings={state.settings} state={state}
                 onSave={(settings) => change({ ...state, settings })}
                 onChangeState={change}
@@ -187,7 +200,14 @@ export default function App() {
             </>
           )}
         </section>
-        <nav className="mobile-nav">{navItems.slice(1).map((item) => <button className={page === item.id ? 'active' : ''} onClick={() => go(item.id)} key={item.id}><b>{item.icon}</b><span>{t[item.label]}</span></button>)}</nav>
+        <nav className="mobile-nav">
+          {navItems.slice(1).concat(extraNavItems).map((item) => (
+            <button className={page === item.id ? 'active' : ''} onClick={() => go(item.id)} key={item.id}>
+              <b>{item.icon}</b>
+              <span>{t[item.label]}</span>
+            </button>
+          ))}
+        </nav>
         {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} shortcuts={state.settings.teacherShortcuts} onUpdateResource={(updated) => change(upsertResource(state, updated))} onClose={() => setFocusId(null)} />}
         
         {/* Floating Mini Cam (shown when camera is active and user is outside speaking page) */}
@@ -293,6 +313,14 @@ function Sidebar({
   isAiTaskRunning?: boolean
   onToggleCollapse: () => void
 }) {
+  const [isSeeMoreOpen, setIsSeeMoreOpen] = useState(page === 'exercises')
+
+  useEffect(() => {
+    if (page === 'exercises') {
+      setIsSeeMoreOpen(true)
+    }
+  }, [page])
+
   return (
     <aside className="sidebar">
       <Brand onClick={() => setPage('home')} />
@@ -308,6 +336,40 @@ function Sidebar({
             <span className="side-label">{t[item.label]}</span>
           </button>
         ))}
+
+        {/* Separator Line with "Voir plus" accordion */}
+        <div className="sidebar-accordion-section">
+          <button
+            type="button"
+            className="sidebar-see-more-toggle"
+            onClick={() => setIsSeeMoreOpen(!isSeeMoreOpen)}
+            title={isSeeMoreOpen ? t.seeLess : t.seeMore}
+          >
+            <span className="see-more-line" />
+            <span className="see-more-label-wrap">
+              <span className="side-label">{isSeeMoreOpen ? t.seeLess : t.seeMore}</span>
+              <ChevronDown
+                size={12}
+                className={`see-more-chevron ${isSeeMoreOpen ? 'open' : ''}`}
+              />
+            </span>
+            <span className="see-more-line" />
+          </button>
+
+          <div className={`sidebar-accordion-body ${isSeeMoreOpen ? 'open' : ''}`}>
+            {extraNavItems.map((item) => (
+              <button
+                className={page === item.id ? 'active' : ''}
+                onClick={() => setPage(item.id)}
+                key={item.id}
+                title={collapsed ? t[item.label] : undefined}
+              >
+                <b>{item.icon}</b>
+                <span className="side-label">{t[item.label]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </nav>
       <div className="side-bottom">
         {isAiTaskRunning && (
