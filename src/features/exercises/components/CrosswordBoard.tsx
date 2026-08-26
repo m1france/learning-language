@@ -105,16 +105,39 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
     setUserGrid(nextGrid)
 
     if (char && char.match(/[A-Z]/)) {
-      moveToNextCell(r, c, activeDirection)
+      moveToNextCell(r, c, activeDirection, nextGrid)
     }
   }
 
-  const moveToNextCell = (r: number, c: number, dir: 'across' | 'down') => {
-    const nextR = dir === 'down' ? r + 1 : r
-    const nextC = dir === 'across' ? c + 1 : c
-    if (nextR < gridRows && nextC < gridCols && activeCellMap[nextR][nextC]) {
-      setSelectedCell({ row: nextR, col: nextC })
-      cellInputRefs.current[nextR]?.[nextC]?.focus()
+  const moveToNextCell = (
+    r: number,
+    c: number,
+    dir: 'across' | 'down',
+    currentGrid: string[][] = userGrid,
+  ) => {
+    let nextR = dir === 'down' ? r + 1 : r
+    let nextC = dir === 'across' ? c + 1 : c
+    let firstActiveCell: { row: number; col: number } | null = null
+
+    while (nextR < gridRows && nextC < gridCols && activeCellMap[nextR][nextC]) {
+      if (!firstActiveCell) {
+        firstActiveCell = { row: nextR, col: nextC }
+      }
+      // If this cell is empty, stop and focus it
+      if (!currentGrid[nextR]?.[nextC]) {
+        setSelectedCell({ row: nextR, col: nextC })
+        cellInputRefs.current[nextR]?.[nextC]?.focus()
+        return
+      }
+      // Skip already filled cell and continue
+      nextR = dir === 'down' ? nextR + 1 : nextR
+      nextC = dir === 'across' ? nextC + 1 : nextC
+    }
+
+    // If all remaining cells in the word are filled, focus the immediate next cell
+    if (firstActiveCell) {
+      setSelectedCell(firstActiveCell)
+      cellInputRefs.current[firstActiveCell.row]?.[firstActiveCell.col]?.focus()
     }
   }
 
@@ -128,7 +151,10 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
       }
     } else if (e.key === 'ArrowRight') {
       e.preventDefault()
-      moveToNextCell(r, c, 'across')
+      if (c + 1 < gridCols && activeCellMap[r][c + 1]) {
+        setSelectedCell({ row: r, col: c + 1 })
+        cellInputRefs.current[r]?.[c + 1]?.focus()
+      }
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault()
       if (c - 1 >= 0 && activeCellMap[r][c - 1]) {
@@ -137,7 +163,10 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
       }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault()
-      moveToNextCell(r, c, 'down')
+      if (r + 1 < gridRows && activeCellMap[r + 1][c]) {
+        setSelectedCell({ row: r + 1, col: c })
+        cellInputRefs.current[r + 1]?.[c]?.focus()
+      }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       if (r - 1 >= 0 && activeCellMap[r - 1][c]) {
@@ -220,7 +249,7 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
         )}
       </div>
 
-      {/* Grand Central 2D Grid with floating tooltip positioning */}
+      {/* Grand Central 2D Grid without outer border or background */}
       <div className="crossword-grand-grid-wrapper">
         <div
           className="crossword-grand-grid"
@@ -253,7 +282,20 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
                     r < activeClue.row + activeClue.answer.length))
 
               if (!isActive) {
-                return <div key={`${r}_${c}`} className="crossword-cell blocked" />
+                return (
+                  <div
+                    key={`${r}_${c}`}
+                    className="crossword-cell blocked"
+                    aria-hidden="true"
+                    style={{
+                      visibility: 'hidden',
+                      pointerEvents: 'none',
+                      background: 'transparent',
+                      border: 'none',
+                      boxShadow: 'none',
+                    }}
+                  />
+                )
               }
 
               return (
@@ -278,6 +320,7 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
                     className="cell-input"
                     value={isSubmitted ? correctVal : userVal}
                     disabled={isSubmitted}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => handleCellChange(r, c, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, r, c)}
                   />
@@ -310,71 +353,6 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
               )
             }),
           )}
-        </div>
-      </div>
-
-      {/* Clues Summary Chips under the grid */}
-      <div className="crossword-clues-chips-tray">
-        <div className="clues-subgroup">
-          <span className="subgroup-title">Horizontal :</span>
-          <div className="chips-list">
-            {clues
-              .filter((c) => c.direction === 'across')
-              .map((c) => (
-                <button
-                  key={`ac_${c.number}`}
-                  type="button"
-                  className={`clue-chip ${
-                    selectedCell?.row === c.row &&
-                    selectedCell?.col >= c.col &&
-                    selectedCell?.col < c.col + c.answer.length &&
-                    activeDirection === 'across'
-                      ? 'active'
-                      : ''
-                  }`}
-                  onClick={() => {
-                    setSelectedCell({ row: c.row, col: c.col })
-                    setActiveDirection('across')
-                    cellInputRefs.current[c.row]?.[c.col]?.focus()
-                  }}
-                  title={c.clue}
-                >
-                  <span className="chip-num">{c.number}</span>
-                  <span className="chip-text">{c.clue}</span>
-                </button>
-              ))}
-          </div>
-        </div>
-
-        <div className="clues-subgroup">
-          <span className="subgroup-title">Vertical :</span>
-          <div className="chips-list">
-            {clues
-              .filter((c) => c.direction === 'down')
-              .map((c) => (
-                <button
-                  key={`dn_${c.number}`}
-                  type="button"
-                  className={`clue-chip ${
-                    selectedCell?.col === c.col &&
-                    selectedCell?.row >= c.row &&
-                    selectedCell?.row < c.row + c.answer.length &&
-                    activeDirection === 'down'
-                      ? 'active'
-                      : ''
-                  }`}
-                  onClick={() => {
-                    setSelectedCell({ row: c.row, col: c.col })
-                    setActiveDirection('down')
-                    cellInputRefs.current[c.row]?.[c.col]?.focus()
-                  }}
-                  title={c.clue}
-                >
-                  <span className="chip-num">{c.number}</span>
-                  <span className="chip-text">{c.clue}</span>
-                </button>
-              ))}
-          </div>
         </div>
       </div>
 

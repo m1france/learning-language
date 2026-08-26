@@ -375,56 +375,54 @@ export function WritingEditor({
 
   return (
     <div className={`writing-editor-view ${initialEntry ? 'is-editing-mode' : ''}`}>
-      {/* Top Header - only show when there's content to display */}
-      {(initialEntry || secondsRemaining !== null || promptWords.length > 0 || (onNavigateToSpeaking && stats.words >= 10)) && (
-        <header className="writing-editor-header">
-          <div className="header-left">
-            <div className="title-block">
-              {initialEntry && (
-                <span className="editing-session-badge" title="Cette session est en cours de modification">
-                  <Edit2 size={11} />
-                  <span>En édition</span>
-                </span>
-              )}
+      {/* Main Page Header */}
+      <header className="page-header writing-page-header">
+        <div className="writing-header-title-group">
+          <h1>Journaling</h1>
+          {initialEntry && (
+            <span className="editing-session-badge" title="Cette session est en cours de modification">
+              <Edit2 size={11} />
+              <span>En édition</span>
+            </span>
+          )}
+        </div>
+
+        <div className="writing-header-actions">
+          {/* Sprint Timer Badge */}
+          {secondsRemaining !== null && (
+            <div className={`sprint-countdown-badge ${secondsRemaining < 60 ? 'urgent' : ''}`}>
+              <Clock size={14} />
+              <span>{formatTimer(secondsRemaining)}</span>
             </div>
-          </div>
+          )}
 
-          <div className="header-right">
-            {/* Sprint Timer Badge */}
-            {secondsRemaining !== null && (
-              <div className={`sprint-countdown-badge ${secondsRemaining < 60 ? 'urgent' : ''}`}>
-                <Clock size={14} />
-                <span>{formatTimer(secondsRemaining)}</span>
-              </div>
-            )}
-
-            {/* Quick Target Words Completion */}
-            {promptWords.length > 0 && (
-              <div className="writing-quick-stats">
-                <span
-                  className={`stat-pill completion ${usedWords.length === promptWords.length ? 'all-done' : ''
-                    }`}
-                >
-                  {usedWords.length}/{promptWords.length} cibles
-                </span>
-              </div>
-            )}
-
-            {/* Show "Pratiquer à l'oral" only when text has at least 10 words */}
-            {onNavigateToSpeaking && stats.words >= 10 && (
-              <button
-                type="button"
-                className="primary prompter-export-btn"
-                onClick={handleSendToPrompter}
-                title="Envoyer ce texte au prompteur du studio Parler"
+          {/* Quick Target Words Completion */}
+          {promptWords.length > 0 && (
+            <div className="writing-quick-stats">
+              <span
+                className={`stat-pill completion ${
+                  usedWords.length === promptWords.length ? 'all-done' : ''
+                }`}
               >
-                <Video size={16} />
-                <span>Pratiquer à l'oral</span>
-              </button>
-            )}
-          </div>
-        </header>
-      )}
+                {usedWords.length}/{promptWords.length} cibles
+              </span>
+            </div>
+          )}
+
+          {/* Show "Pratiquer à l'oral" only when text has at least 10 words */}
+          {onNavigateToSpeaking && stats.words >= 10 && (
+            <button
+              type="button"
+              className="primary prompter-export-btn"
+              onClick={handleSendToPrompter}
+              title="Envoyer ce texte au prompteur du studio Parler"
+            >
+              <Video size={16} />
+              <span>Pratiquer à l'oral</span>
+            </button>
+          )}
+        </div>
+      </header>
 
       {/* Target Word Bricks (if any) */}
       {promptWords.length > 0 && (

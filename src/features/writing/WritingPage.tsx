@@ -66,11 +66,6 @@ export function WritingPage({
 
   return (
     <div className="page writing-page-hub">
-      <header className="page-header">
-        <div>
-          <h1>Journaling</h1>
-        </div>
-      </header>
       <WritingEditor
         key={editingEntry?.id ?? 'new-session'}
         config={activeConfig}
