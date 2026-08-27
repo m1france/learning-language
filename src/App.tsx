@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, Difficulty, Language, Resource, UiLanguage } from './domain'
 import { BUILTIN_CATEGORIES, id } from './domain'
-import { addMarking, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
+import { addMarking, batchMarkWordsKnown, batchUpsertWordDetails, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
+import { getResourceWordStats } from './features/readingProgressUtils'
 import { importFromFile, importFromUrl, paragraphsToResource } from './importer'
 import { Reader, Cover } from './features/Reader'
 import { LearningFocus } from './features/LearningFocus'
@@ -29,12 +30,16 @@ import {
   ChevronDown,
   Sun,
   Moon,
-  ArrowRight,
   Plus,
+  ArrowRight,
+  Search,
   Upload,
+  Link2,
+  Trash2,
+  Lock,
+  Compass,
   Loader2,
   X,
-  Trash2,
   Check,
   ArrowUpDown,
   Play,
@@ -51,20 +56,24 @@ import {
 type Page = 'home' | 'reading' | 'speaking' | 'writing' | 'exercises' | 'settings'
 
 type UI = (typeof copy)[keyof typeof copy]
-type NavLabel = 'home' | 'reading' | 'speaking' | 'writing' | 'exercises'
+type NavItem = {
+  id: Page
+  label: 'home' | 'reading' | 'speaking' | 'writing' | 'exercises'
+  icon: React.ReactNode
+}
 
-const navItems: { id: Page; icon: React.ReactNode; label: NavLabel }[] = [
-  { id: 'home', icon: <Home size={18} />, label: 'home' },
-  { id: 'reading', icon: <BookOpen size={18} />, label: 'reading' },
-  { id: 'speaking', icon: <Mic size={18} />, label: 'speaking' },
-  { id: 'writing', icon: <PenLine size={18} />, label: 'writing' },
+const navItems: NavItem[] = [
+  { id: 'home', label: 'home', icon: <Home size={18} /> },
+  { id: 'reading', label: 'reading', icon: <BookOpen size={18} /> },
+  { id: 'speaking', label: 'speaking', icon: <Mic size={18} /> },
+  { id: 'writing', label: 'writing', icon: <PenLine size={18} /> },
 ]
 
-const extraNavItems: { id: Page; icon: React.ReactNode; label: NavLabel }[] = [
-  { id: 'exercises', icon: <Sparkles size={18} />, label: 'exercises' },
+const extraNavItems: NavItem[] = [
+  { id: 'exercises', label: 'exercises', icon: <Sparkles size={18} /> },
 ]
 
-export const isGenericImportedAuthor = (author?: string) => {
+export const isGenericImportedAuthor = (author?: string): boolean => {
   if (!author) return true
   const lower = author.trim().toLowerCase()
   return lower === 'importé' || lower === 'importés' || lower === 'imported' || lower === 'texte importé' || lower === 'sans auteur'
@@ -78,6 +87,12 @@ export default function App() {
   const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem('vivre-side-collapsed') === '1')
   const [speakingPrompterText, setSpeakingPrompterText] = useState<string | null>(null)
   const [isAiTaskRunning, setIsAiTaskRunning] = useState(false)
+  const [aiTaskLabel, setAiTaskLabel] = useState<string | undefined>(undefined)
+
+  const handleAiTaskChange = (running: boolean, label?: string) => {
+    setIsAiTaskRunning(running)
+    setAiTaskLabel(label)
+  }
 
   const [pendingNavPage, setPendingNavPage] = useState<Page | null>(null)
   const writingDraftGuardRef = useRef<{ hasDraftMoreThan10Words: boolean; saveDraft: () => void } | null>(null)
@@ -96,8 +111,9 @@ export default function App() {
   const ui = state.settings.uiLanguage
   const t = copy[ui]
   const reader = state.resources.find((resource) => resource.id === readerId) ?? null
-  const change = (next: AppState) => setState(next)
-  const setUiLanguage = (uiLanguage: UiLanguage) => change({ ...state, settings: { ...state.settings, uiLanguage } })
+  const change = (next: AppState | ((prev: AppState) => AppState)) =>
+    setState((prev) => (typeof next === 'function' ? (prev ? next(prev) : prev) : next))
+  const setUiLanguage = (uiLanguage: UiLanguage) => change((prev) => ({ ...prev, settings: { ...prev.settings, uiLanguage } }))
 
   const go = (next: Page) => {
     if (page === 'writing' && next !== 'writing' && writingDraftGuardRef.current?.hasDraftMoreThan10Words) {
@@ -128,10 +144,11 @@ export default function App() {
           setPage={go}
           t={t}
           theme={state.settings.theme}
-          toggleTheme={() => change({ ...state, settings: { ...state.settings, theme: state.settings.theme === 'light' ? 'dark' : 'light' } })}
+          toggleTheme={() => change((prev) => ({ ...prev, settings: { ...prev.settings, theme: prev.settings.theme === 'light' ? 'dark' : 'light' } }))}
           name={state.settings.name}
           collapsed={sideCollapsed}
           isAiTaskRunning={isAiTaskRunning}
+          aiTaskLabel={aiTaskLabel}
           onToggleCollapse={toggleSide}
         />
         <section className="page-canvas">
@@ -139,24 +156,26 @@ export default function App() {
           {reader ? (
             <Reader state={state} resource={reader} ui={ui}
               onBack={() => setReaderId(null)}
-              onUpdate={(updated) => change(upsertResource(state, updated))}
-              onDelete={(resourceId) => { change(deleteResource(state, resourceId)); setReaderId(null) }}
-              onProgress={(resourceId, chapterIndex, paragraphIndex) => change({
-                ...state,
-                progress: { ...state.progress, [resourceId]: { resourceId, chapterIndex, paragraphIndex, completed: false, updatedAt: new Date().toISOString() } },
-              })}
-              onSaveWord={(args) => change(upsertWordDetails(state, args))}
-              onDeleteWord={(raw, language) => change(deleteWord(state, raw, language))}
+              onUpdate={(updated) => change((prev) => upsertResource(prev, updated))}
+              onDelete={(resourceId) => { change((prev) => deleteResource(prev, resourceId)); setReaderId(null) }}
+              onProgress={(resourceId, chapterIndex, paragraphIndex) => change((prev) => ({
+                ...prev,
+                progress: { ...prev.progress, [resourceId]: { resourceId, chapterIndex, paragraphIndex, completed: false, updatedAt: new Date().toISOString() } },
+              }))}
+              onSaveWord={(args) => change((prev) => upsertWordDetails(prev, args))}
+              onBatchSaveWords={(items) => change((prev) => batchUpsertWordDetails(prev, items))}
+              onBatchMarkKnown={(words, language) => change((prev) => batchMarkWordsKnown(prev, words, language))}
+              onDeleteWord={(raw, language) => change((prev) => deleteWord(prev, raw, language))}
               onOpenFocus={(resource) => setFocusId(resource.id)}
-              onPageSize={(size) => change({ ...state, settings: { ...state.settings, readerPageSize: size } })}
-              onWordMark={(key, mark) => change(setWordMark(state, key, mark))}
-              onSilentMark={(key, letterIndex) => change(toggleSilentMark(state, key, letterIndex))}
-              onMarkColor={(type, color) => change({ ...state, settings: { ...state.settings, markColors: { ...state.settings.markColors, [type]: color } } })}
-              onAddMarking={(label, color) => change(addMarking(state, label, color))}
-              onRenameMarking={(markingId, newLabel) => change(renameMarking(state, markingId, newLabel))}
-              onDeleteMarking={(markingId) => change(deleteMarking(state, markingId))}
-              onResetMarks={(language) => change(resetResourceMarks(state, language))}
-              onAiTaskChange={setIsAiTaskRunning} />
+              onPageSize={(size) => change((prev) => ({ ...prev, settings: { ...prev.settings, readerPageSize: size } }))}
+              onWordMark={(key, mark) => change((prev) => setWordMark(prev, key, mark))}
+              onSilentMark={(key, letterIndex) => change((prev) => toggleSilentMark(prev, key, letterIndex))}
+              onMarkColor={(type, color) => change((prev) => ({ ...prev, settings: { ...prev.settings, markColors: { ...prev.settings.markColors, [type]: color } } }))}
+              onAddMarking={(label, color) => change((prev) => addMarking(prev, label, color))}
+              onRenameMarking={(markingId, newLabel) => change((prev) => renameMarking(prev, markingId, newLabel))}
+              onDeleteMarking={(markingId) => change((prev) => deleteMarking(prev, markingId))}
+              onResetMarks={(language) => change((prev) => resetResourceMarks(prev, language))}
+              onAiTaskChange={handleAiTaskChange} />
           ) : (
             <>
               {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onNavigate={go} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}
@@ -312,6 +331,7 @@ function Sidebar({
   name,
   collapsed,
   isAiTaskRunning,
+  aiTaskLabel,
   onToggleCollapse,
 }: {
   page: Page
@@ -322,6 +342,7 @@ function Sidebar({
   name: string
   collapsed: boolean
   isAiTaskRunning?: boolean
+  aiTaskLabel?: string
   onToggleCollapse: () => void
 }) {
   const [isSeeMoreOpen, setIsSeeMoreOpen] = useState(page === 'exercises')
@@ -386,10 +407,10 @@ function Sidebar({
         {isAiTaskRunning && (
           <div
             className="sidebar-ai-task-pill"
-            title="L'IA analyse le mot en arrière-plan"
+            title="L'IA analyse en arrière-plan"
           >
             <span className="sidebar-ai-pulse-dot" />
-            <span className="side-label">Analyse IA en cours…</span>
+            <span className="side-label">{aiTaskLabel || 'Analyse IA en cours…'}</span>
           </div>
         )}
         <div className="side-bottom-actions">
@@ -785,7 +806,23 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
                 <span>{labelFor(resource.type)} · {t.difficulty[resource.difficulty]}</span>
                 <h3>{resource.title}</h3>
                 {resource.author && !isGenericImportedAuthor(resource.author) && !resource.isAiGenerated && <p>{resource.author}</p>}
-                <div className="card-bottom"><small>{resource.minutes} min</small>{progressFor(state, resource) > 0 && <div className="tiny-progress"><i style={{ width: `${progressFor(state, resource)}%` }} /></div>}</div>
+                {(() => {
+                  const stats = getResourceWordStats(state, resource)
+                  return (
+                    <div className="card-bottom">
+                      <small>
+                        {stats.totalUnique > 0
+                          ? `${stats.knownCount} / ${stats.totalUnique} mots connus (${stats.percentage}%)`
+                          : `${resource.minutes} min`}
+                      </small>
+                      {stats.percentage > 0 && (
+                        <div className="tiny-progress">
+                          <i style={{ width: `${stats.percentage}%` }} />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </button>
           )

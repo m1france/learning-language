@@ -1,4 +1,5 @@
 import { type ApiSettings, type AppState, type Language, type LearnedWord, type MarkingDefinition, type Resource, type UserSettings, type WordMark, type WordRelationType, type WritingEntry, id, normalizeWord, todayKey } from './domain'
+import { getResourceWordStats } from './features/readingProgressUtils'
 
 const stateKey = 'vivre-la-langue:state:v2'
 
@@ -323,6 +324,77 @@ export const upsertWordDetails = (state: AppState, args: {
   }
 }
 
+/** Save or update multiple words in bulk without race conditions or overwrites. */
+export const batchUpsertWordDetails = (
+  state: AppState,
+  items: {
+    raw: string
+    sentence?: string
+    language: Language
+    sourceResourceId?: string
+    translation: string
+    parent?: string
+    pronunciation?: string
+    knowledge?: number
+    tags?: string[]
+    relationType?: WordRelationType
+    partOfSpeech?: string
+  }[],
+): AppState => {
+  let nextWords = [...state.words]
+  const now = new Date().toISOString()
+
+  for (const args of items) {
+    const cleaned = args.raw.replace(/^[.,!?;:()"“”«»'’\s]+|[.,!?;:()"“”«»'’\s]+$/g, '').replace(/\s+/g, ' ').trim()
+    if (!cleaned) continue
+    const normalized = normalizeWord(cleaned)
+    const existingIndex = nextWords.findIndex((w) => w.normalized === normalized && w.language === args.language)
+
+    if (existingIndex >= 0) {
+      const existing = nextWords[existingIndex]
+      nextWords[existingIndex] = {
+        ...existing,
+        word: cleaned,
+        translation: args.translation,
+        parent: args.parent || undefined,
+        relationType: args.relationType ?? existing.relationType,
+        partOfSpeech: args.partOfSpeech ?? existing.partOfSpeech ?? '',
+        phonetic: args.pronunciation || undefined,
+        knowledge: args.knowledge ?? existing.knowledge,
+        tags: args.tags ?? existing.tags ?? [],
+        definitions: args.translation ? [{ definition: '', translation: args.translation }] : existing.definitions,
+        status: (args.knowledge === 6 || existing.status === 'mastered') ? 'mastered' : existing.status,
+      }
+    } else {
+      nextWords.push({
+        id: id('word'),
+        word: cleaned,
+        normalized,
+        language: args.language,
+        phonetic: args.pronunciation || undefined,
+        translation: args.translation,
+        parent: args.parent || undefined,
+        relationType: args.relationType,
+        partOfSpeech: args.partOfSpeech ?? '',
+        knowledge: args.knowledge ?? 6,
+        definitions: args.translation ? [{ definition: '', translation: args.translation }] : [],
+        contextSentence: args.sentence ?? '',
+        sourceResourceId: args.sourceResourceId,
+        sourceSkill: 'reading',
+        status: (args.knowledge === 6) ? 'mastered' : 'learning',
+        intervalDays: (args.knowledge === 6) ? 30 : 1,
+        nextReview: todayKey(),
+        easeFactor: 2.5,
+        reviewCount: (args.knowledge === 6) ? 1 : 0,
+        tags: args.tags ?? [],
+        createdAt: now,
+      })
+    }
+  }
+
+  return { ...state, words: nextWords }
+}
+
 /** Reverse / reassign reference word for a word family */
 export const setWordAsReference = (
   state: AppState,
@@ -420,11 +492,55 @@ export const knownParents = (state: AppState, language: Language): string[] => {
 }
 
 export const progressFor = (state: AppState, resource: Resource) => {
-  const value = state.progress[resource.id]
-  if (!value) return 0
-  const total = resource.chapters.reduce((sum, chapter) => sum + chapter.paragraphs.length, 0)
-  const before = resource.chapters.slice(0, value.chapterIndex).reduce((sum, chapter) => sum + chapter.paragraphs.length, 0)
-  return Math.min(100, Math.round(((before + value.paragraphIndex + (value.completed ? 1 : 0)) / Math.max(total, 1)) * 100))
+  return getResourceWordStats(state, resource).percentage
+}
+
+/** Mark an array of words as known (Knowledge 6 / Mastered) in bulk. */
+export const batchMarkWordsKnown = (
+  state: AppState,
+  wordsToMark: { raw: string; sentence?: string }[],
+  language: Language,
+): AppState => {
+  let nextWords = [...state.words]
+  const now = new Date().toISOString()
+
+  for (const item of wordsToMark) {
+    const cleaned = item.raw.replace(/^[.,!?;:()"“”«»'’\s]+|[.,!?;:()"“”«»'’\s]+$/g, '').replace(/\s+/g, ' ').trim()
+    if (!cleaned) continue
+    const normalized = normalizeWord(cleaned)
+    const existingIndex = nextWords.findIndex((w) => w.normalized === normalized && w.language === language)
+
+    if (existingIndex >= 0) {
+      const existing = nextWords[existingIndex]
+      nextWords[existingIndex] = {
+        ...existing,
+        word: cleaned,
+        knowledge: 6,
+        status: 'mastered',
+      }
+    } else {
+      nextWords.push({
+        id: id('word'),
+        word: cleaned,
+        normalized,
+        language,
+        knowledge: 6,
+        status: 'mastered',
+        partOfSpeech: '',
+        definitions: [],
+        contextSentence: item.sentence ?? '',
+        sourceSkill: 'reading',
+        intervalDays: 30,
+        nextReview: todayKey(),
+        easeFactor: 2.5,
+        reviewCount: 1,
+        tags: [],
+        createdAt: now,
+      })
+    }
+  }
+
+  return { ...state, words: nextWords }
 }
 
 export const upsertResource = (state: AppState, resource: Resource): AppState => {

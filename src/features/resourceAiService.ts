@@ -3,6 +3,7 @@ import { id } from '../domain'
 import { paragraphsToResource, autoDifficulty } from '../importer'
 import { getAgentConfig } from './speaking/wordAiService'
 import { getLanguageName } from '../languages'
+import { extractAiContent, extractCleanJson } from './aiResponseUtils'
 
 export type StoryLength = 'short' | 'medium' | 'long' | 'novel'
 
@@ -120,6 +121,7 @@ JSON Schema:
           { role: 'user', content: userInstruction },
         ],
         temperature: isRandom ? 0.85 : 0.7,
+        max_tokens: 3500,
       }),
     })
 
@@ -132,21 +134,29 @@ JSON Schema:
     }
 
     const data = await response.json()
-    const content = data.choices?.[0]?.message?.content?.trim() || ''
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
+    const content = extractAiContent(data)
+    if (!content) {
+      return {
+        ok: false,
+        error: 'L’IA n’a pas retourné de réponse. Réessaie avec un autre modèle.',
+      }
+    }
+
+    let parsed: any
+    try {
+      parsed = extractCleanJson<Partial<GeneratedResourceResult> & { coverPrompt?: string }>(content)
+    } catch {
       return {
         ok: false,
         error: 'L’IA n’a pas retourné de format JSON valide. Réessaie avec un autre modèle.',
       }
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as Partial<GeneratedResourceResult> & { coverPrompt?: string }
     const title = (parsed.title || 'Nouvelle ressource').trim()
     // AI-generated resources stay authorless: never persist an invented author name.
     const author = ''
     const paragraphs = Array.isArray(parsed.paragraphs)
-      ? parsed.paragraphs.map((p) => String(p).trim()).filter((p) => p.length > 5)
+      ? (parsed.paragraphs as unknown[]).map((p) => String(p).trim()).filter((p: string) => p.length > 5)
       : []
 
     if (paragraphs.length === 0) {
@@ -313,15 +323,15 @@ Return ONLY a JSON object:
           { role: 'user', content: prompt },
         ],
         temperature: 0.1,
+        max_tokens: 3500,
       }),
     })
 
     if (response.ok) {
       const data = await response.json()
-      const content = data.choices?.[0]?.message?.content?.trim() || ''
-      const jsonMatch = content.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]) as Partial<GeneratedResourceResult>
+      const content = extractAiContent(data)
+      if (content) {
+        const parsed = extractCleanJson<Partial<GeneratedResourceResult>>(content)
         if (Array.isArray(parsed.paragraphs) && parsed.paragraphs.length > 0) {
           const validDifficulty: Difficulty =
             parsed.difficulty === 'beginner' ||

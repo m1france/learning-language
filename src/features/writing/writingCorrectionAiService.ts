@@ -1,6 +1,7 @@
 import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { getAgentConfig } from '../speaking/wordAiService'
 import { getLanguageName } from '../../languages'
+import { extractAiContent, extractCleanJson, isReasoningModel } from '../aiResponseUtils'
 
 export type CorrectionType =
   | 'letter_error'       // Faute d'orthographe, lettres en trop/manquantes, coquille
@@ -172,6 +173,7 @@ Return STRICTLY valid JSON matching:
 
   try {
     const isFish = agentConfig.model.toLowerCase().includes('fish')
+    const isReasoning = isReasoningModel(agentConfig.model)
     const response = await fetch(agentConfig.endpoint, {
       method: 'POST',
       headers: {
@@ -187,7 +189,8 @@ Return STRICTLY valid JSON matching:
           { role: 'user', content: `Student's text to analyze and correct:\n\n"""\n${clean}\n"""` },
         ],
         temperature: 0.2,
-        ...(!isFish && !agentConfig.endpoint.includes('moonshot') ? { response_format: { type: 'json_object' } } : {}),
+        max_tokens: 3500,
+        ...(!isFish && !isReasoning && !agentConfig.endpoint.includes('moonshot') ? { response_format: { type: 'json_object' } } : {}),
       }),
     })
 
@@ -200,31 +203,17 @@ Return STRICTLY valid JSON matching:
     }
 
     const data = await response.json()
-    const content = data.choices?.[0]?.message?.content || ''
+    const content = extractAiContent(data)
 
     if (!content) {
       return { ok: false, error: 'L’IA a renvoyé une réponse vide.' }
     }
 
-    // Clean JSON markdown codeblocks if returned
-    const jsonCleaned = content
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim()
-
     let parsed: any
     try {
-      parsed = JSON.parse(jsonCleaned)
+      parsed = extractCleanJson(content)
     } catch {
-      // Fallback: search for first { and last }
-      const start = jsonCleaned.indexOf('{')
-      const end = jsonCleaned.lastIndexOf('}')
-      if (start !== -1 && end !== -1) {
-        parsed = JSON.parse(jsonCleaned.slice(start, end + 1))
-      } else {
-        return { ok: false, error: 'Impossible de décoder la réponse JSON de l’IA.' }
-      }
+      return { ok: false, error: 'Impossible de décoder la réponse JSON de l’IA.' }
     }
 
     const rawCorrections = Array.isArray(parsed.corrections) ? parsed.corrections : []

@@ -22,6 +22,7 @@ import {
   Plus,
   X,
   Check,
+  CheckCircle2,
   Minimize2,
   Globe,
   BookOpen,
@@ -35,6 +36,8 @@ import {
 } from 'lucide-react'
 import { speak } from '../ai'
 import { analyzeWordWithAi } from './speaking/wordAiService'
+import { getResourceWordStats, extractPageUniqueWords } from './readingProgressUtils'
+import { PageSavedWordsModal } from './vocabulary/PageSavedWordsModal'
 import {
   ResourceContextMenu,
   EditContentModal,
@@ -241,7 +244,7 @@ export function Cover({
   )
 }
 
-export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProgress, onSaveWord, onDeleteWord, onOpenFocus, onPageSize, onWordMark, onSilentMark, onMarkColor, onAddMarking, onRenameMarking, onDeleteMarking, onResetMarks, onAiTaskChange }: {
+export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProgress, onSaveWord, onBatchSaveWords, onBatchMarkKnown, onDeleteWord, onOpenFocus, onPageSize, onWordMark, onSilentMark, onMarkColor, onAddMarking, onRenameMarking, onDeleteMarking, onResetMarks, onAiTaskChange }: {
   state: AppState
   resource: Resource
   ui: UiLanguage
@@ -250,6 +253,8 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   onDelete: (resourceId: string) => void
   onProgress: (resourceId: string, chapterIndex: number, paragraphIndex: number) => void
   onSaveWord: (args: WordDetails) => void
+  onBatchSaveWords?: (items: WordDetails[]) => void
+  onBatchMarkKnown?: (words: { raw: string; sentence?: string }[], language: Language) => void
   onDeleteWord?: (raw: string, language: Language) => void
   onOpenFocus: (resource: Resource) => void
   onPageSize: (size: number) => void
@@ -260,7 +265,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   onRenameMarking?: (markingId: string, newLabel: string) => void
   onDeleteMarking?: (markingId: string) => void
   onResetMarks?: (language: Language) => void
-  onAiTaskChange?: (running: boolean) => void
+  onAiTaskChange?: (running: boolean, label?: string) => void
 }) {
   const t = readerCopy[ui]
   const settings = state.settings
@@ -328,6 +333,114 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [editingContent, setEditingContent] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // Lute-style page validation & batch AI save state
+  const [pageValidationMenu, setPageValidationMenu] = useState<{ x: number; y: number } | null>(null)
+  const [isBatchSavingAi, setIsBatchSavingAi] = useState(false)
+  const [savedPageWordsList, setSavedPageWordsList] = useState<LearnedWord[]>([])
+  const [showSavedToast, setShowSavedToast] = useState(false)
+  const [showSavedModal, setShowSavedModal] = useState(false)
+
+  const handleOpenValidationMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setPageContextMenu(null)
+    setContextMenu(null)
+    setWordContextMenu(null)
+    setMultiWordMenu(null)
+    setPageValidationMenu({ x: rect.left, y: rect.top })
+  }
+
+  const handleMarkPageAsDone = () => {
+    const pageWords = extractPageUniqueWords(page)
+    if (pageWords.length > 0) {
+      onBatchMarkKnown?.(pageWords, resource.language)
+    }
+    setPageValidationMenu(null)
+  }
+
+  const handleSaveAllPageWordsWithAi = async () => {
+    setPageValidationMenu(null)
+    const pageWords = extractPageUniqueWords(page)
+    if (pageWords.length === 0) return
+
+    setIsBatchSavingAi(true)
+    onAiTaskChange?.(true, `Analyse IA en cours (0/${pageWords.length})…`)
+    const newlySaved: LearnedWord[] = []
+    const allWordDetails: WordDetails[] = []
+
+    for (let i = 0; i < pageWords.length; i++) {
+      const item = pageWords[i]
+      onAiTaskChange?.(true, `Analyse IA en cours (${i + 1}/${pageWords.length})…`)
+      try {
+        const analysis = await analyzeWordWithAi({
+          word: item.raw,
+          targetLang: resource.language,
+          uiLang: ui,
+          existingTags: knownTags(state, resource.language),
+          api: state.settings.api,
+          contextSentence: item.sentence,
+        })
+        const wordDetails: WordDetails = {
+          raw: analysis.word || item.raw,
+          sentence: item.sentence,
+          language: resource.language,
+          sourceResourceId: resource.id,
+          translation: analysis.translation,
+          parent: analysis.parent,
+          pronunciation: analysis.pronunciation,
+          partOfSpeech: analysis.partOfSpeech,
+          tags: analysis.tags,
+          knowledge: 6,
+        }
+        allWordDetails.push(wordDetails)
+        newlySaved.push({
+          id: `saved-${Date.now()}-${i}`,
+          word: analysis.word || item.raw,
+          normalized: item.normalized,
+          language: resource.language,
+          phonetic: analysis.pronunciation,
+          translation: analysis.translation,
+          parent: analysis.parent,
+          partOfSpeech: analysis.partOfSpeech || '',
+          knowledge: 6,
+          definitions: analysis.translation ? [{ definition: '', translation: analysis.translation }] : [],
+          contextSentence: item.sentence,
+          sourceResourceId: resource.id,
+          sourceSkill: 'reading',
+          status: 'mastered',
+          intervalDays: 30,
+          nextReview: new Date().toISOString(),
+          easeFactor: 2.5,
+          reviewCount: 1,
+          tags: analysis.tags || [],
+          createdAt: new Date().toISOString(),
+        })
+      } catch (err) {
+        console.warn('[Reader] Batch analyze word error:', err)
+      }
+    }
+
+    if (allWordDetails.length > 0) {
+      if (onBatchSaveWords) {
+        onBatchSaveWords(allWordDetails)
+      } else {
+        for (const wd of allWordDetails) {
+          onSaveWord(wd)
+        }
+      }
+    }
+
+    setIsBatchSavingAi(false)
+    onAiTaskChange?.(false)
+    if (newlySaved.length > 0) {
+      setSavedPageWordsList(newlySaved)
+      setShowSavedToast(true)
+      setShowSavedModal(true)
+      setTimeout(() => setShowSavedToast(false), 12000)
+    }
+  }
 
   const toggleLeftPanel = () => {
     const next = !leftCollapsed
@@ -670,6 +783,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     onBack()
   }
 
+  const wordStats = useMemo(() => getResourceWordStats(state, resource), [state.words, resource])
   const progress = Math.round(((safePage + 1) / pages.length) * 100)
   const activeType = markMode && markMode !== 'silent' ? markMode : null
 
@@ -693,7 +807,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   return <div className={`reader-page ${markMode === 'silent' ? 'arm-silent' : ''} ${markMode && markMode !== 'silent' ? 'arm-word' : ''}`}
     onClick={() => {
       if (Date.now() - lastMultiWordDragTimestamp < 500) return
-      setSelected(null); setContextMenu(null); setPageContextMenu(null); setResourceMenuTarget(null); setWordContextMenu(null); setMultiWordMenu(null); if (wikiArmed) setWikiArmed(false)
+      setSelected(null); setContextMenu(null); setPageContextMenu(null); setResourceMenuTarget(null); setWordContextMenu(null); setMultiWordMenu(null); setPageValidationMenu(null); if (wikiArmed) setWikiArmed(false)
     }}
     onContextMenu={handlePageContextMenu}>
     <header className="reader-top">
@@ -742,7 +856,13 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               : <h2 className="title-clickable" title={t.renameHint} onClick={(event) => { event.stopPropagation(); setEditingTitle(true) }}>{resource.title}</h2>}
             {resource.author && !isGenericImportedAuthor(resource.author) && <p>{resource.author}</p>}
           </div>
-          <div className="reader-progress"><div><span>{t.progress}</span><strong>{progress}%</strong></div><i><b style={{ width: `${progress}%` }} /></i></div>
+          <div className="reader-progress">
+            <div>
+              <span>{t.progress}</span>
+              <strong>{wordStats.totalUnique > 0 ? `${wordStats.knownCount} / ${wordStats.totalUnique} (${wordStats.percentage}%)` : `${progress}%`}</strong>
+            </div>
+            <i><b style={{ width: `${wordStats.totalUnique > 0 ? wordStats.percentage : progress}%` }} /></i>
+          </div>
           <div className="reader-page-nav">
             <button aria-label={t.previous} disabled={safePage === 0} onClick={(event) => { event.stopPropagation(); gotoPage(safePage - 1) }}><ChevronLeft size={18} /></button>
             <span>{safePage + 1} / {pages.length}</span>
@@ -792,6 +912,19 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             </div>
           )
         })}
+
+        {/* Bottom-Page Discreet Validation Button (Lute style) */}
+        <div className="reader-page-validation-row">
+          <button
+            type="button"
+            className="reader-page-check-btn"
+            onClick={handleOpenValidationMenu}
+            title="Valider la page (Enregistrer tous les mots ou marquer comme terminé)"
+            aria-label="Valider la page"
+          >
+            <CheckCircle2 size={22} className="check-icon" />
+          </button>
+        </div>
       </article>
 
       <aside className="reader-right">
@@ -1119,6 +1252,97 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           </button>
         )}
       </div>
+    )}
+
+    {pageValidationMenu && (
+      <div
+        className="page-context-menu page-validation-menu"
+        style={{
+          left: Math.max(10, Math.min(window.innerWidth - 220, pageValidationMenu.x - 90)),
+          top: Math.max(10, pageValidationMenu.y - 100),
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="page-context-item"
+          onClick={handleSaveAllPageWordsWithAi}
+          disabled={isBatchSavingAi}
+        >
+          <i><Sparkles size={15} /></i> Enregistrer tous les mots
+        </button>
+        <button
+          type="button"
+          className="page-context-item"
+          onClick={handleMarkPageAsDone}
+        >
+          <i><Check size={15} /></i> Terminé
+        </button>
+      </div>
+    )}
+
+    {showSavedToast && savedPageWordsList.length > 0 && (
+      <div
+        className="reader-saved-toast glass"
+        onClick={() => {
+          setShowSavedToast(false)
+          setShowSavedModal(true)
+        }}
+        role="button"
+        tabIndex={0}
+        title="Cliquer pour afficher la liste complète des mots enregistrés"
+      >
+        <div className="saved-toast-icon-wrap">
+          <Sparkles size={16} />
+          <span className="saved-toast-pulse-dot" />
+        </div>
+        <div className="saved-toast-text">
+          <strong>
+            {savedPageWordsList.length === 1
+              ? '1 mot enregistré avec succès'
+              : `${savedPageWordsList.length} mots enregistrés avec succès`}
+          </strong>
+          <span>Clique pour voir la liste complète et modifier</span>
+        </div>
+        <button
+          type="button"
+          className="saved-toast-close"
+          onClick={(e) => {
+            e.stopPropagation()
+            setShowSavedToast(false)
+          }}
+          title="Fermer"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    )}
+
+    {showSavedModal && (
+      <PageSavedWordsModal
+        isOpen={showSavedModal}
+        onClose={() => setShowSavedModal(false)}
+        words={savedPageWordsList
+          .map((sw) => {
+            const current = state.words.find((w) => w.normalized === sw.normalized && w.language === resource.language)
+            return current || sw
+          })
+          .filter((w) => state.words.some((sw) => sw.normalized === w.normalized && sw.language === resource.language))}
+        language={resource.language}
+        api={state.settings.api}
+        onEditWord={(word) => {
+          setSelected({
+            raw: word.word,
+            sentence: word.contextSentence || word.word,
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+          })
+        }}
+        onDeleteWord={(raw, lang) => {
+          onDeleteWord?.(raw, lang)
+          setSavedPageWordsList((prev) => prev.filter((p) => normalizeWord(p.word) !== normalizeWord(raw)))
+        }}
+      />
     )}
 
     <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={toggleWiki} />

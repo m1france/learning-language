@@ -2,6 +2,7 @@ import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { getAgentConfig } from './wordAiService'
 import { getLanguageName } from '../../languages'
 import type { SpeakingVideoAnalysis, SpeakingVideoAdviceItem, SpeakingVideoAdviceCategory } from './speakingStorage'
+import { extractAiContent, extractCleanJson, isReasoningModel } from '../aiResponseUtils'
 
 const UI_LANG_NAMES: Record<string, string> = {
   fr: 'Français',
@@ -151,7 +152,7 @@ export async function analyzeSpeakingVideo(
   // 2. Resolve Agent / OpenRouter config
   // Default to the best free OpenRouter model (google/gemini-2.0-flash-exp:free)
   const defaultModel = 'google/gemini-2.0-flash-exp:free'
-  const customModel = api.taskModelSpeakingAnalysis?.trim() || defaultModel
+  const customModel = api.taskModelSpeakingAnalysis?.trim() || api.agentModel?.trim() || defaultModel
   const agentConfig = getAgentConfig(api, customModel)
 
   if (!agentConfig || !agentConfig.key) {
@@ -267,6 +268,9 @@ ${referenceText ? `Read text: """${referenceText}"""` : ''}
 
 Listen to the recording carefully, transcribe and evaluate my speech rhythm, phonetics, grammar, and give me timestamped advice.`
 
+    const isReasoning = isReasoningModel(agentConfig.model)
+    const isFish = agentConfig.model.toLowerCase().includes('fish')
+
     // Construct message content
     const userContent: Array<
       | { type: 'text'; text: string }
@@ -274,8 +278,8 @@ Listen to the recording carefully, transcribe and evaluate my speech rhythm, pho
       | { type: 'input_audio'; input_audio: { data: string; format: string } }
     > = [{ type: 'text', text: userPromptText }]
 
-    if (mediaDataUrl) {
-      // Pass data URL as multimodal input
+    if (mediaDataUrl && !isReasoning) {
+      // Pass data URL as multimodal input when not a pure text reasoning model
       userContent.push({
         type: 'image_url',
         image_url: {
@@ -283,8 +287,6 @@ Listen to the recording carefully, transcribe and evaluate my speech rhythm, pho
         },
       })
     }
-
-    const isFish = agentConfig.model.toLowerCase().includes('fish')
 
     const response = await fetch(agentConfig.endpoint, {
       method: 'POST',
@@ -298,10 +300,11 @@ Listen to the recording carefully, transcribe and evaluate my speech rhythm, pho
         model: agentConfig.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent },
+          { role: 'user', content: isReasoning ? userPromptText : userContent },
         ],
         temperature: 0.3,
-        ...(!isFish && !agentConfig.endpoint.includes('moonshot') ? { response_format: { type: 'json_object' } } : {}),
+        max_tokens: 4096,
+        ...(!isFish && !isReasoning && !agentConfig.endpoint.includes('moonshot') ? { response_format: { type: 'json_object' } } : {}),
       }),
     })
 
@@ -314,30 +317,17 @@ Listen to the recording carefully, transcribe and evaluate my speech rhythm, pho
     }
 
     const data = await response.json()
-    const rawContent = data.choices?.[0]?.message?.content || ''
+    const rawContent = extractAiContent(data)
 
     if (!rawContent) {
       return { ok: false, error: 'L’IA OpenRouter a renvoyé une réponse vide.' }
     }
 
-    // Clean JSON markdown code blocks
-    const jsonCleaned = rawContent
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim()
-
     let parsed: any
     try {
-      parsed = JSON.parse(jsonCleaned)
+      parsed = extractCleanJson(rawContent)
     } catch {
-      const start = jsonCleaned.indexOf('{')
-      const end = jsonCleaned.lastIndexOf('}')
-      if (start !== -1 && end !== -1) {
-        parsed = JSON.parse(jsonCleaned.slice(start, end + 1))
-      } else {
-        return { ok: false, error: 'Impossible de décoder la réponse JSON retournée par le modèle.' }
-      }
+      return { ok: false, error: 'Impossible de décoder la réponse JSON retournée par le modèle.' }
     }
 
     const rawItems: any[] = Array.isArray(parsed.items) ? parsed.items : []

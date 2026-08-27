@@ -2,6 +2,7 @@ import type { ApiSettings, Difficulty, Language, UiLanguage } from '../../domain
 import type { ExerciseDefinition, ExerciseMode } from './exercisesDomain'
 import { getLanguageName } from '../../languages'
 import { buildGuaranteedCrossword } from './crosswordUtils'
+import { extractAiContent, extractCleanJson, isReasoningModel } from '../aiResponseUtils'
 
 const UI_LANG_NAMES: Record<string, string> = {
   fr: 'Français',
@@ -213,17 +214,19 @@ OUTPUT JSON FORMAT:
   async function executeRequest(withJsonFormat: boolean): Promise<any> {
     const isFish = aiConfig!.model.toLowerCase().includes('fish')
     const isMoonshot = aiConfig!.endpoint.includes('moonshot')
+    const isReasoning = isReasoningModel(aiConfig!.model)
 
-    const bodyObj: Record<string, any> = {
+    const bodyObj: any = {
       model: aiConfig!.model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
       temperature: 0.3,
+      max_tokens: 3500,
     }
 
-    if (withJsonFormat && !isFish && !isMoonshot) {
+    if (withJsonFormat && !isFish && !isMoonshot && !isReasoning) {
       bodyObj.response_format = { type: 'json_object' }
     }
 
@@ -259,29 +262,17 @@ OUTPUT JSON FORMAT:
     }
 
     const data = await response.json()
-    const content = data.choices?.[0]?.message?.content || ''
+    const content = extractAiContent(data)
 
     if (!content) {
       return { ok: false, error: 'L’IA a renvoyé une réponse vide.' }
     }
 
-    const jsonCleaned = content
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim()
-
     let parsed: any
     try {
-      parsed = JSON.parse(jsonCleaned)
+      parsed = extractCleanJson(content)
     } catch {
-      const start = jsonCleaned.indexOf('{')
-      const end = jsonCleaned.lastIndexOf('}')
-      if (start !== -1 && end !== -1) {
-        parsed = JSON.parse(jsonCleaned.slice(start, end + 1))
-      } else {
-        return { ok: false, error: 'Impossible de décoder la réponse JSON de l’IA.' }
-      }
+      return { ok: false, error: 'Impossible de décoder la réponse JSON de l’IA.' }
     }
 
     const resolvedMode: ExerciseMode = parsed.mode || (requestedMode === 'auto' ? 'fill_in_blanks' : requestedMode)

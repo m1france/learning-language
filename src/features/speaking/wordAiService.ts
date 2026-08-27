@@ -1,6 +1,7 @@
 import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { formatIpaPronunciation } from '../vocabulary/phoneticUtils'
 import { getLanguageName, getUiLanguageName } from '../../languages'
+import { extractAiContent, extractCleanJson } from '../aiResponseUtils'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
@@ -156,6 +157,8 @@ Return ONLY a JSON object with this exact structure (no other markdown or commen
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${agentConfig.key}`,
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+          'X-Title': 'Language Learning App - Word AI',
         },
         body: JSON.stringify({
           model: agentConfig.model,
@@ -170,15 +173,15 @@ Return ONLY a JSON object with this exact structure (no other markdown or commen
             },
           ],
           temperature: 0.1,
+          max_tokens: 1500,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        const content = data.choices?.[0]?.message?.content?.trim() || ''
-        const jsonMatch = content.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]) as Partial<AiWordAnalysisResult>
+        const content = extractAiContent(data)
+        if (content) {
+          const parsed = extractCleanJson<Partial<AiWordAnalysisResult>>(content)
           const validTags = Array.isArray(parsed.tags)
             ? parsed.tags.filter((t) => typeof t === 'string' && existingTags.includes(t))
             : []
@@ -231,7 +234,7 @@ export async function testAgentConnection(
       body: JSON.stringify({
         model: config.model,
         messages: [{ role: 'user', content: 'Say "OK" in one single word.' }],
-        max_tokens: 10,
+        max_tokens: 300,
         temperature: 0.1,
       }),
     })
@@ -240,7 +243,7 @@ export async function testAgentConnection(
       return { ok: false, model: config.model, error: `HTTP ${response.status}: ${err.slice(0, 180)}` }
     }
     const data = await response.json()
-    const reply = data.choices?.[0]?.message?.content?.trim() || 'OK'
+    const reply = extractAiContent(data) || 'OK'
     return { ok: true, model: config.model, error: reply ? undefined : 'Réponse vide' }
   } catch (caught) {
     return { ok: false, model: config.model, error: caught instanceof Error ? caught.message : 'Erreur réseau' }
