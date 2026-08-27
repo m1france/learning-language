@@ -953,7 +953,7 @@ h2 {
   flex-direction: column;
   gap: 10px;
   flex: 1;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .speaking-session-row {
