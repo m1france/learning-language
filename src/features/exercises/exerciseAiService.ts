@@ -1,5 +1,6 @@
 import type { ApiSettings, Difficulty, Language, UiLanguage } from '../../domain'
 import type { ExerciseDefinition, ExerciseMode } from './exercisesDomain'
+import { getLanguageName } from '../../languages'
 import { buildGuaranteedCrossword } from './crosswordUtils'
 
 const UI_LANG_NAMES: Record<string, string> = {
@@ -136,7 +137,7 @@ export async function generateExerciseWithAi(
     }
   }
 
-  const targetLangName = learningLanguage === 'fr' ? 'French' : 'English'
+  const targetLangName = getLanguageName(learningLanguage)
   const explanationLang = UI_LANG_NAMES[uiLanguage] || 'Français'
 
   const systemPrompt = `You are a world-class pedagogical language professor creating a bespoke, high-quality interactive exercise.

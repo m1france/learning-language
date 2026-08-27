@@ -1,8 +1,10 @@
+import type { Language } from './domain'
+
 export type DefaultPromptWord = {
   id: string
   word: string
   normalized: string
-  language: 'en' | 'fr'
+  language: Language
   translation: string
   phonetic: string
   contextSentence: string

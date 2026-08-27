@@ -1,5 +1,6 @@
 import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { getAgentConfig } from './wordAiService'
+import { getLanguageName } from '../../languages'
 import type { SpeakingVideoAnalysis, SpeakingVideoAdviceItem, SpeakingVideoAdviceCategory } from './speakingStorage'
 
 const UI_LANG_NAMES: Record<string, string> = {
@@ -160,7 +161,7 @@ export async function analyzeSpeakingVideo(
     }
   }
 
-  const targetLangName = targetLanguage === 'fr' ? 'French' : 'English'
+  const targetLangName = getLanguageName(targetLanguage)
   const explanationLang = UI_LANG_NAMES[uiLanguage] || 'Français'
   const formattedDuration = `${Math.floor(durationSeconds / 60)}m ${Math.round(durationSeconds % 60)}s`
 

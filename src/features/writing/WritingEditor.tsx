@@ -42,7 +42,7 @@ type WritingEditorProps = {
 }
 
 // Common logical connectors for English and French
-const CONNECTORS: Record<'en' | 'fr', { category: string; words: string[] }[]> = {
+const CONNECTORS: Record<string, { category: string; words: string[] }[]> = {
   en: [
     { category: 'Addition', words: ['Furthermore', 'Moreover', 'In addition', 'Besides', 'Not to mention'] },
     { category: 'Contrast', words: ['However', 'Nevertheless', 'On the other hand', 'Yet', 'Although'] },
@@ -622,7 +622,7 @@ export function WritingEditor({
               {activeDrawerTab === 'connectors' && (
                 <div className="connectors-tab">
                   <p className="tab-hint">Clique sur un connecteur pour l'insérer dans ton texte :</p>
-                  {(CONNECTORS[learningLang] || CONNECTORS.fr).map((group) => (
+                  {(CONNECTORS[learningLang] || CONNECTORS.en || CONNECTORS.fr || []).map((group) => (
                     <div key={group.category} className="connector-group">
                       <h6>{group.category}</h6>
                       <div className="connector-chips">

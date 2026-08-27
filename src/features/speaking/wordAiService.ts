@@ -1,5 +1,6 @@
-import type { ApiSettings, Language } from '../../domain'
+import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { formatIpaPronunciation } from '../vocabulary/phoneticUtils'
+import { getLanguageName, getUiLanguageName } from '../../languages'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
@@ -123,17 +124,19 @@ export async function analyzeWordWithAi(args: {
 
   if (agentConfig) {
     try {
+      const targetLangName = getLanguageName(targetLang)
+      const uiLangName = getUiLanguageName(uiLang as UiLanguage)
       const prompt = `You are a linguistics and language learning dictionary assistant.
-Target language: ${targetLang === 'en' ? 'English (US)' : 'French'}.
-Learner interface language: ${uiLang === 'fr' ? 'French' : 'English'}.
+Target language: ${targetLangName}.
+Learner interface language: ${uiLangName}.
 Word to analyze: "${clean}".
 Context: "${contextSentence || ''}".
 User's existing vocabulary tags: ${JSON.stringify(existingTags)}.
 
 Tasks:
 1. "word": provide the exact word or canonical form "${clean}".
-2. "translation": provide the concise and accurate translation in ${uiLang === 'fr' ? 'French' : 'English'}. If the word has multiple common meanings or nuances, provide up to 3 translations separated by commas and a space (e.g. "serrer, resserrer, tendre").
-3. "pronunciation": provide standard General American / US IPA transcription enclosed in slashes. Represent syllable boundaries with " · " and the primary stressed syllable formatted in markdown bold (**syllable**), without the "'" or "ˈ" stress marker (e.g. "/**taɪ** · tən/", "/kəm · **pjuː** · tər/", "/**wɔː** · tər/").
+2. "translation": provide the concise and accurate translation in ${uiLangName}. If the word has multiple common meanings or nuances, provide up to 3 translations separated by commas and a space (e.g. "serrer, resserrer, tendre").
+3. "pronunciation": provide standard IPA transcription for ${targetLangName} enclosed in slashes. Represent syllable boundaries with " · " and the primary stressed syllable formatted in markdown bold (**syllable**), without the "'" or "ˈ" stress marker (e.g. "/**taɪ** · tən/", "/kəm · **pjuː** · tər/", "/**wɔː** · tər/").
 4. "parent": if "${clean}" is an inflected/conjugated form (e.g. "went" -> "go", "speaking" -> "speak"), provide the base lemma; otherwise empty string "".
 5. "partOfSpeech": noun, verb, adjective, adverb, expression, or phrase.
 6. "tags": an array of tags. IMPORTANT: ONLY include tags that strictly exist in the User's existing vocabulary tags list (${JSON.stringify(existingTags)}). If none match or the list is empty, return an empty array [].

@@ -1,5 +1,6 @@
 import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { getAgentConfig } from '../speaking/wordAiService'
+import { getLanguageName } from '../../languages'
 
 export type CorrectionType =
   | 'letter_error'       // Faute d'orthographe, lettres en trop/manquantes, coquille
@@ -127,7 +128,7 @@ export async function analyzeWritingWithAi(args: {
     }
   }
 
-  const targetLangName = learningLanguage === 'fr' ? 'French' : 'English'
+  const targetLangName = getLanguageName(learningLanguage)
   const explanationLang = UI_LANG_NAMES[uiLanguage] || 'Français'
 
   const systemPrompt = `You are a helpful, expert language teacher correcting a student's writing in ${targetLangName}.

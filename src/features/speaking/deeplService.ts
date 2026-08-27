@@ -1,5 +1,6 @@
 import type { ApiSettings } from '../../domain'
 import { getAgentConfig } from './wordAiService'
+import { getDeepLTargetLang, getLanguageName } from '../../languages'
 
 export type DeepLTranslationResult = {
   translatedText: string
@@ -40,12 +41,16 @@ export async function translateText(
   const apiSettings = typeof apiOrKey === 'object' ? apiOrKey : undefined
   const preferAi = apiSettings?.speakingTranslationProvider === 'ai'
 
+  const deepLTarget = getDeepLTargetLang(targetLang)
+  const targetName = getLanguageName(targetLang)
+  const sourceName = getLanguageName(sourceLang)
+
   const tryAiTranslate = async (): Promise<DeepLTranslationResult | null> => {
     if (!apiSettings) return null
     const agent = getAgentConfig(apiSettings, apiSettings.taskModelSpeakingTranslation)
     if (!agent || !agent.key) return null
     try {
-      const prompt = `Translate the following ${sourceLang} text into ${targetLang}. Return ONLY the translation, without any quote marks, markdown or commentary.\n\n"${trimmed}"`
+      const prompt = `Translate the following ${sourceName} text into ${targetName}. Return ONLY the translation, without any quote marks, markdown or commentary.\n\n"${trimmed}"`
       const response = await fetch(agent.endpoint, {
         method: 'POST',
         headers: {
@@ -105,7 +110,7 @@ export async function translateText(
           },
           body: JSON.stringify({
             text: [trimmed],
-            target_lang: targetLang.toUpperCase(),
+            target_lang: deepLTarget,
             source_lang: sourceLang.toUpperCase(),
           }),
         })

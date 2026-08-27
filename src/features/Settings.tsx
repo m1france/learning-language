@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { BUILTIN_CATEGORIES, id } from '../domain'
 import { copy, UI_LANGUAGES } from '../i18n'
+import { TOP_LEARNING_LANGUAGES } from '../languages'
 import { listVoices, speak, testOpenRouterTts } from '../ai'
 import { testAgentConnection } from './speaking/wordAiService'
 import { testDeepLConnection } from './speaking/deeplService'
@@ -417,7 +418,15 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
           <div className="settings-fields">
             <label>Ton prénom<input value={draft.name} onChange={(event) => update('name', event.target.value)} /></label>
             <label>Langue de l’interface<select value={draft.uiLanguage} onChange={(event) => update('uiLanguage', event.target.value as UiLanguage)}>{UI_LANGUAGES.map((language) => <option value={language.id} key={language.id}>{language.flag} {language.name}</option>)}</select></label>
-            <label>Langue apprise<select value={draft.learningLanguage} onChange={(event) => update('learningLanguage', event.target.value as Language)}><option value="en">English (américain)</option><option value="fr">Français</option></select></label>
+            <label>Langue apprise
+              <select value={draft.learningLanguage} onChange={(event) => update('learningLanguage', event.target.value as Language)}>
+                {TOP_LEARNING_LANGUAGES.map((language) => (
+                  <option value={language.id} key={language.id}>
+                    {language.flag} {language.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>Apparence<select value={draft.theme} onChange={(event) => update('theme', event.target.value as UserSettings['theme'])}><option value="light">Clair chaleureux</option><option value="dark">Sombre calme</option></select></label>
           </div>
           <aside className="settings-tip"><span><Sparkles size={16} /></span><p>La langue de l’interface traduit les menus, boutons et instructions — jamais le contenu de tes ressources importées.</p></aside>

@@ -1,4 +1,4 @@
-export type Language = 'en' | 'fr'
+export type Language = string
 /** Interface language (everything except imported content). */
 export type UiLanguage = 'en' | 'fr' | 'es' | 'zh' | 'ru' | 'pt'
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced' | 'native'

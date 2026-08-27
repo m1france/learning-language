@@ -1,4 +1,5 @@
 import type { ApiSettings, Language } from './domain'
+import { getLanguageBcp47 } from './languages'
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
@@ -35,7 +36,7 @@ export function bestVoice(lang: Language, preferredName?: string): SpeechSynthes
 
 export function listVoices(lang: Language): SpeechSynthesisVoice[] {
   if (typeof speechSynthesis === 'undefined') return []
-  const target = lang === 'en' ? 'en' : 'fr'
+  const target = (lang || 'en').toLowerCase().slice(0, 2)
   const voices = speechSynthesis.getVoices()
   return voices
     .filter((voice) => voice.lang.toLowerCase().startsWith(target))
@@ -243,7 +244,7 @@ function speakWithGoogle(text: string, lang: Language): Promise<boolean> {
   return new Promise((resolve) => {
     const chunks = chunkForTts(text)
     if (!chunks.length) { resolve(false); return }
-    const tl = lang === 'en' ? 'en' : 'fr'
+    const tl = (lang || 'en').toLowerCase().slice(0, 2)
     let index = 0
     let settled = false
     const ok = (value: boolean) => { if (!settled) { settled = true; resolve(value) } }
@@ -288,7 +289,7 @@ export async function speak(text: string, lang: Language, api: ApiSettings): Pro
     const utterance = new SpeechSynthesisUtterance(text)
     const voice = bestVoice(lang, api.ttsVoice || undefined)
     if (voice) utterance.voice = voice
-    utterance.lang = lang === 'en' ? 'en-US' : 'fr-FR'
+    utterance.lang = getLanguageBcp47(lang)
     utterance.rate = 0.92
     utterance.pitch = 1
     speechSynthesis.speak(utterance)
@@ -306,7 +307,7 @@ export async function speak(text: string, lang: Language, api: ApiSettings): Pro
   const utterance = new SpeechSynthesisUtterance(text)
   const voice = bestVoice(lang, api.ttsVoice || undefined)
   if (voice) utterance.voice = voice
-  utterance.lang = lang === 'en' ? 'en-US' : 'fr-FR'
+  utterance.lang = getLanguageBcp47(lang)
   utterance.rate = 0.92
   utterance.pitch = 1
   speechSynthesis.speak(utterance)

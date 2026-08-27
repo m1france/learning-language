@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import type { AppState, Difficulty, Resource, UiLanguage } from './domain'
+import type { AppState, Difficulty, Language, Resource, UiLanguage } from './domain'
 import { BUILTIN_CATEGORIES, id } from './domain'
 import { addMarking, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
 import { importFromFile, importFromUrl, paragraphsToResource } from './importer'
@@ -15,6 +15,7 @@ import { VocabularyVaultModal } from './features/vocabulary/VocabularyVaultModal
 import { AddResourceModal } from './components/AddResourceModal'
 import { prompts } from './data'
 import { baseUi, copy, detectUiLanguage, UI_LANGUAGES } from './i18n'
+import { TOP_LEARNING_LANGUAGES } from './languages'
 import { doveWhite } from './assets/doveWhite'
 import {
   Home,
@@ -36,6 +37,7 @@ import {
   Trash2,
   Check,
   ArrowUpDown,
+  Play,
 } from 'lucide-react'
 import {
   ResourceContextMenu,
@@ -89,7 +91,7 @@ export default function App() {
   useEffect(() => { if (state) saveState(state) }, [state])
   useEffect(() => { if (state) document.documentElement.dataset.theme = state.settings.theme }, [state?.settings.theme]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!state) return <Onboarding onComplete={(name, uiLanguage) => setState(createState({ name, uiLanguage }))} />
+  if (!state) return <Onboarding onComplete={(name, uiLanguage, learningLanguage) => setState(createState({ name, uiLanguage, learningLanguage }))} />
 
   const ui = state.settings.uiLanguage
   const t = copy[ui]
@@ -157,7 +159,7 @@ export default function App() {
               onAiTaskChange={setIsAiTaskRunning} />
           ) : (
             <>
-              {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}
+              {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onNavigate={go} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}
               {page === 'reading' && <ReadingLibrary state={state} t={t} onOpen={(resource) => setReaderId(resource.id)} onAdd={(resource) => change(upsertResource(state, resource))} onChange={change} onAiTaskChange={setIsAiTaskRunning} />}
               {page === 'speaking' && (
                 <SpeakingPage
@@ -269,16 +271,16 @@ function Brand({ onClick }: { onClick?: () => void }) {
     : <div className="brand">{content}</div>
 }
 
-function Onboarding({ onComplete }: { onComplete: (name: string, uiLanguage: UiLanguage) => void }) {
+function Onboarding({ onComplete }: { onComplete: (name: string, uiLanguage: UiLanguage, learningLanguage: Language) => void }) {
   const [name, setName] = useState('')
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(() => detectUiLanguage())
+  const [learningLanguage, setLearningLanguage] = useState<Language>('en')
   const t = copy[uiLanguage]
   return <main className="onboarding">
     <div className="onboard-grain" />
     <nav className="onboard-top"><Brand /><span>01 / 01</span></nav>
     <div className="onboard-content">
       <h1>{t.onboardTitleA}<br /><i>{t.onboardTitleB}</i></h1>
-      <p className="onboard-intro">{t.onboardIntro}</p>
       <div className="onboard-form">
         <label>{t.name}<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder={t.nameHint} /></label>
         <label className="onboard-lang">{t.interfaceQuestion}
@@ -286,7 +288,16 @@ function Onboarding({ onComplete }: { onComplete: (name: string, uiLanguage: UiL
             {UI_LANGUAGES.map((language) => <option value={language.id} key={language.id}>{language.flag} {language.name}</option>)}
           </select>
         </label>
-        <button className="primary large" disabled={!name.trim()} onClick={() => onComplete(name.trim(), uiLanguage)}>{t.start} <ArrowRight size={16} /></button>
+        <label className="onboard-lang">{t.learningLanguageQuestion}
+          <select value={learningLanguage} onChange={(event) => setLearningLanguage(event.target.value as Language)}>
+            {TOP_LEARNING_LANGUAGES.map((language) => (
+              <option value={language.id} key={language.id}>
+                {language.flag} {language.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="primary large" disabled={!name.trim()} onClick={() => onComplete(name.trim(), uiLanguage, learningLanguage)}>{t.start} <ArrowRight size={16} /></button>
       </div>
     </div>
   </main>
@@ -422,17 +433,218 @@ function LanguageFlags({ ui, onUiLanguage }: { ui: UiLanguage; onUiLanguage: (la
   </div>
 }
 
-function Dashboard({ name, state, ui, onUiLanguage, onWrite, onContinue, t }: { name: string; state: AppState; ui: UiLanguage; onUiLanguage: (language: UiLanguage) => void; onWrite: () => void; onContinue: (resourceId: string) => void; t: UI }) {
-  const current = state.resources[0]
-  const progress = current ? progressFor(state, current) : 0
-  return <div className="page dashboard">
-    <header className="page-header"><div><p className="eyebrow">{t.today.toUpperCase()}</p><h1>{t.welcome}, {name}.</h1><p className="subhead">{t.reading}, {t.speaking}, {t.writing} — {t.homeSubTail}</p></div><LanguageFlags ui={ui} onUiLanguage={onUiLanguage} /></header>
-    <section className="daily-card"><div className="daily-art"><span className="sun" /><span className="horizon" /><span className="city city-one" /><span className="city city-two" /></div><div className="daily-copy"><p className="eyebrow">{t.dayCard.toUpperCase()}</p><h2>{t.cardTitle}</h2><p>{t.cardBody}</p><button className="primary" onClick={onWrite}>{t.startActivity} <ArrowRight size={16} /></button></div><div className="daily-count"><strong>08</strong><span>living<br />words</span></div></section>
-    <section className="dashboard-grid">
-      {current && <article className="continue-card"><div><p className="eyebrow">{t.continueReading.toUpperCase()}</p><h3>{current.title}</h3><p>{progress}% {t.progressDone}</p></div><button className="round-arrow" onClick={() => onContinue(current.id)} aria-label="Continuer"><ArrowRight size={16} /></button><div className="progress"><span style={{ width: `${progress}%` }} /></div></article>}
-      <article className="quiet-card"><span><Sparkles size={20} /></span><div><h3>{t.quietTitle}</h3><p>{t.noPush}</p></div></article>
-    </section>
-  </div>
+function Dashboard({
+  name,
+  state,
+  ui,
+  onUiLanguage,
+  onWrite,
+  onNavigate,
+  onContinue,
+  t,
+}: {
+  name: string
+  state: AppState
+  ui: UiLanguage
+  onUiLanguage: (language: UiLanguage) => void
+  onWrite: () => void
+  onNavigate: (page: Page) => void
+  onContinue: (resourceId: string) => void
+  t: UI
+}) {
+  const carouselRef = useRef<HTMLDivElement>(null)
+
+  const handleScrollRight = () => {
+    if (carouselRef.current) {
+      carouselRef.current.scrollBy({ left: 300, behavior: 'smooth' })
+    }
+  }
+
+  const labelFor = (typeId: string) =>
+    t.categories[typeId] ??
+    state.customCategories.find((category) => category.id === typeId)?.label ??
+    typeId
+
+  const hasResources = state.resources.length > 0
+
+  return (
+    <div className="page dashboard">
+      {/* Header */}
+      <header className="page-header dashboard-header">
+        <div>
+          <h1>{t.welcome}, {name || 'Salut'}.</h1>
+        </div>
+        <LanguageFlags ui={ui} onUiLanguage={onUiLanguage} />
+      </header>
+
+      {/* Top Section: Reprendre là où tu t'es arrêté */}
+      <section className="dashboard-section resume-section-card">
+        <div className="resume-section-head">
+          <h2>{t.resumeWhereYouLeftOff}</h2>
+          <button className="resume-view-all-link" onClick={() => onNavigate('reading')}>
+            {t.viewAll} <ArrowRight size={14} />
+          </button>
+        </div>
+
+        {hasResources ? (
+          <div className="resume-carousel-wrapper">
+            <div className="resume-carousel" ref={carouselRef}>
+              {state.resources.map((resource) => {
+                const progress = progressFor(state, resource)
+                const typeLabel = labelFor(resource.type)
+                return (
+                  <div
+                    className="resume-item-card"
+                    key={resource.id}
+                    onClick={() => onContinue(resource.id)}
+                    role="button"
+                    tabIndex={0}
+                    title={`Continuer : ${resource.title}`}
+                  >
+                    {resource.coverImage ? (
+                      <div
+                        className="card-bg-img"
+                        style={{ backgroundImage: `url(${resource.coverImage})` }}
+                      />
+                    ) : (
+                      <div className={`card-bg-tone cover ${resource.cover || 'coral'}`}>
+                        <span className="cover-type">{typeLabel}</span>
+                        <div className="cover-shape one" />
+                        <div className="cover-shape two" />
+                        <div className="cover-line" />
+                      </div>
+                    )}
+                    <div className="card-gradient-overlay" />
+                    <div className="card-content">
+                      <span className="card-tag">{typeLabel}</span>
+                      <h3 className="card-title">{resource.title}</h3>
+                      <span className="card-detail">
+                        {resource.minutes} min
+                        {resource.author && !isGenericImportedAuthor(resource.author) ? ` · ${resource.author}` : ''}
+                      </span>
+                      <div className="card-progress-track">
+                        <div className="card-progress-bar" style={{ width: `${progress}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {state.resources.length > 2 && (
+              <button
+                className="carousel-next-btn"
+                onClick={handleScrollRight}
+                aria-label="Faire défiler vers la droite"
+              >
+                <ChevronRight size={18} />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="resume-empty-banner">
+            <div className="resume-empty-icon">
+              <BookOpen size={24} />
+            </div>
+            <div className="resume-empty-text">
+              <h4>{t.emptyTitle}</h4>
+              <p>{t.emptyHint}</p>
+            </div>
+            <button className="primary" onClick={() => onNavigate('reading')}>
+              <Plus size={16} /> {t.add}
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* Bottom Row: 2 Smart Layouts (Parler & Ton carnet) */}
+      <div className="dashboard-smart-grid">
+        {/* Parler Section */}
+        <section className="smart-card speaking-smart-card">
+          <div className="smart-card-head">
+            <h3>{t.speaking}</h3>
+            <button className="smart-view-all-link" onClick={() => onNavigate('speaking')}>
+              {t.viewAll} <ArrowRight size={14} />
+            </button>
+          </div>
+          <div className="speaking-sessions-list">
+            <div className="speaking-session-row" onClick={() => onNavigate('speaking')} role="button" tabIndex={0}>
+              <div className="play-icon-box"><Play size={13} fill="currentColor" /></div>
+              <span className="session-title">Session de conversation</span>
+              <span className="session-time">Aujourd’hui</span>
+            </div>
+            <div className="speaking-session-row" onClick={() => onNavigate('speaking')} role="button" tabIndex={0}>
+              <div className="play-icon-box"><Play size={13} fill="currentColor" /></div>
+              <span className="session-title">Discussion libre</span>
+              <span className="session-time">Hier</span>
+            </div>
+            <div className="speaking-session-row" onClick={() => onNavigate('speaking')} role="button" tabIndex={0}>
+              <div className="play-icon-box"><Play size={13} fill="currentColor" /></div>
+              <span className="session-title">Récit du week-end</span>
+              <span className="session-time">16 juin</span>
+            </div>
+            <div className="speaking-session-row" onClick={() => onNavigate('speaking')} role="button" tabIndex={0}>
+              <div className="play-icon-box"><Play size={13} fill="currentColor" /></div>
+              <span className="session-title">Expression spontanée</span>
+              <span className="session-time">13 juin</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Ton carnet Section */}
+        <section className="smart-card notebook-smart-card">
+          <div className="smart-card-head">
+            <h3>{t.yourJournal}</h3>
+            <button className="smart-view-all-link" onClick={onWrite}>
+              {t.openAction} <ArrowRight size={14} />
+            </button>
+          </div>
+          <div
+            className="spiral-notebook-container"
+            onClick={onWrite}
+            role="button"
+            tabIndex={0}
+            title="Ouvrir mon carnet d'écriture"
+          >
+            <div className="spiral-notebook">
+              {/* Central Spiral Rings */}
+              <div className="spiral-rings">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div className="spiral-ring" key={i}>
+                    <span className="ring-coil" />
+                    <span className="ring-hole left" />
+                    <span className="ring-hole right" />
+                  </div>
+                ))}
+              </div>
+
+              {/* Left Page with handwritten quote */}
+              <div className="notebook-page page-left">
+                <div className="quote-wrapper">
+                  <p className="cursive-quote">
+                    Chaque mot appris<br />
+                    est une porte<br />
+                    qui s’ouvre.
+                  </p>
+                  <p className="cursive-sig">— Toi, aujourd’hui</p>
+                </div>
+              </div>
+
+              {/* Right Page with lined paper and bookmark */}
+              <div className="notebook-page page-right">
+                <div className="notebook-bookmark-ribbon" />
+                <div className="notebook-lines">
+                  <span className="lines-placeholder">Écris librement…</span>
+                  {Array.from({ length: 7 }).map((_, i) => (
+                    <div className="ruled-line" key={i} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
 }
 
 function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: { state: AppState; t: UI; onOpen: (r: Resource) => void; onAdd: (r: Resource) => void; onChange: (state: AppState) => void; onAiTaskChange?: (running: boolean) => void }) {

@@ -1,4 +1,4 @@
-import type { Chapter, Difficulty, Resource } from './domain'
+import type { Chapter, Difficulty, Language, Resource } from './domain'
 import { id } from './domain'
 
 /**
@@ -90,7 +90,7 @@ export function paragraphsToResource(args: {
   paragraphs: string[]
   type?: string
   difficulty?: Difficulty
-  language: 'en' | 'fr'
+  language: Language
   sourceUrl?: string
   coverImage?: string
   isAiGenerated?: boolean
@@ -125,7 +125,7 @@ export type ImportOptions = {
 }
 export type ImportResult = { ok: true; resource: Resource } | { ok: false; reason: 'invalid' | 'unreadable' | 'empty' }
 
-export async function importFromUrl(rawUrl: string, language: 'en' | 'fr', options: ImportOptions = {}): Promise<ImportResult> {
+export async function importFromUrl(rawUrl: string, language: Language, options: ImportOptions = {}): Promise<ImportResult> {
   let url: URL
   try {
     url = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`)
@@ -275,7 +275,7 @@ async function importPdf(file: File): Promise<ImportedText | null> {
   return { title: file.name.replace(/\.pdf$/i, ''), author: '', paragraphs }
 }
 
-export async function importFromFile(file: File, language: 'en' | 'fr', options: ImportOptions = {}): Promise<ImportResult> {
+export async function importFromFile(file: File, language: Language, options: ImportOptions = {}): Promise<ImportResult> {
   const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
   const title = file.name.replace(/\.[^.]+$/, '')
 

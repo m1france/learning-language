@@ -261,7 +261,7 @@ export const resolveWordFamily = (
 export const upsertWordDetails = (state: AppState, args: {
   raw: string
   sentence?: string
-  language: 'en' | 'fr'
+  language: Language
   sourceResourceId?: string
   translation: string
   parent?: string
@@ -356,7 +356,7 @@ export const setWordAsReference = (
 }
 
 /** Delete a word from the user's learned/annotated words. */
-export const deleteWord = (state: AppState, rawOrNormalized: string, language: 'en' | 'fr'): AppState => {
+export const deleteWord = (state: AppState, rawOrNormalized: string, language: Language): AppState => {
   const norm = normalizeWord(rawOrNormalized)
   return {
     ...state,
@@ -365,7 +365,7 @@ export const deleteWord = (state: AppState, rawOrNormalized: string, language: '
 }
 
 /** All distinct custom tags already used, for the tag suggestions. */
-export const knownTags = (state: AppState, language?: 'en' | 'fr'): string[] => {
+export const knownTags = (state: AppState, language?: Language): string[] => {
   const set = new Set<string>(state.customTags ?? [])
   state.words.forEach((word) => {
     if (!language || word.language === language) {
@@ -413,7 +413,7 @@ export const deleteCustomTag = (state: AppState, tagToDelete: string): AppState 
 }
 
 /** All distinct parent words already used, for the autocomplete suggestions. */
-export const knownParents = (state: AppState, language: 'en' | 'fr'): string[] => {
+export const knownParents = (state: AppState, language: Language): string[] => {
   const set = new Set<string>()
   state.words.forEach((word) => { if (word.language === language && word.parent) set.add(word.parent) })
   return [...set].sort((a, b) => a.localeCompare(b))

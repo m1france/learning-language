@@ -2,6 +2,7 @@ import type { ApiSettings, Difficulty, Language, Resource } from '../domain'
 import { id } from '../domain'
 import { paragraphsToResource, autoDifficulty } from '../importer'
 import { getAgentConfig } from './speaking/wordAiService'
+import { getLanguageName } from '../languages'
 
 export type StoryLength = 'short' | 'medium' | 'long' | 'novel'
 
@@ -52,7 +53,7 @@ export async function generateResourceWithAi(args: {
     }
   }
 
-  const langName = language === 'fr' ? 'French' : 'English (US)'
+  const langName = getLanguageName(language)
   const levelInfo = DIFFICULTY_DESCRIPTIONS[difficulty] || DIFFICULTY_DESCRIPTIONS.intermediate
   const lengthInfo = LENGTH_INSTRUCTIONS[length] || LENGTH_INSTRUCTIONS.medium
 
