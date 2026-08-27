@@ -8,7 +8,7 @@ import { LearningFocus } from './features/LearningFocus'
 import { SpeakingPage } from './features/SpeakingPage'
 import { WritingPage } from './features/writing/WritingPage'
 import { ExercisesPage } from './features/exercises/ExercisesPage'
-import { CameraProvider } from './features/speaking/CameraContext'
+import { CameraProvider, useCamera } from './features/speaking/CameraContext'
 import { FloatingMiniCam } from './features/speaking/FloatingMiniCam'
 import { Settings } from './features/Settings'
 import { VocabularyVaultModal } from './features/vocabulary/VocabularyVaultModal'
@@ -452,6 +452,7 @@ function Dashboard({
   onContinue: (resourceId: string) => void
   t: UI
 }) {
+  const { sessions, setActiveReviewSession } = useCamera()
   const carouselRef = useRef<HTMLDivElement>(null)
 
   const handleScrollRight = () => {
@@ -466,6 +467,7 @@ function Dashboard({
     typeId
 
   const hasResources = state.resources.length > 0
+  const hasSpeakingSessions = sessions.length > 0
 
   return (
     <div className="page dashboard">
@@ -566,28 +568,38 @@ function Dashboard({
               {t.viewAll} <ArrowRight size={14} />
             </button>
           </div>
-          <div className="speaking-sessions-list">
-            <div className="speaking-session-row" onClick={() => onNavigate('speaking')} role="button" tabIndex={0}>
-              <div className="play-icon-box"><Play size={13} fill="currentColor" /></div>
-              <span className="session-title">Session de conversation</span>
-              <span className="session-time">Aujourd’hui</span>
+          {hasSpeakingSessions ? (
+            <div className="speaking-sessions-list">
+              {sessions.slice(0, 4).map((session) => (
+                <div
+                  className="speaking-session-row"
+                  key={session.id}
+                  onClick={() => {
+                    setActiveReviewSession(session)
+                    onNavigate('speaking')
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="play-icon-box"><Play size={13} fill="currentColor" /></div>
+                  <span className="session-title">{session.title || 'Session de conversation'}</span>
+                  <span className="session-time">
+                    {new Date(session.createdAt).toLocaleDateString(ui === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div className="speaking-session-row" onClick={() => onNavigate('speaking')} role="button" tabIndex={0}>
-              <div className="play-icon-box"><Play size={13} fill="currentColor" /></div>
-              <span className="session-title">Discussion libre</span>
-              <span className="session-time">Hier</span>
+          ) : (
+            <div className="speaking-empty-state">
+              <div className="speaking-empty-icon">
+                <Mic size={22} />
+              </div>
+              <p className="speaking-empty-text">{t.noSpeakingSessions}</p>
+              <button className="primary small" onClick={() => onNavigate('speaking')}>
+                <Plus size={14} /> {t.startSpeakingSession}
+              </button>
             </div>
-            <div className="speaking-session-row" onClick={() => onNavigate('speaking')} role="button" tabIndex={0}>
-              <div className="play-icon-box"><Play size={13} fill="currentColor" /></div>
-              <span className="session-title">Récit du week-end</span>
-              <span className="session-time">16 juin</span>
-            </div>
-            <div className="speaking-session-row" onClick={() => onNavigate('speaking')} role="button" tabIndex={0}>
-              <div className="play-icon-box"><Play size={13} fill="currentColor" /></div>
-              <span className="session-title">Expression spontanée</span>
-              <span className="session-time">13 juin</span>
-            </div>
-          </div>
+          )}
         </section>
 
         {/* Ton carnet Section */}

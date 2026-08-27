@@ -39,6 +39,8 @@ export type AppCopy = {
   viewAll: string
   yourJournal: string
   openAction: string
+  noSpeakingSessions: string
+  startSpeakingSession: string
   darkMode: string
   collapseSidebar: string
   expandSidebar: string
@@ -116,6 +118,8 @@ const fr: AppCopy = {
   viewAll: 'Voir tout',
   yourJournal: 'Ton carnet',
   openAction: 'Ouvrir',
+  noSpeakingSessions: 'Aucun enregistrement pour le moment.',
+  startSpeakingSession: 'Démarrer une session',
   welcome: 'Bienvenue', darkMode: 'Mode sombre', collapseSidebar: 'Réduire la barre latérale', expandSidebar: 'Agrandir la barre latérale', lightMode: 'Mode clair', roleLabel: 'Apprenant au quotidien', home: 'Accueil', reading: 'Lire', speaking: 'Parler', writing: 'Écrire', exercises: 'Exercices', seeMore: 'Voir plus', seeLess: 'Voir moins', settings: 'Paramètres',
   today: 'Aujourd’hui', continueReading: 'Continuer à lire', library: 'Bibliothèque', add: 'Ajouter une ressource',
   all: 'Tout', allLevels: 'Tous niveaux', dayCard: 'Ta carte du jour', startActivity: 'Commencer l’activité',
@@ -152,6 +156,8 @@ const en: AppCopy = {
   viewAll: 'View all',
   yourJournal: 'Your journal',
   openAction: 'Open',
+  noSpeakingSessions: 'No recordings yet.',
+  startSpeakingSession: 'Start a session',
   welcome: 'Welcome', darkMode: 'Dark mode', collapseSidebar: 'Collapse sidebar', expandSidebar: 'Expand sidebar', lightMode: 'Light mode', roleLabel: 'Everyday learner', home: 'Home', reading: 'Read', speaking: 'Speak', writing: 'Write', exercises: 'Exercises', seeMore: 'See more', seeLess: 'See less', settings: 'Settings',
   today: 'Today', continueReading: 'Keep reading', library: 'Library', add: 'Add a resource',
   all: 'All', allLevels: 'All levels', dayCard: 'Your card for today', startActivity: 'Start activity',
@@ -188,6 +194,8 @@ const es: AppCopy = {
   viewAll: 'Ver todo',
   yourJournal: 'Tu cuaderno',
   openAction: 'Abrir',
+  noSpeakingSessions: 'No hay grabaciones todavía.',
+  startSpeakingSession: 'Iniciar una sesión',
   welcome: 'Bienvenido', darkMode: 'Modo oscuro', collapseSidebar: 'Reducir la barra lateral', expandSidebar: 'Ampliar la barra lateral', lightMode: 'Modo claro', roleLabel: 'Aprendiz cotidiano', home: 'Inicio', reading: 'Leer', speaking: 'Hablar', writing: 'Escribir', exercises: 'Ejercicios', seeMore: 'Ver más', seeLess: 'Ver menos', settings: 'Ajustes',
   today: 'Hoy', continueReading: 'Seguir leyendo', library: 'Biblioteca', add: 'Añadir un recurso',
   all: 'Todo', allLevels: 'Todos los niveles', dayCard: 'Tu tarjeta del día', startActivity: 'Empezar la actividad',
@@ -224,6 +232,8 @@ const zh: AppCopy = {
   viewAll: '查看全部',
   yourJournal: '你的笔记本',
   openAction: '打开',
+  noSpeakingSessions: '暂无录音记录。',
+  startSpeakingSession: '开始口语练习',
   welcome: '欢迎', darkMode: '深色模式', collapseSidebar: '收起侧边栏', expandSidebar: '展开侧边栏', lightMode: '浅色模式', roleLabel: '日常学习者', home: '首页', reading: '阅读', speaking: '口语', writing: '写作', exercises: '练习', seeMore: '查看更多', seeLess: '收起', settings: '设置',
   today: '今天', continueReading: '继续阅读', library: '书库', add: '添加资源',
   all: '全部', allLevels: '所有级别', dayCard: '今日卡片', startActivity: '开始活动',
@@ -260,6 +270,8 @@ const ru: AppCopy = {
   viewAll: 'Посмотреть всё',
   yourJournal: 'Твой блокнот',
   openAction: 'Открыть',
+  noSpeakingSessions: 'Записей пока нет.',
+  startSpeakingSession: 'Начать сессию',
   welcome: 'Добро пожаловать', darkMode: 'Тёмная тема', collapseSidebar: 'Свернуть панель', expandSidebar: 'Развернуть панель', lightMode: 'Светлая тема', roleLabel: 'Учусь каждый день', home: 'Главная', reading: 'Читать', speaking: 'Говорить', writing: 'Писать', exercises: 'Упражнения', seeMore: 'Показать ещё', seeLess: 'Свернуть', settings: 'Настройки',
   today: 'Сегодня', continueReading: 'Продолжить чтение', library: 'Библиотека', add: 'Добавить ресурс',
   all: 'Все', allLevels: 'Все уровни', dayCard: 'Твоя карточка дня', startActivity: 'Начать занятие',
@@ -296,6 +308,8 @@ const pt: AppCopy = {
   viewAll: 'Ver tudo',
   yourJournal: 'O teu caderno',
   openAction: 'Abrir',
+  noSpeakingSessions: 'Nenhuma gravação ainda.',
+  startSpeakingSession: 'Iniciar uma sessão',
   welcome: 'Bem-vindo', darkMode: 'Modo escuro', collapseSidebar: 'Recolher a barra lateral', expandSidebar: 'Expandir a barra lateral', lightMode: 'Modo claro', roleLabel: 'Aprendiz do dia a dia', home: 'Início', reading: 'Ler', speaking: 'Falar', writing: 'Escrever', exercises: 'Exercícios', seeMore: 'Ver mais', seeLess: 'Ver menos', settings: 'Definições',
   today: 'Hoje', continueReading: 'Continuar a ler', library: 'Biblioteca', add: 'Adicionar um recurso',
   all: 'Tudo', allLevels: 'Todos os níveis', dayCard: 'O teu cartão do dia', startActivity: 'Começar a atividade',
