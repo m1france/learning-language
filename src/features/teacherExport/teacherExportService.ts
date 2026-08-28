@@ -5,6 +5,17 @@ import type { ExportedLesson, ExportedLessonParagraph, StudentComment } from './
 const STORAGE_KEY_LIST = 'vivre_exported_lessons'
 const STORAGE_KEY_PREFIX = 'vivre_shared_lesson_'
 
+function getApiBaseUrl(): string {
+  if (typeof window === 'undefined') return ''
+  // Si on est en dev local sur le port 5173 et que le serveur Hono tourne sur 3001
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    if (window.location.port === '5173') {
+      return 'http://localhost:3001'
+    }
+  }
+  return ''
+}
+
 /** Nettoie et normalise le nom d'utilisateur pour les URLs (minuscules, sans accents, caractères alphanumériques et tirets). */
 export function normalizeTeacherUsername(raw: string): string {
   if (!raw) return ''
@@ -90,20 +101,55 @@ export function getExportedLesson(id: string): ExportedLesson | null {
     const all = getAllExportedLessons()
     return all.find((item) => item.id === id) ?? null
   } catch (err) {
-    console.error('Erreur récupération leçon partagée:', err)
+    console.error('Erreur récupération leçon partagée locale:', err)
     return null
   }
 }
 
+/** Récupère une leçon depuis le serveur (ou le stockage local en fallback) */
+export async function fetchSharedLesson(id: string): Promise<ExportedLesson | null> {
+  // 1. Tenter depuis le cache local
+  const local = getExportedLesson(id)
+  if (local) return local
+
+  // 2. Requête API serveur
+  try {
+    const apiBase = getApiBaseUrl()
+    const response = await fetch(`${apiBase}/api/share/lessons/${encodeURIComponent(id)}`)
+    if (response.ok) {
+      const data = await response.json()
+      if (data.lesson) {
+        // Mettre en cache localement
+        localStorage.setItem(`${STORAGE_KEY_PREFIX}${id}`, JSON.stringify(data.lesson))
+        return data.lesson as ExportedLesson
+      }
+    }
+  } catch (err) {
+    console.warn('Impossible de joindre le serveur de partage:', err)
+  }
+
+  return null
+}
+
 export function saveExportedLesson(lesson: ExportedLesson): void {
   try {
-    // 1. Enregistrement direct par id
+    // 1. Enregistrement local
     localStorage.setItem(`${STORAGE_KEY_PREFIX}${lesson.id}`, JSON.stringify(lesson))
 
-    // 2. Mise à jour de la liste maîtresse
+    // 2. Mise à jour de la liste maîtresse locale
     const all = getAllExportedLessons().filter((item) => item.id !== lesson.id)
     all.unshift(lesson)
     localStorage.setItem(STORAGE_KEY_LIST, JSON.stringify(all))
+
+    // 3. Synchronisation avec le serveur distant
+    const apiBase = getApiBaseUrl()
+    fetch(`${apiBase}/api/share/lessons`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lesson }),
+    }).catch((err) => {
+      console.warn('Sync serveur de partage en arrière-plan:', err)
+    })
   } catch (err) {
     console.error('Erreur sauvegarde leçon exportée:', err)
   }
@@ -114,6 +160,12 @@ export function deleteExportedLesson(id: string): void {
     localStorage.removeItem(`${STORAGE_KEY_PREFIX}${id}`)
     const all = getAllExportedLessons().filter((item) => item.id !== id)
     localStorage.setItem(STORAGE_KEY_LIST, JSON.stringify(all))
+
+    // Suppression sur le serveur
+    const apiBase = getApiBaseUrl()
+    fetch(`${apiBase}/api/share/lessons/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }).catch(() => {})
   } catch (err) {
     console.error('Erreur suppression leçon exportée:', err)
   }
@@ -121,34 +173,56 @@ export function deleteExportedLesson(id: string): void {
 
 export function addLessonReaction(lessonId: string, emoji: string): Record<string, number> {
   const lesson = getExportedLesson(lessonId)
-  if (!lesson) return {}
-  const reactions = { ...(lesson.reactions || {}) }
+  const reactions = { ...(lesson?.reactions || {}) }
   reactions[emoji] = (reactions[emoji] || 0) + 1
-  const updated: ExportedLesson = {
-    ...lesson,
-    reactions,
-    updatedAt: new Date().toISOString(),
+
+  if (lesson) {
+    const updated: ExportedLesson = {
+      ...lesson,
+      reactions,
+      updatedAt: new Date().toISOString(),
+    }
+    saveExportedLesson(updated)
   }
-  saveExportedLesson(updated)
+
+  // Notifier l'API
+  const apiBase = getApiBaseUrl()
+  fetch(`${apiBase}/api/share/lessons/${encodeURIComponent(lessonId)}/reactions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emoji }),
+  }).catch(() => {})
+
   return reactions
 }
 
 export function addLessonComment(lessonId: string, authorName: string, text: string): StudentComment | null {
   const lesson = getExportedLesson(lessonId)
-  if (!lesson) return null
   const comment: StudentComment = {
     id: `comm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     authorName: authorName.trim() || 'Élève',
     text: text.trim(),
     createdAt: new Date().toISOString(),
   }
-  const comments = [...(lesson.studentComments || []), comment]
-  const updated: ExportedLesson = {
-    ...lesson,
-    studentComments: comments,
-    updatedAt: new Date().toISOString(),
+
+  if (lesson) {
+    const comments = [...(lesson.studentComments || []), comment]
+    const updated: ExportedLesson = {
+      ...lesson,
+      studentComments: comments,
+      updatedAt: new Date().toISOString(),
+    }
+    saveExportedLesson(updated)
   }
-  saveExportedLesson(updated)
+
+  // Notifier l'API
+  const apiBase = getApiBaseUrl()
+  fetch(`${apiBase}/api/share/lessons/${encodeURIComponent(lessonId)}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ authorName, text }),
+  }).catch(() => {})
+
   return comment
 }
 

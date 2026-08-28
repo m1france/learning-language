@@ -19,7 +19,7 @@ import { baseUi, copy, detectUiLanguage, UI_LANGUAGES } from './i18n'
 import { TOP_LEARNING_LANGUAGES } from './languages'
 import { doveWhite } from './assets/doveWhite'
 import { SharedLessonViewer } from './features/teacherExport/SharedLessonViewer'
-import { parseSharedLessonFromUrl, getExportedLesson } from './features/teacherExport/teacherExportService'
+import { parseSharedLessonFromUrl, getExportedLesson, fetchSharedLesson } from './features/teacherExport/teacherExportService'
 import type { ExportedLesson } from './features/teacherExport/teacherExportDomain'
 import {
   Home,
@@ -46,6 +46,7 @@ import {
   Check,
   ArrowUpDown,
   Play,
+  AlertCircle,
 } from 'lucide-react'
 import {
   ResourceContextMenu,
@@ -100,6 +101,30 @@ export default function App() {
     }
     return null
   })
+  const [loadingSharedLesson, setLoadingSharedLesson] = useState(false)
+  const [sharedLessonError, setSharedLessonError] = useState<string | null>(null)
+
+  // Récupération distante si l'URL contient un ID de leçon non présent en local
+  useEffect(() => {
+    const parsed = parseSharedLessonFromUrl()
+    if (parsed?.lessonId && !viewingSharedLesson) {
+      setLoadingSharedLesson(true)
+      fetchSharedLesson(parsed.lessonId)
+        .then((lesson) => {
+          if (lesson) {
+            setViewingSharedLesson(lesson)
+          } else {
+            setSharedLessonError("Cette leçon n'est pas disponible ou a été dépubliée.")
+          }
+        })
+        .catch(() => {
+          setSharedLessonError("Impossible de joindre le serveur pour charger la leçon.")
+        })
+        .finally(() => {
+          setLoadingSharedLesson(false)
+        })
+    }
+  }, [])
 
   const handleAiTaskChange = (running: boolean, label?: string) => {
     setIsAiTaskRunning(running)
@@ -117,6 +142,42 @@ export default function App() {
 
   useEffect(() => { if (state) saveState(state) }, [state])
   useEffect(() => { if (state) document.documentElement.dataset.theme = state.settings.theme }, [state?.settings.theme]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Écran de chargement d'une leçon partagée distante
+  if (loadingSharedLesson) {
+    return (
+      <div className="shared-viewer-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+          <Loader2 size={36} className="spin" style={{ color: '#2563eb' }} />
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: 'var(--ink)' }}>Chargement de la leçon partagée...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Écran d'erreur si la leçon partagée est introuvable
+  if (sharedLessonError) {
+    return (
+      <div className="shared-viewer-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, minHeight: '100vh' }}>
+        <div className="teacher-export-card" style={{ maxWidth: 440, padding: '28px 28px', textAlign: 'center' }}>
+          <AlertCircle size={40} style={{ color: '#f59e0b', margin: '0 auto 12px' }} />
+          <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600, color: 'var(--ink)' }}>Leçon introuvable</h3>
+          <p style={{ margin: '0 0 20px', fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55 }}>{sharedLessonError}</p>
+          <button
+            className="btn-primary"
+            style={{ margin: '0 auto' }}
+            onClick={() => {
+              setSharedLessonError(null)
+              if (window.location.hash.startsWith('#/share/')) window.location.hash = ''
+              if (window.location.search.includes('share=')) window.history.replaceState({}, '', window.location.pathname)
+            }}
+          >
+            Retour à l'accueil
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   // Si on est en mode consultation d'une leçon partagée pour un élève (ou preview)
   if (viewingSharedLesson) {
