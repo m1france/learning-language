@@ -20,7 +20,19 @@ import {
   ChevronUp,
   ChevronDown,
   X,
+  Share2,
 } from 'lucide-react'
+import { TeacherUsernameModal } from './teacherExport/TeacherUsernameModal'
+import { NoModificationsModal, ConfirmExportModal } from './teacherExport/ExportConfirmModal'
+import { ExportPreviewFrame } from './teacherExport/ExportPreviewFrame'
+import { ExportSuccessModal } from './teacherExport/ExportSuccessModal'
+import {
+  hasPageModifications,
+  saveExportedLesson,
+  getTeacherUsername,
+  normalizeTeacherUsername,
+} from './teacherExport/teacherExportService'
+import type { ExportedLesson, ExportedLessonParagraph } from './teacherExport/teacherExportDomain'
 
 /**
  * Teacher Mode — plein écran pour projeter un texte en classe.
@@ -36,24 +48,24 @@ import {
  * Cmd/Ctrl+Z = annuler la dernière annotation. Échap = quitter.
  */
 
-type Tool = 'select' | 'pen' | 'highlighter' | 'text' | 'edit' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'liaison' | 'gray' | 'eraser'
+export type Tool = 'select' | 'pen' | 'highlighter' | 'text' | 'edit' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'liaison' | 'gray' | 'eraser'
 
-type Point = { x: number; y: number }
-type Stroke = {
+export type Point = { x: number; y: number }
+export type Stroke = {
   id: string
   kind: 'pen' | 'highlighter' | 'rect' | 'ellipse' | 'line' | 'arrow'
   color: string
   width: number
   points: Point[]
 }
-type Liaison = { id: string; x1: number; x2: number; y: number; color: string }
+export type Liaison = { id: string; x1: number; x2: number; y: number; color: string }
 /** Un segment de texte + sa couleur — permet plusieurs couleurs dans une note. */
-type TextRun = { t: string; c: string }
-type TextNote = { id: string; x: number; y: number; runs: TextRun[]; size: number; color: string }
-type ActionRef = { kind: 'stroke' | 'liaison' | 'gray' | 'text'; id: string }
-type PageAnnotations = { strokes: Stroke[]; liaisons: Liaison[]; texts: TextNote[]; grayed: string[]; order: ActionRef[] }
-type AnnotationMap = Record<string, PageAnnotations>
-type DraftNote = { x: number; y: number; id?: string; size: number; baseColor: string }
+export type TextRun = { t: string; c: string }
+export type TextNote = { id: string; x: number; y: number; runs: TextRun[]; size: number; color: string }
+export type ActionRef = { kind: 'stroke' | 'liaison' | 'gray' | 'text'; id: string }
+export type PageAnnotations = { strokes: Stroke[]; liaisons: Liaison[]; texts: TextNote[]; grayed: string[]; order: ActionRef[] }
+export type AnnotationMap = Record<string, PageAnnotations>
+export type DraftNote = { x: number; y: number; id?: string; size: number; baseColor: string }
 
 const emptyPage = (): PageAnnotations => ({ strokes: [], liaisons: [], texts: [], grayed: [], order: [] })
 
@@ -306,12 +318,26 @@ const distToStroke = (p: Point, stroke: Stroke) => {
   return Infinity
 }
 
-export function LearningFocus({ resources, initialResourceId, shortcuts, onUpdateResource, onClose }: {
+export function LearningFocus({
+  resources,
+  initialResourceId,
+  shortcuts,
+  onUpdateResource,
+  onClose,
+  teacherUsername,
+  teacherName,
+  onSaveTeacherUsername,
+  onOpenSharedLesson,
+}: {
   resources: Resource[]
   initialResourceId: string
   shortcuts?: Record<string, string>
   onUpdateResource: (resource: Resource) => void
   onClose: () => void
+  teacherUsername?: string
+  teacherName?: string
+  onSaveTeacherUsername?: (username: string) => void
+  onOpenSharedLesson?: (lesson: ExportedLesson) => void
 }) {
   const resource = resources.find((item) => item.id === initialResourceId) ?? resources[0]
   const [pageIndex, setPageIndex] = useState(0)
@@ -330,6 +356,13 @@ export function LearningFocus({ resources, initialResourceId, shortcuts, onUpdat
   const [selectedStroke, setSelectedStroke] = useState<string | null>(null)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [eraserPos, setEraserPos] = useState<Point | null>(null)
+
+  // Modales et flux d'exportation
+  const [usernameModalOpen, setUsernameModalOpen] = useState(false)
+  const [noModifModalOpen, setNoModifModalOpen] = useState(false)
+  const [confirmExportModalOpen, setConfirmExportModalOpen] = useState(false)
+  const [previewFrameOpen, setPreviewFrameOpen] = useState(false)
+  const [successExportModalLesson, setSuccessExportModalLesson] = useState<ExportedLesson | null>(null)
 
   const boardRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef<Stroke | null>(null)
@@ -369,6 +402,43 @@ export function LearningFocus({ resources, initialResourceId, shortcuts, onUpdat
     return map
   }, [effectiveShortcuts])
 
+  const proceedWithExportCheck = () => {
+    const hasModif = hasPageModifications(page, current, originals, legacyEdited)
+    if (!hasModif) {
+      setNoModifModalOpen(true)
+    } else {
+      setConfirmExportModalOpen(true)
+    }
+  }
+
+  const handleExportClick = () => {
+    commitNote()
+    const username = getTeacherUsername({ teacherUsername, name: teacherName })
+    if (!username) {
+      setUsernameModalOpen(true)
+      return
+    }
+    proceedWithExportCheck()
+  }
+
+  const handleSaveUsername = (newUsername: string) => {
+    const clean = normalizeTeacherUsername(newUsername)
+    onSaveTeacherUsername?.(clean)
+    setUsernameModalOpen(false)
+    proceedWithExportCheck()
+  }
+
+  const handleConfirmExport = () => {
+    setConfirmExportModalOpen(false)
+    setPreviewFrameOpen(true)
+  }
+
+  const handleFinishExport = (lesson: ExportedLesson) => {
+    saveExportedLesson(lesson)
+    setPreviewFrameOpen(false)
+    setSuccessExportModalLesson(lesson)
+  }
+
   // caractères modifiés (vert) par paragraphe, calculés contre le texte d'origine
   const modifiedChars = useMemo(() => {
     const map: Record<string, Set<number>> = {}
@@ -382,6 +452,23 @@ export function LearningFocus({ resources, initialResourceId, shortcuts, onUpdat
     }
     return map
   }, [paragraphs, originals, legacyEdited])
+
+  const exportParagraphs: ExportedLessonParagraph[] = useMemo(() => {
+    return page.map((paragraph) => {
+      const original = originals[paragraph.key] ?? paragraph.text
+      const greenIndices = Array.from(modifiedChars[paragraph.key] ?? [])
+      return {
+        key: paragraph.key,
+        chapterIndex: paragraph.chapterIndex,
+        paragraphIndex: paragraph.paragraphIndex,
+        chapterTitle: paragraph.chapterTitle,
+        isChapterStart: paragraph.isChapterStart,
+        text: paragraph.text,
+        originalText: original,
+        modifiedIndices: greenIndices,
+      }
+    })
+  }, [page, originals, modifiedChars])
 
   useEffect(() => {
     localStorage.setItem(`vivre-focus-${resource.id}`, JSON.stringify(annotations))
@@ -499,6 +586,9 @@ export function LearningFocus({ resources, initialResourceId, shortcuts, onUpdat
   // Échap : termine la saisie en cours, sinon quitte. Delete/Backspace : supprime l'élément sélectionné. Cmd/Ctrl+Z = annuler. Raccourcis outils.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (usernameModalOpen || noModifModalOpen || confirmExportModalOpen || previewFrameOpen || successExportModalLesson) {
+        return
+      }
       if (event.key === 'Escape') {
         if (draftNote) { commitNote(); return }
         quitAll()
@@ -556,7 +646,7 @@ export function LearningFocus({ resources, initialResourceId, shortcuts, onUpdat
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose, pageKey, annotations, draftNote, selectedNote, selectedStroke, keyToTool])
+  }, [onClose, pageKey, annotations, draftNote, selectedNote, selectedStroke, keyToTool, usernameModalOpen, noModifModalOpen, confirmExportModalOpen, previewFrameOpen, successExportModalLesson])
 
   const boardPoint = (event: { clientX: number; clientY: number }): Point => {
     const rect = boardRef.current?.getBoundingClientRect()
@@ -1130,6 +1220,68 @@ export function LearningFocus({ resources, initialResourceId, shortcuts, onUpdat
         )
       })}
     </footer>
+
+    {/* bouton Exporter — bas droite */}
+    <button
+      className="focus-export-btn glass"
+      title="Exporter cette page corrigée pour vos élèves"
+      onClick={handleExportClick}
+    >
+      <Share2 size={15} />
+      <span>Exporter</span>
+    </button>
+
+    {/* Modal Nom d'utilisateur enseignant */}
+    {usernameModalOpen && (
+      <TeacherUsernameModal
+        initialValue={teacherUsername || teacherName || ''}
+        onSave={handleSaveUsername}
+        onCancel={() => setUsernameModalOpen(false)}
+      />
+    )}
+
+    {/* Modal Avertissement aucune modification */}
+    {noModifModalOpen && (
+      <NoModificationsModal onClose={() => setNoModifModalOpen(false)} />
+    )}
+
+    {/* Modal Confirmation d'export */}
+    {confirmExportModalOpen && (
+      <ConfirmExportModal
+        pageNumber={safePage + 1}
+        totalPages={pages.length}
+        onConfirm={handleConfirmExport}
+        onCancel={() => setConfirmExportModalOpen(false)}
+      />
+    )}
+
+    {/* Frame Grand Écran d'Exportation */}
+    {previewFrameOpen && (
+      <ExportPreviewFrame
+        resource={resource}
+        pageIndex={safePage}
+        totalPages={pages.length}
+        paragraphs={exportParagraphs}
+        annotations={current}
+        fontSize={fontSize}
+        teacherUsername={getTeacherUsername({ teacherUsername, name: teacherName }) || 'prof'}
+        teacherName={teacherName}
+        onCancel={() => setPreviewFrameOpen(false)}
+        onExport={handleFinishExport}
+      />
+    )}
+
+    {/* Modal Succès avec lien share.mathisbnl.info */}
+    {successExportModalLesson && (
+      <ExportSuccessModal
+        lesson={successExportModalLesson}
+        onClose={() => setSuccessExportModalLesson(null)}
+        onOpenViewer={(lesson) => {
+          setSuccessExportModalLesson(null)
+          onOpenSharedLesson?.(lesson)
+        }}
+      />
+    )}
   </div>
 }
 

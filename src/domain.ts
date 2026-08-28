@@ -191,6 +191,8 @@ export type WordMark = {
 
 export type UserSettings = {
   name: string
+  /** Nom d'utilisateur personnalisé utilisé pour les liens d'export : share.mathisbnl.info/{teacherUsername}/... */
+  teacherUsername?: string
   learningLanguage: Language
   /** Language of every interface text (never touches imported content). */
   uiLanguage: UiLanguage

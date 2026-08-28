@@ -32,7 +32,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Layers,
+  Share2,
 } from 'lucide-react'
+import { MyLessonsSettingsTab } from './teacherExport/MyLessonsSettingsTab'
+import type { ExportedLesson } from './teacherExport/teacherExportDomain'
 
 type SettingsProps = {
   settings: UserSettings
@@ -40,9 +43,10 @@ type SettingsProps = {
   onSave: (settings: UserSettings) => void
   onChangeState: (state: AppState) => void
   onResetData: () => void
+  onOpenLesson?: (lesson: ExportedLesson) => void
 }
 
-type Tab = 'profile' | 'reading' | 'markings' | 'shortcuts' | 'tags-categories' | 'connections' | 'data'
+type Tab = 'profile' | 'reading' | 'markings' | 'shortcuts' | 'tags-categories' | 'lessons' | 'connections' | 'data'
 
 const TEACHER_TOOLS_INFO = [
   { id: 'select', label: 'Sélection', desc: 'Sélectionner et déplacer des formes ou des notes' },
@@ -162,7 +166,7 @@ const DEFAULT_CATEGORIES: { id: string; label: string }[] = [
   { id: 'scientific', label: 'Scientifique' },
 ]
 
-export function Settings({ settings, state, onSave, onChangeState, onResetData }: SettingsProps) {
+export function Settings({ settings, state, onSave, onChangeState, onResetData, onOpenLesson }: SettingsProps) {
   const [draft, setDraft] = useState<UserSettings>(settings)
   const [tab, setTab] = useState<Tab>('profile')
   const [saved, setSaved] = useState(false)
@@ -399,6 +403,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
     { id: 'markings', icon: <Palette size={16} />, label: 'Marquages' },
     { id: 'shortcuts', icon: <Keyboard size={16} />, label: 'Raccourcis' },
     { id: 'tags-categories', icon: <Tag size={16} />, label: 'Tags & Catégories' },
+    { id: 'lessons', icon: <Share2 size={16} />, label: 'Mes leçons' },
     { id: 'connections', icon: <KeyRound size={16} />, label: 'Connexions' },
     { id: 'data', icon: <Database size={16} />, label: 'Données' },
   ]
@@ -856,6 +861,17 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData }
             )}
           </div>
         </>}
+
+        {tab === 'lessons' && (
+          <MyLessonsSettingsTab
+            settings={draft}
+            onUpdateSettings={(s) => {
+              setDraft(s)
+              onSave(s)
+            }}
+            onOpenLesson={(lesson) => onOpenLesson?.(lesson)}
+          />
+        )}
 
         {tab === 'connections' && <>
           <SettingHeading title="Connexions & Modèles IA" detail="Configure tes clés d’API et personnalise les modèles d’intelligence artificielle par tâche." />

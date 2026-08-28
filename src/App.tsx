@@ -18,6 +18,9 @@ import { prompts } from './data'
 import { baseUi, copy, detectUiLanguage, UI_LANGUAGES } from './i18n'
 import { TOP_LEARNING_LANGUAGES } from './languages'
 import { doveWhite } from './assets/doveWhite'
+import { SharedLessonViewer } from './features/teacherExport/SharedLessonViewer'
+import { parseSharedLessonFromUrl, getExportedLesson } from './features/teacherExport/teacherExportService'
+import type { ExportedLesson } from './features/teacherExport/teacherExportDomain'
 import {
   Home,
   BookOpen,
@@ -89,6 +92,15 @@ export default function App() {
   const [isAiTaskRunning, setIsAiTaskRunning] = useState(false)
   const [aiTaskLabel, setAiTaskLabel] = useState<string | undefined>(undefined)
 
+  // Consultation d'une leçon partagée (via URL ou prévisualisation professeur)
+  const [viewingSharedLesson, setViewingSharedLesson] = useState<ExportedLesson | null>(() => {
+    const parsed = parseSharedLessonFromUrl()
+    if (parsed?.lessonId) {
+      return getExportedLesson(parsed.lessonId)
+    }
+    return null
+  })
+
   const handleAiTaskChange = (running: boolean, label?: string) => {
     setIsAiTaskRunning(running)
     setAiTaskLabel(label)
@@ -105,6 +117,25 @@ export default function App() {
 
   useEffect(() => { if (state) saveState(state) }, [state])
   useEffect(() => { if (state) document.documentElement.dataset.theme = state.settings.theme }, [state?.settings.theme]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Si on est en mode consultation d'une leçon partagée pour un élève (ou preview)
+  if (viewingSharedLesson) {
+    return (
+      <SharedLessonViewer
+        lesson={viewingSharedLesson}
+        onBack={() => {
+          setViewingSharedLesson(null)
+          if (window.location.hash.startsWith('#/share/')) {
+            window.location.hash = ''
+          }
+          if (window.location.search.includes('share=')) {
+            window.history.replaceState({}, '', window.location.pathname)
+          }
+        }}
+        isTeacherPreview={state !== null}
+      />
+    )
+  }
 
   if (!state) return <Onboarding onComplete={(name, uiLanguage, learningLanguage) => setState(createState({ name, uiLanguage, learningLanguage }))} />
 
@@ -214,10 +245,20 @@ export default function App() {
                   onAiTaskChange={setIsAiTaskRunning}
                 />
               )}
-              {page === 'settings' && <Settings settings={state.settings} state={state}
-                onSave={(settings) => change({ ...state, settings })}
-                onChangeState={change}
-                onResetData={() => { resetState(); setState(null); setPage('home') }} />}
+              {page === 'settings' && (
+                <Settings
+                  settings={state.settings}
+                  state={state}
+                  onSave={(settings) => change({ ...state, settings })}
+                  onChangeState={change}
+                  onOpenLesson={(lesson) => setViewingSharedLesson(lesson)}
+                  onResetData={() => {
+                    resetState()
+                    setState(null)
+                    setPage('home')
+                  }}
+                />
+              )}
             </>
           )}
         </section>
@@ -229,7 +270,21 @@ export default function App() {
             </button>
           ))}
         </nav>
-        {focusId && <LearningFocus resources={state.resources} initialResourceId={focusId} shortcuts={state.settings.teacherShortcuts} onUpdateResource={(updated) => change(upsertResource(state, updated))} onClose={() => setFocusId(null)} />}
+        {focusId && (
+          <LearningFocus
+            resources={state.resources}
+            initialResourceId={focusId}
+            shortcuts={state.settings.teacherShortcuts}
+            teacherUsername={state.settings.teacherUsername}
+            teacherName={state.settings.name}
+            onSaveTeacherUsername={(teacherUsername) =>
+              change((prev) => ({ ...prev, settings: { ...prev.settings, teacherUsername } }))
+            }
+            onOpenSharedLesson={(lesson) => setViewingSharedLesson(lesson)}
+            onUpdateResource={(updated) => change(upsertResource(state, updated))}
+            onClose={() => setFocusId(null)}
+          />
+        )}
         
         {/* Floating Mini Cam (shown when camera is active and user is outside speaking page) */}
         {(page !== 'speaking' || reader !== null) && (
