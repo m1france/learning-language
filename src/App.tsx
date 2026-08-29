@@ -19,7 +19,7 @@ import { baseUi, copy, detectUiLanguage, UI_LANGUAGES } from './i18n'
 import { TOP_LEARNING_LANGUAGES } from './languages'
 import { doveWhite } from './assets/doveWhite'
 import { SharedLessonViewer } from './features/teacherExport/SharedLessonViewer'
-import { parseSharedLessonFromUrl, getExportedLesson, fetchSharedLesson } from './features/teacherExport/teacherExportService'
+import { parseSharedLessonFromUrl, getExportedLesson, fetchSharedLesson, isShareSubdomain } from './features/teacherExport/teacherExportService'
 import type { ExportedLesson } from './features/teacherExport/teacherExportDomain'
 import {
   Home,
@@ -47,6 +47,7 @@ import {
   ArrowUpDown,
   Play,
   AlertCircle,
+  GraduationCap,
 } from 'lucide-react'
 import {
   ResourceContextMenu,
@@ -157,23 +158,26 @@ export default function App() {
 
   // Écran d'erreur si la leçon partagée est introuvable
   if (sharedLessonError) {
+    const isShare = isShareSubdomain()
     return (
       <div className="shared-viewer-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, minHeight: '100vh' }}>
         <div className="teacher-export-card" style={{ maxWidth: 440, padding: '28px 28px', textAlign: 'center' }}>
           <AlertCircle size={40} style={{ color: '#f59e0b', margin: '0 auto 12px' }} />
           <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 600, color: 'var(--ink)' }}>Leçon introuvable</h3>
-          <p style={{ margin: '0 0 20px', fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55 }}>{sharedLessonError}</p>
-          <button
-            className="btn-primary"
-            style={{ margin: '0 auto' }}
-            onClick={() => {
-              setSharedLessonError(null)
-              if (window.location.hash.startsWith('#/share/')) window.location.hash = ''
-              if (window.location.search.includes('share=')) window.history.replaceState({}, '', window.location.pathname)
-            }}
-          >
-            Retour à l'accueil
-          </button>
+          <p style={{ margin: isShare ? '0' : '0 0 20px', fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55 }}>{sharedLessonError}</p>
+          {!isShare && (
+            <button
+              className="btn-primary"
+              style={{ margin: '0 auto' }}
+              onClick={() => {
+                setSharedLessonError(null)
+                if (window.location.hash.startsWith('#/share/')) window.location.hash = ''
+                if (window.location.search.includes('share=')) window.history.replaceState({}, '', window.location.pathname)
+              }}
+            >
+              Retour à l'accueil
+            </button>
+          )}
         </div>
       </div>
     )
@@ -193,8 +197,27 @@ export default function App() {
             window.history.replaceState({}, '', window.location.pathname)
           }
         }}
-        isTeacherPreview={state !== null}
+        isTeacherPreview={state !== null && !isShareSubdomain()}
       />
+    )
+  }
+
+  // Si on est sur le sous-domaine share.mathisbnl.info sans leçon spécifiée (page d'accueil du sous-domaine)
+  if (isShareSubdomain()) {
+    return (
+      <div className="shared-viewer-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: 20 }}>
+        <div className="teacher-export-card" style={{ maxWidth: 460, padding: '36px 32px', textAlign: 'center' }}>
+          <div className="teacher-export-icon-badge primary" style={{ margin: '0 auto 16px', width: 52, height: 52 }}>
+            <GraduationCap size={28} />
+          </div>
+          <h2 style={{ margin: '0 0 10px', fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>
+            Espace de partage de cours
+          </h2>
+          <p style={{ margin: '0', fontSize: 14, color: 'var(--muted)', lineHeight: 1.6 }}>
+            Pour accéder à vos pages de cours et devoirs, veuillez utiliser le lien direct communiqué par votre professeur.
+          </p>
+        </div>
+      </div>
     )
   }
 

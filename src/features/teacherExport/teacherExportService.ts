@@ -364,3 +364,10 @@ export function parseSharedLessonFromUrl(): { username?: string; lessonId: strin
     return null
   }
 }
+
+export function isShareSubdomain(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname.toLowerCase()
+  return host === 'share.mathisbnl.info' || host.endsWith('.share.mathisbnl.info')
+}
+

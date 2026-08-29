@@ -403,16 +403,20 @@ export function LearningFocus({
       return {
         pageIndex: pIdx,
         chapterTitle,
-        paragraphs: pageParagraphs.map((p) => ({
-          key: p.key,
-          chapterIndex: p.chapterIndex,
-          paragraphIndex: p.paragraphIndex,
-          chapterTitle: p.chapterTitle,
-          isChapterStart: p.isChapterStart,
-          text: p.text,
-          originalText: originals[p.key],
-          modifiedIndices: Array.from(modifiedCharIndices(originals[p.key] || '', p.text)),
-        })),
+        paragraphs: pageParagraphs.map((p) => {
+          const original = originals[p.key]
+          const isModified = original !== undefined && original !== p.text
+          return {
+            key: p.key,
+            chapterIndex: p.chapterIndex,
+            paragraphIndex: p.paragraphIndex,
+            chapterTitle: p.chapterTitle,
+            isChapterStart: p.isChapterStart,
+            text: p.text,
+            originalText: original ?? p.text,
+            modifiedIndices: isModified ? Array.from(modifiedCharIndices(original, p.text)) : [],
+          }
+        }),
         annotations: pAnn,
       }
     })

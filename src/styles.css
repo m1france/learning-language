@@ -6195,20 +6195,26 @@ h2 {
   overflow-y: auto !important;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .focus-board {
   position: relative;
+  max-width: 880px;
   width: 100%;
   min-height: 100%;
   height: max-content;
-  padding: 70px 0 160px;
+  margin: 0 auto;
+  padding: 70px 54px 160px 54px;
+  box-sizing: border-box;
 }
 
 .focus-text-col {
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 0 54px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 .focus-chapter {
@@ -19518,12 +19524,20 @@ h2 {
   border-color: #313c4c;
 }
 
-/* Wrappers du contenu de la page */
+/* Wrappers du contenu de la page — Alignés sur le focus-board de Teacher Mode */
 .export-page-canvas-wrap,
-.shared-page-canvas-wrap {
+.shared-page-canvas-wrap,
+.export-page-board,
+.shared-page-board {
   position: relative;
+  max-width: 880px;
   width: 100%;
   min-height: 250px;
+  margin: 0 auto;
+  padding: 70px 54px 160px 54px;
+  box-sizing: border-box;
+  background: var(--paper);
+  border-radius: 12px;
 }
 
 /* Dessins SVG au-dessus du texte (position absolute) */
@@ -19542,6 +19556,87 @@ h2 {
   position: relative;
   z-index: 5;
   line-height: 1.8;
+}
+
+/* Mots avec commentaire enseignant */
+.export-commented-word-wrap {
+  position: relative;
+  display: inline;
+}
+
+.export-word.has-comment {
+  border-bottom: 2px dashed #f59e0b;
+  cursor: pointer;
+}
+
+.export-word.selectable-for-comment {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s ease;
+}
+
+.export-word.selectable-for-comment:hover {
+  background: rgba(245, 158, 11, 0.18);
+}
+
+/* Carte de commentaire d'un mot */
+.export-word-comment-card {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 35;
+  width: 270px;
+  background: var(--white, #ffffff);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  padding: 10px 12px;
+  animation: modalPop 0.18s ease;
+}
+
+:root[data-theme='dark'] .export-word-comment-card {
+  background: #1e2530;
+  border-color: #333f52;
+}
+
+.export-word-comment-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d97706;
+}
+
+.export-word-comment-body {
+  display: block;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+/* Boutons de suppression stylisés et modernes */
+.export-del-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.export-del-btn:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.25);
 }
 
 /* Notes de texte (style Teacher Mode) */
@@ -19569,19 +19664,27 @@ h2 {
 }
 
 .export-note-delete-btn {
-  background: #ef4444;
-  color: #ffffff;
-  border: none;
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-radius: 50% !important;
+  width: 18px !important;
+  height: 18px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
 }
 
-/* Infobulles minimalistes orange (sans cercles bleu/blanc) */
+.export-note-delete-btn:hover {
+  background: #dc2626 !important;
+  transform: scale(1.1);
+}
+
+/* Infobulles minimalistes orange */
 .export-tooltip-pin {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -19648,7 +19751,7 @@ h2 {
 /* Popups interactives dans la frame */
 .export-popup {
   position: absolute;
-  z-index: 25;
+  z-index: 35;
   background: var(--white, #ffffff);
   border: 1px solid var(--line, #cbd5e1);
   border-radius: 14px;
@@ -19656,6 +19759,10 @@ h2 {
   width: 280px;
   overflow: hidden;
   animation: modalPop 0.18s ease;
+}
+
+.export-word-comment-popup {
+  width: 290px;
 }
 
 :root[data-theme='dark'] .export-popup {

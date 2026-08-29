@@ -168,10 +168,10 @@ export function SharedLessonViewer({
       {/* Barre supérieure étudiante */}
       <header className="shared-viewer-header">
         <div className="shared-viewer-header-left">
-          {onBack && (
-            <button className="shared-back-btn" onClick={onBack} title="Retour">
+          {onBack && isTeacherPreview && (
+            <button className="shared-back-btn" onClick={onBack} title="Quitter l'aperçu">
               <ChevronLeft size={18} />
-              <span>{isTeacherPreview ? "Quitter l'aperçu" : 'Retour'}</span>
+              <span>Quitter l'aperçu</span>
             </button>
           )}
           <div className="shared-teacher-badge">
@@ -237,21 +237,26 @@ export function SharedLessonViewer({
             return (
               <div
                 key={p.pageIndex}
-                ref={(el) => {
-                  pageRefs.current[p.pageIndex] = el
-                }}
                 className="shared-page-block"
-                onClick={(e) => handlePageClick(p.pageIndex, e)}
               >
-                {/* Séparateur entre les pages */}
-                <div className="shared-page-divider">
-                  <span className="shared-page-divider-line" />
-                  <span className="shared-page-divider-badge">PAGE {p.pageIndex + 1}</span>
-                  <span className="shared-page-divider-line" />
-                </div>
+                {/* Séparateur entre les pages si plusieurs pages */}
+                {allPages.length > 1 && (
+                  <div className="shared-page-divider">
+                    <span className="shared-page-divider-line" />
+                    <span className="shared-page-divider-badge">PAGE {p.pageIndex + 1}</span>
+                    <span className="shared-page-divider-line" />
+                  </div>
+                )}
 
-                {/* Tableau relatif de la page */}
-                <div className="shared-page-canvas-wrap" style={{ fontSize: lesson.fontSize || 32 }}>
+                {/* Tableau relatif de la page — Exactement identique à focus-board */}
+                <div
+                  ref={(el) => {
+                    pageRefs.current[p.pageIndex] = el
+                  }}
+                  className="shared-page-board focus-board"
+                  style={{ fontSize: lesson.fontSize || 32 }}
+                  onClick={(e) => handlePageClick(p.pageIndex, e)}
+                >
                   {/* Layer 1 : Stickers d'élèves en arrière-plan sous le texte (z-index: 2) */}
                   {pageStickers.map((sticker) => (
                     <div
@@ -267,94 +272,100 @@ export function SharedLessonViewer({
                     </div>
                   ))}
 
-                  {/* Layer 2 : Paragraphes de texte (z-index: 5) */}
-                  <div className="shared-paragraphs-layer">
+                  {/* Layer 2 : Paragraphes de texte et titres de chapitre (z-index: 5) */}
+                  <div className="focus-text-col">
                     {p.paragraphs.map((par) => {
                       const words = par.text.split(/(\s+)/)
                       const greenSet = new Set(par.modifiedIndices || [])
                       let letterOffset = 0
 
                       return (
-                        <p key={par.key} className="focus-paragraph">
-                          {words.map((word, wIdx) => {
-                            if (/\s+/.test(word)) {
-                              letterOffset += word.length
-                              return <span key={wIdx}>{word}</span>
-                            }
+                        <div key={par.key}>
+                          {par.isChapterStart && <h3 className="focus-chapter">{par.chapterTitle}</h3>}
+                          <p className="focus-paragraph">
+                            {words.map((word, wIdx) => {
+                              if (/\s+/.test(word)) {
+                                letterOffset += word.length
+                                return <span key={wIdx}>{word}</span>
+                              }
 
-                            const wordKey = `${par.key}:${wIdx}`
-                            const hasComment = commentKeys.has(wordKey)
-                            const commentObj = pageWordComments.find((c) => c.wordKey === wordKey)
+                              const wordKey = `${par.key}:${wIdx}`
+                              const hasComment = commentKeys.has(wordKey)
+                              const commentObj = pageWordComments.find((c) => c.wordKey === wordKey)
 
-                            const wordEl = (
-                              <span
-                                key={wIdx}
-                                className={`export-word ${hasComment ? 'has-comment' : ''}`}
-                                onClick={(e) => {
-                                  if (hasComment && commentObj) {
-                                    e.stopPropagation()
-                                    setActiveWordCommentKey(
-                                      activeWordCommentKey === commentObj.id ? null : commentObj.id
+                              const wordEl = (
+                                <span
+                                  key={wIdx}
+                                  className={`export-word ${hasComment ? 'has-comment' : ''}`}
+                                  onClick={(e) => {
+                                    if (hasComment && commentObj) {
+                                      e.stopPropagation()
+                                      setActiveWordCommentKey(
+                                        activeWordCommentKey === commentObj.id ? null : commentObj.id
+                                      )
+                                    }
+                                  }}
+                                >
+                                  {word.split('').map((letter, lIdx) => {
+                                    const letterKey = `${par.key}:${wIdx}.${lIdx}`
+                                    const isGrayed = p.annotations.grayed.includes(letterKey)
+                                    const isGreen = greenSet.has(letterOffset + lIdx)
+
+                                    return (
+                                      <span
+                                        key={lIdx}
+                                        className={`focus-letter ${isGreen ? 'edited-char' : ''} ${
+                                          isGrayed ? 'user-gray' : ''
+                                        }`}
+                                      >
+                                        {letter}
+                                      </span>
                                     )
-                                  }
-                                }}
-                              >
-                                {word.split('').map((letter, lIdx) => {
-                                  const letterKey = `${par.key}:${wIdx}.${lIdx}`
-                                  const isGrayed = p.annotations.grayed.includes(letterKey)
-                                  const isGreen = greenSet.has(letterOffset + lIdx)
-
-                                  return (
-                                    <span
-                                      key={lIdx}
-                                      className={`focus-letter ${isGreen ? 'edited-char' : ''} ${
-                                        isGrayed ? 'user-gray' : ''
-                                      }`}
-                                    >
-                                      {letter}
-                                    </span>
-                                  )
-                                })}
-                              </span>
-                            )
-
-                            letterOffset += word.length
-
-                            if (hasComment && commentObj) {
-                              return (
-                                <span key={wIdx} className="export-commented-word-wrap">
-                                  {wordEl}
-                                  {activeWordCommentKey === commentObj.id && (
-                                    <div
-                                      className="export-word-comment-card student-comment-popover"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <div className="export-word-comment-head">
-                                        <MessageSquare size={12} />
-                                        <strong>Commentaire du professeur</strong>
-                                        <button
-                                          className="export-popup-close"
-                                          onClick={() => setActiveWordCommentKey(null)}
-                                        >
-                                          <X size={12} />
-                                        </button>
-                                      </div>
-                                      <span className="export-word-comment-body">{commentObj.comment}</span>
-                                    </div>
-                                  )}
+                                  })}
                                 </span>
                               )
-                            }
 
-                            return wordEl
-                          })}
-                        </p>
+                              letterOffset += word.length
+
+                              if (hasComment && commentObj) {
+                                return (
+                                  <span key={wIdx} className="export-commented-word-wrap">
+                                    {wordEl}
+                                    {activeWordCommentKey === commentObj.id && (
+                                      <div
+                                        className="export-word-comment-card student-comment-popover"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <div className="export-word-comment-head">
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <MessageSquare size={12} />
+                                            <strong>Commentaire du professeur</strong>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            className="export-popup-close"
+                                            onClick={() => setActiveWordCommentKey(null)}
+                                          >
+                                            <X size={12} />
+                                          </button>
+                                        </div>
+                                        <span className="export-word-comment-body">{commentObj.comment}</span>
+                                      </div>
+                                    )}
+                                  </span>
+                                )
+                              }
+
+                              return wordEl
+                            })}
+                          </p>
+                        </div>
                       )
                     })}
                   </div>
 
                   {/* Layer 3 : Dessins SVG du professeur au-dessus du texte (z-index: 10) */}
-                  <svg className="export-drawing-svg" aria-hidden="true">
+                  <svg className="export-drawing-svg focus-ink" aria-hidden="true">
                     {p.annotations.strokes.map((stroke, sIdx) => (
                       <StrokeRender key={sIdx} stroke={stroke} />
                     ))}
@@ -367,7 +378,7 @@ export function SharedLessonViewer({
                   {p.annotations.texts.map((note) => (
                     <div
                       key={note.id}
-                      className="export-text-note-pin read-only"
+                      className="export-text-note-pin focus-text-note read-only"
                       style={{
                         left: note.x,
                         top: note.y,
@@ -379,7 +390,7 @@ export function SharedLessonViewer({
                     </div>
                   ))}
 
-                  {/* Layer 5 : Infobulles du professeur (Icône orange minimaliste sans cercles) (z-index: 15) */}
+                  {/* Layer 5 : Infobulles du professeur (Icône orange minimaliste) (z-index: 15) */}
                   {pageTooltips.map((t) => {
                     const isOpen = activeTooltipId === t.id
                     return (
@@ -395,7 +406,7 @@ export function SharedLessonViewer({
                           onClick={() => setActiveTooltipId(isOpen ? null : t.id)}
                           title="Cliquez pour afficher l'explication"
                         >
-                          <HelpCircle size={19} className="minimal-orange-icon" />
+                          <HelpCircle size={20} className="minimal-orange-icon" />
                         </button>
 
                         {isOpen && (
@@ -403,6 +414,7 @@ export function SharedLessonViewer({
                             <div className="export-tooltip-popover-head">
                               <span>Explication</span>
                               <button
+                                type="button"
                                 className="export-popup-close"
                                 onClick={() => setActiveTooltipId(null)}
                               >

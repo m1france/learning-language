@@ -83,6 +83,8 @@ export function ExportPreviewFrame({
     wordKey: string
     wordText: string
     text: string
+    x: number
+    y: number
   } | null>(null)
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null)
 
@@ -172,11 +174,27 @@ export function ExportPreviewFrame({
   }, [draftTooltip, draftComment, draftNote, activeAction])
 
   const commitDraftNote = () => {
-    if (!draftNote || !draftNote.text.trim()) {
+    if (!draftNote) return
+    const { pageIndex: pIdx, id, x, y, text, color, size } = draftNote
+    if (!text.trim()) {
+      if (id) {
+        // Suppression si vidé
+        setPageAnnotationsMap((prev) => {
+          const pageAnn = prev[pIdx] || { strokes: [], liaisons: [], texts: [], grayed: [], order: [] }
+          return {
+            ...prev,
+            [pIdx]: {
+              ...pageAnn,
+              texts: pageAnn.texts.filter((t) => t.id !== id),
+              order: pageAnn.order.filter((a) => a.id !== id),
+            },
+          }
+        })
+      }
       setDraftNote(null)
       return
     }
-    const { pageIndex: pIdx, id, x, y, text, color, size } = draftNote
+
     setPageAnnotationsMap((prev) => {
       const pageAnn = prev[pIdx] || { strokes: [], liaisons: [], texts: [], grayed: [], order: [] }
       if (id) {
@@ -210,6 +228,11 @@ export function ExportPreviewFrame({
 
   // Clic sur la page
   const handlePageClick = (pIdx: number, e: React.MouseEvent<HTMLDivElement>) => {
+    // Si une note était en cours d'édition, la valider
+    if (draftNote) {
+      commitDraftNote()
+    }
+
     const pageEl = pageRefs.current[pIdx]
     if (!pageEl) return
 
@@ -246,11 +269,19 @@ export function ExportPreviewFrame({
   const handleWordClick = (pIdx: number, wordKey: string, wordText: string, e: React.MouseEvent) => {
     if (activeAction !== 'comment') return
     e.stopPropagation()
+    const pageEl = pageRefs.current[pIdx]
+    const boardRect = pageEl?.getBoundingClientRect()
+    const wordRect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = Math.max(10, Math.min(wordRect.left - (boardRect?.left || 0), (boardRect?.width || 800) - 300))
+    const y = wordRect.bottom - (boardRect?.top || 0) + 6
+
     setDraftComment({
       pageIndex: pIdx,
       wordKey,
       wordText,
       text: '',
+      x,
+      y,
     })
   }
 
@@ -267,6 +298,7 @@ export function ExportPreviewFrame({
     }
     setTooltips((prev) => [...prev, newTooltip])
     setDraftTooltip(null)
+    setActiveAction('none')
   }
 
   // Validation d'un commentaire
@@ -282,6 +314,7 @@ export function ExportPreviewFrame({
     }
     setWordComments((prev) => [...prev.filter((c) => c.wordKey !== draftComment.wordKey), newComment])
     setDraftComment(null)
+    setActiveAction('none')
   }
 
   // Suppression d'une note texte
@@ -444,23 +477,121 @@ export function ExportPreviewFrame({
               return (
                 <div
                   key={p.pageIndex}
-                  ref={(el) => {
-                    pageRefs.current[p.pageIndex] = el
-                  }}
                   className={`export-page-block mode-${activeAction}`}
-                  onClick={(e) => handlePageClick(p.pageIndex, e)}
                 >
                   {/* Séparateur élégant entre les pages */}
-                  <div className="export-page-divider">
-                    <span className="export-page-divider-line" />
-                    <span className="export-page-divider-badge">PAGE {p.pageIndex + 1}</span>
-                    <span className="export-page-divider-line" />
-                  </div>
+                  {pages.length > 1 && (
+                    <div className="export-page-divider">
+                      <span className="export-page-divider-line" />
+                      <span className="export-page-divider-badge">PAGE {p.pageIndex + 1}</span>
+                      <span className="export-page-divider-line" />
+                    </div>
+                  )}
 
-                  {/* Tableau relatif de la page */}
-                  <div className="export-page-canvas-wrap" style={{ fontSize }}>
-                    {/* Layer 1: Dessins SVG au-dessus du texte (position absolute) */}
-                    <svg className="export-drawing-svg" aria-hidden="true">
+                  {/* Tableau relatif de la page — Exactement identique à focus-board */}
+                  <div
+                    ref={(el) => {
+                      pageRefs.current[p.pageIndex] = el
+                    }}
+                    className="export-page-board focus-board"
+                    style={{ fontSize }}
+                    onClick={(e) => handlePageClick(p.pageIndex, e)}
+                  >
+                    {/* Layer 1: Paragraphes de texte et titres de chapitre */}
+                    <div className="focus-text-col">
+                      {p.paragraphs.map((par, parIdx) => {
+                        const words = par.text.split(/(\s+)/)
+                        const greenSet = new Set(par.modifiedIndices || [])
+                        let letterOffset = 0
+
+                        return (
+                          <div key={par.key}>
+                            {par.isChapterStart && <h3 className="focus-chapter">{par.chapterTitle}</h3>}
+                            <p className="focus-paragraph" style={{ fontSize }}>
+                              {words.map((word, wIdx) => {
+                                if (/\s+/.test(word)) {
+                                  letterOffset += word.length
+                                  return <span key={wIdx}>{word}</span>
+                                }
+
+                                const wordKey = `${par.key}:${wIdx}`
+                                const hasComment = commentKeys.has(wordKey)
+                                const commentObj = pageComments.find((c) => c.wordKey === wordKey)
+
+                                const wordEl = (
+                                  <span
+                                    key={wIdx}
+                                    className={`export-word ${hasComment ? 'has-comment' : ''} ${
+                                      activeAction === 'comment' ? 'selectable-for-comment' : ''
+                                    }`}
+                                    onClick={(e) => handleWordClick(p.pageIndex, wordKey, word, e)}
+                                  >
+                                    {word.split('').map((letter, lIdx) => {
+                                      const letterKey = `${par.key}:${wIdx}.${lIdx}`
+                                      const isGrayed = pageAnn.grayed.includes(letterKey)
+                                      const isGreen = greenSet.has(letterOffset + lIdx)
+
+                                      return (
+                                        <span
+                                          key={lIdx}
+                                          className={`focus-letter ${isGreen ? 'edited-char' : ''} ${
+                                            isGrayed ? 'user-gray' : ''
+                                          }`}
+                                        >
+                                          {letter}
+                                        </span>
+                                      )
+                                    })}
+                                  </span>
+                                )
+
+                                letterOffset += word.length
+
+                                if (hasComment && commentObj) {
+                                  return (
+                                    <span
+                                      key={wIdx}
+                                      className="export-commented-word-wrap"
+                                      onClick={() =>
+                                        setActiveCommentId(activeCommentId === commentObj.id ? null : commentObj.id)
+                                      }
+                                    >
+                                      {wordEl}
+                                      {activeCommentId === commentObj.id && (
+                                        <div className="export-word-comment-card" onClick={(e) => e.stopPropagation()}>
+                                          <div className="export-word-comment-head">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                              <MessageSquare size={12} />
+                                              <strong>{commentObj.wordText}</strong>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              className="export-del-btn"
+                                              onClick={() =>
+                                                setWordComments((prev) => prev.filter((c) => c.id !== commentObj.id))
+                                              }
+                                              title="Supprimer ce commentaire"
+                                            >
+                                              <Trash2 size={12} />
+                                            </button>
+                                          </div>
+                                          <span className="export-word-comment-body">{commentObj.comment}</span>
+                                        </div>
+                                      )}
+                                    </span>
+                                  )
+                                }
+
+                                return wordEl
+                              })}
+                            </p>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Layer 2: Dessins SVG au-dessus du texte (position absolute) */}
+                    <svg className="export-drawing-svg focus-ink" aria-hidden="true">
                       {pageAnn.strokes.map((stroke, sIdx) => (
                         <StrokeRender key={sIdx} stroke={stroke} />
                       ))}
@@ -468,93 +599,6 @@ export function ExportPreviewFrame({
                         <LiaisonRender key={lIdx} liaison={liaison} />
                       ))}
                     </svg>
-
-                    {/* Layer 2: Paragraphes de texte */}
-                    <div className="export-paragraphs-layer">
-                      {p.paragraphs.map((par, parIdx) => {
-                        const words = par.text.split(/(\s+)/)
-                        const greenSet = new Set(par.modifiedIndices || [])
-                        let letterOffset = 0
-
-                        return (
-                          <p key={par.key} className="focus-paragraph">
-                            {words.map((word, wIdx) => {
-                              if (/\s+/.test(word)) {
-                                letterOffset += word.length
-                                return <span key={wIdx}>{word}</span>
-                              }
-
-                              const wordKey = `${par.key}:${wIdx}`
-                              const hasComment = commentKeys.has(wordKey)
-                              const commentObj = pageComments.find((c) => c.wordKey === wordKey)
-
-                              const wordEl = (
-                                <span
-                                  key={wIdx}
-                                  className={`export-word ${hasComment ? 'has-comment' : ''} ${
-                                    activeAction === 'comment' ? 'selectable-for-comment' : ''
-                                  }`}
-                                  onClick={(e) => handleWordClick(p.pageIndex, wordKey, word, e)}
-                                >
-                                  {word.split('').map((letter, lIdx) => {
-                                    const letterKey = `${par.key}:${wIdx}.${lIdx}`
-                                    const isGrayed = pageAnn.grayed.includes(letterKey)
-                                    const isGreen = greenSet.has(letterOffset + lIdx)
-
-                                    return (
-                                      <span
-                                        key={lIdx}
-                                        className={`focus-letter ${isGreen ? 'edited-char' : ''} ${
-                                          isGrayed ? 'user-gray' : ''
-                                        }`}
-                                      >
-                                        {letter}
-                                      </span>
-                                    )
-                                  })}
-                                </span>
-                              )
-
-                              letterOffset += word.length
-
-                              if (hasComment && commentObj) {
-                                return (
-                                  <span
-                                    key={wIdx}
-                                    className="export-commented-word-wrap"
-                                    onClick={() =>
-                                      setActiveCommentId(activeCommentId === commentObj.id ? null : commentObj.id)
-                                    }
-                                  >
-                                    {wordEl}
-                                    {activeCommentId === commentObj.id && (
-                                      <div className="export-word-comment-card" onClick={(e) => e.stopPropagation()}>
-                                        <div className="export-word-comment-head">
-                                          <MessageSquare size={12} />
-                                          <strong>{commentObj.wordText}</strong>
-                                          <button
-                                            className="export-del-btn"
-                                            onClick={() =>
-                                              setWordComments((prev) => prev.filter((c) => c.id !== commentObj.id))
-                                            }
-                                            title="Supprimer ce commentaire"
-                                          >
-                                            <Trash2 size={11} />
-                                          </button>
-                                        </div>
-                                        <span className="export-word-comment-body">{commentObj.comment}</span>
-                                      </div>
-                                    )}
-                                  </span>
-                                )
-                              }
-
-                              return wordEl
-                            })}
-                          </p>
-                        )
-                      })}
-                    </div>
 
                     {/* Layer 3: Notes textuelles (Exact Teacher Mode : draggable, éditable, palette) */}
                     {pageAnn.texts.map((note) => {
@@ -564,7 +608,7 @@ export function ExportPreviewFrame({
                       return (
                         <div
                           key={note.id}
-                          className={`export-text-note-pin ${isSelected ? 'selected' : ''}`}
+                          className={`export-text-note-pin focus-text-note ${isSelected ? 'selected' : ''}`}
                           style={{
                             left: note.x,
                             top: note.y,
@@ -588,7 +632,8 @@ export function ExportPreviewFrame({
                           <span>{noteText}</span>
                           {isSelected && (
                             <button
-                              className="export-note-delete-btn"
+                              type="button"
+                              className="export-del-btn export-note-delete-btn"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleDeleteTextNote(p.pageIndex, note.id)
@@ -645,7 +690,7 @@ export function ExportPreviewFrame({
                       </div>
                     )}
 
-                    {/* Layer 4: Infobulles créées (Icône minimaliste orange sans cercles) */}
+                    {/* Layer 4: Infobulles créées (Icône minimaliste orange) */}
                     {pageTooltips.map((t) => {
                       const isOpen = activeTooltipId === t.id
                       return (
@@ -661,7 +706,7 @@ export function ExportPreviewFrame({
                             onClick={() => setActiveTooltipId(isOpen ? null : t.id)}
                             title="Voir l'infobulle"
                           >
-                            <HelpCircle size={19} className="minimal-orange-icon" />
+                            <HelpCircle size={20} className="minimal-orange-icon" />
                           </button>
 
                           {isOpen && (
@@ -669,6 +714,7 @@ export function ExportPreviewFrame({
                               <div className="export-tooltip-popover-head">
                                 <span>Infobulle</span>
                                 <button
+                                  type="button"
                                   className="export-del-btn"
                                   onClick={() => setTooltips((prev) => prev.filter((item) => item.id !== t.id))}
                                   title="Supprimer"
@@ -726,7 +772,11 @@ export function ExportPreviewFrame({
                     )}
 
                     {draftComment && draftComment.pageIndex === p.pageIndex && (
-                      <div className="export-popup export-word-comment-popup" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="export-popup export-word-comment-popup"
+                        style={{ left: draftComment.x, top: draftComment.y }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="export-popup-head">
                           <span>Commentaire sur : « {draftComment.wordText} »</span>
                           <button className="export-popup-close" onClick={() => setDraftComment(null)}>
