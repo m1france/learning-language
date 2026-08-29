@@ -179,7 +179,7 @@ export function ExportPreviewFrame({
     const { pageIndex: pIdx, id, x, y, text, color, size } = draftNote
     if (!text.trim()) {
       if (id) {
-        // Suppression si vidé
+        // Suppression si vidé lors de l'édition
         setPageAnnotationsMap((prev) => {
           const pageAnn = prev[pIdx] || { strokes: [], liaisons: [], texts: [], grayed: [], order: [] }
           return {
@@ -203,7 +203,9 @@ export function ExportPreviewFrame({
           ...prev,
           [pIdx]: {
             ...pageAnn,
-            texts: pageAnn.texts.map((t) => (t.id === id ? { ...t, runs: [{ t: text, c: color }], color, size } : t)),
+            texts: pageAnn.texts.map((t) =>
+              t.id === id ? { ...t, runs: [{ t: text.trim(), c: color }], color, size } : t
+            ),
           },
         }
       }
@@ -211,7 +213,7 @@ export function ExportPreviewFrame({
         id: uid(),
         x,
         y,
-        runs: [{ t: text, c: color }],
+        runs: [{ t: text.trim(), c: color }],
         color,
         size,
       }
@@ -227,12 +229,32 @@ export function ExportPreviewFrame({
     setDraftNote(null)
   }
 
+  // Changement direct de couleur d'une note sélectionnée
+  const handleChangeNoteColor = (pIdx: number, noteId: string, color: string) => {
+    setPageAnnotationsMap((prev) => {
+      const pageAnn = prev[pIdx]
+      if (!pageAnn) return prev
+      return {
+        ...prev,
+        [pIdx]: {
+          ...pageAnn,
+          texts: pageAnn.texts.map((t) =>
+            t.id === noteId ? { ...t, color, runs: t.runs.map((r) => ({ ...r, c: color })) } : t
+          ),
+        },
+      }
+    })
+  }
+
   // Clic sur la page
   const handlePageClick = (pIdx: number, e: React.MouseEvent<HTMLDivElement>) => {
     // Si une note était en cours d'édition, la valider
     if (draftNote) {
       commitDraftNote()
     }
+    setSelectedNoteId(null)
+    setActiveTooltipId(null)
+    setActiveCommentId(null)
 
     const pageEl = pageRefs.current[pIdx]
     if (!pageEl) return
@@ -250,6 +272,7 @@ export function ExportPreviewFrame({
         yPercent,
         text: '',
       })
+      setActiveAction('none')
       return
     }
 
@@ -262,6 +285,7 @@ export function ExportPreviewFrame({
         color: COLORS[0],
         size: 22,
       })
+      setActiveAction('none')
       return
     }
   }
@@ -585,6 +609,9 @@ export function ExportPreviewFrame({
 
                     {/* Layer 3: Notes textuelles (Exact Teacher Mode : draggable, éditable, palette) */}
                     {pageAnn.texts.map((note) => {
+                      // Si la note est actuellement en cours d'édition dans draftNote, masquer le calque statique
+                      if (draftNote && draftNote.id === note.id) return null
+
                       const isSelected = selectedNoteId === note.id
                       const noteText = note.runs.map((r) => r.t).join('')
 
@@ -598,9 +625,19 @@ export function ExportPreviewFrame({
                             fontSize: note.size || 22,
                             color: note.color || COLORS[0],
                           }}
-                          onPointerDown={(e) => handleNotePointerDown(p.pageIndex, note, e)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (draftNote) commitDraftNote()
+                            setSelectedNoteId(note.id)
+                          }}
+                          onPointerDown={(e) => {
+                            e.stopPropagation()
+                            if (draftNote) commitDraftNote()
+                            handleNotePointerDown(p.pageIndex, note, e)
+                          }}
                           onDoubleClick={(e) => {
                             e.stopPropagation()
+                            setSelectedNoteId(null)
                             setDraftNote({
                               pageIndex: p.pageIndex,
                               id: note.id,
@@ -614,17 +651,39 @@ export function ExportPreviewFrame({
                         >
                           <span>{noteText}</span>
                           {isSelected && (
-                            <button
-                              type="button"
-                              className="export-del-btn export-note-delete-btn"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDeleteTextNote(p.pageIndex, note.id)
-                              }}
-                              title="Supprimer la note"
-                            >
-                              <X size={12} />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                className="export-del-btn export-note-delete-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteTextNote(p.pageIndex, note.id)
+                                }}
+                                title="Supprimer la note"
+                              >
+                                <X size={12} />
+                              </button>
+                              <div
+                                className="export-live-text-colors"
+                                style={{
+                                  position: 'absolute',
+                                  top: 'calc(100% + 4px)',
+                                  left: 0,
+                                  zIndex: 35,
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {COLORS.map((c) => (
+                                  <button
+                                    key={c}
+                                    type="button"
+                                    className={`live-color-dot ${(note.color || COLORS[0]) === c ? 'active' : ''}`}
+                                    style={{ background: c }}
+                                    onClick={() => handleChangeNoteColor(p.pageIndex, note.id, c)}
+                                  />
+                                ))}
+                              </div>
+                            </>
                           )}
                         </div>
                       )
@@ -995,21 +1054,14 @@ export function ExportPreviewFrame({
       {/* Modal Toggles Réactions & Commentaires */}
       {finalizeModalOpen && (
         <div className="teacher-export-overlay" onClick={() => setFinalizeModalOpen(false)}>
-          <div className="teacher-export-card" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-            <header className="teacher-export-card-head">
-              <div className="teacher-export-icon-badge primary">
-                <Sparkles size={22} />
-              </div>
-              <div>
-                <h3>Options d'interaction pour les élèves</h3>
-                <p>Définissez comment vos élèves pourront interagir avec cette page.</p>
-              </div>
-              <button className="teacher-export-close-btn" onClick={() => setFinalizeModalOpen(false)}>
+          <div className="teacher-export-card" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 18px 0 18px' }}>
+              <button className="teacher-export-close-btn" onClick={() => setFinalizeModalOpen(false)} title="Fermer">
                 <X size={16} />
               </button>
-            </header>
+            </div>
 
-            <div className="teacher-export-card-body">
+            <div className="teacher-export-card-body" style={{ paddingTop: 4 }}>
               <div className="teacher-export-toggles">
                 <div className="teacher-toggle-item">
                   <div className="teacher-toggle-info">

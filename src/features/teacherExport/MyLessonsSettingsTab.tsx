@@ -253,10 +253,11 @@ export function MyLessonsSettingsTab({
               </p>
             </div>
             <footer className="teacher-export-card-foot">
-              <button className="btn-secondary" onClick={() => setDeleteConfirmLesson(null)}>
+              <button type="button" className="outline" onClick={() => setDeleteConfirmLesson(null)}>
                 Annuler
               </button>
               <button
+                type="button"
                 className="btn-danger"
                 onClick={() => handleDelete(deleteConfirmLesson.id)}
               >

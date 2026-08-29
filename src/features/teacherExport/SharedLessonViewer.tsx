@@ -140,6 +140,32 @@ export function SharedLessonViewer({
     }
   }
 
+  // Glisser-déposer d'un sticker depuis le dock vertical
+  const handleStickerDrop = (pIdx: number, emoji: string, e: React.DragEvent<HTMLDivElement>) => {
+    if (!lesson.allowReactions) return
+    const pageEl = pageRefs.current[pIdx]
+    if (!pageEl) return
+
+    const rect = pageEl.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const xPercent = Math.max(2, Math.min(98, (x / rect.width) * 100))
+    const yPercent = Math.max(2, Math.min(98, (y / rect.height) * 100))
+
+    const newSticker = addStudentSticker(lesson.id, {
+      pageIndex: pIdx,
+      xPercent,
+      yPercent,
+      emoji,
+    })
+    if (newSticker) {
+      setLesson((prev) => ({
+        ...prev,
+        stickers: [...(prev.stickers || []), newSticker],
+      }))
+    }
+  }
+
   // Envoi du commentaire Figma
   const handleSendFigmaComment = () => {
     if (!draftFigmaComment || !draftFigmaComment.text.trim()) return
@@ -256,6 +282,17 @@ export function SharedLessonViewer({
                   className="shared-page-board focus-board"
                   style={{ fontSize: lesson.fontSize || 32 }}
                   onClick={(e) => handlePageClick(p.pageIndex, e)}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'copy'
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const emoji = e.dataTransfer.getData('text/plain')
+                    if (emoji) {
+                      handleStickerDrop(p.pageIndex, emoji, e)
+                    }
+                  }}
                 >
                   {/* Layer 1 : Stickers d'élèves en arrière-plan sous le texte (z-index: 2) */}
                   {pageStickers.map((sticker) => (
@@ -458,10 +495,12 @@ export function SharedLessonViewer({
                                 })}
                               </span>
                               <button
-                                className="export-popup-close"
+                                type="button"
+                                className="export-del-btn"
                                 onClick={() => setActiveFigmaCommentId(null)}
+                                title="Fermer"
                               >
-                                <X size={12} />
+                                <X size={13} />
                               </button>
                             </div>
                             <p className="figma-comment-popover-text">{fc.text}</p>
@@ -471,56 +510,69 @@ export function SharedLessonViewer({
                     )
                   })}
 
-                  {/* Saisie d'un nouveau commentaire Figma */}
+                  {/* Saisie d'un nouveau commentaire Figma avec Pin et popup attachée */}
                   {draftFigmaComment && draftFigmaComment.pageIndex === p.pageIndex && (
                     <div
-                      className="figma-comment-input-card"
+                      className="figma-comment-pin drafting"
                       style={{
                         left: `${draftFigmaComment.xPercent}%`,
                         top: `${draftFigmaComment.yPercent}%`,
                       }}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="figma-comment-input-head">
+                      <div className="figma-comment-pin-badge active">
                         <MessageSquare size={13} />
-                        <span>Nouveau commentaire</span>
-                        <button
-                          className="export-popup-close"
-                          onClick={() => setDraftFigmaComment(null)}
-                        >
-                          <X size={12} />
-                        </button>
                       </div>
-                      <div className="figma-comment-input-body">
-                        <input
-                          type="text"
-                          placeholder="Votre prénom..."
-                          value={studentName}
-                          onChange={(e) => setStudentName(e.target.value)}
-                          className="figma-name-input"
-                        />
-                        <textarea
-                          autoFocus
-                          placeholder="Écrivez votre remarque ou question…"
-                          value={draftFigmaComment.text}
-                          onChange={(e) =>
-                            setDraftFigmaComment({ ...draftFigmaComment, text: e.target.value })
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault()
-                              handleSendFigmaComment()
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="export-send-btn"
-                          disabled={!draftFigmaComment.text.trim()}
-                          onClick={handleSendFigmaComment}
-                        >
-                          <Send size={13} />
-                        </button>
+
+                      <div className="figma-comment-input-card attached-popup">
+                        <div className="figma-comment-input-head">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <MessageSquare size={13} style={{ color: '#0d99ff' }} />
+                            <span>Votre commentaire</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="export-del-btn"
+                            onClick={() => setDraftFigmaComment(null)}
+                            title="Fermer"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                        <div className="figma-comment-input-body">
+                          <input
+                            type="text"
+                            placeholder="Votre prénom (optionnel)…"
+                            value={studentName}
+                            onChange={(e) => setStudentName(e.target.value)}
+                            className="figma-name-input"
+                          />
+                          <div className="figma-textarea-wrap">
+                            <textarea
+                              autoFocus
+                              placeholder="Écrivez votre remarque ou question…"
+                              value={draftFigmaComment.text}
+                              onChange={(e) =>
+                                setDraftFigmaComment({ ...draftFigmaComment, text: e.target.value })
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault()
+                                  handleSendFigmaComment()
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="figma-send-icon-btn"
+                              disabled={!draftFigmaComment.text.trim()}
+                              onClick={handleSendFigmaComment}
+                              title="Envoyer le commentaire"
+                            >
+                              <Send size={13} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -531,29 +583,28 @@ export function SharedLessonViewer({
         </div>
       </main>
 
-      {/* Barre de Stickers de réaction flottante en bas (si autorisé) */}
+      {/* Dock vertical de stickers en bas à droite (uniquement les emojis avec drag & drop) */}
       {lesson.allowReactions && (
-        <div className="shared-sticker-bar">
-          <div className="shared-sticker-bar-title">
-            <Smile size={15} />
-            <span>Déposer un sticker :</span>
-          </div>
-          <div className="shared-sticker-list">
-            {AVAILABLE_STICKER_EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                className={`shared-sticker-btn ${selectedStickerEmoji === emoji ? 'selected' : ''}`}
-                onClick={() => {
-                  setSelectedStickerEmoji(selectedStickerEmoji === emoji ? null : emoji)
-                  setIsFigmaCommentMode(false)
-                }}
-                title={`Cliquer pour coller ${emoji} sur la page`}
-              >
-                <span>{emoji}</span>
-              </button>
-            ))}
-          </div>
+        <div className="shared-vertical-sticker-dock">
+          {AVAILABLE_STICKER_EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              draggable="true"
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', emoji)
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
+              className={`shared-sticker-dock-btn ${selectedStickerEmoji === emoji ? 'selected' : ''}`}
+              onClick={() => {
+                setSelectedStickerEmoji(selectedStickerEmoji === emoji ? null : emoji)
+                setIsFigmaCommentMode(false)
+              }}
+              title={`Glisser-déposer ${emoji} sur la page, ou cliquer`}
+            >
+              <span>{emoji}</span>
+            </button>
+          ))}
         </div>
       )}
 

@@ -19103,7 +19103,7 @@ h2 {
   color: var(--ink);
   border: 1px solid var(--line, #d1d5db);
   border-radius: 999px;
-  padding: 8px 16px;
+  padding: 8px 18px;
   font-family: inherit;
   font-size: 13.5px;
   font-weight: 500;
@@ -19124,6 +19124,29 @@ h2 {
   font-size: 12px;
 }
 
+.btn-danger {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.35);
+}
+
 .btn-danger-ghost {
   background: transparent;
   color: #dc2626;
@@ -19141,6 +19164,223 @@ h2 {
 
 .btn-danger-ghost.small {
   font-size: 12px;
+}
+
+/* Switches & Toggles modernes */
+.teacher-export-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.teacher-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  background: var(--paper-subtle, #f8fafc);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 12px;
+  transition: background 0.15s ease;
+}
+
+:root[data-theme='dark'] .teacher-toggle-item {
+  background: #202733;
+  border-color: #323d4e;
+}
+
+.teacher-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.teacher-toggle-title {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.teacher-toggle-info p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #cbd5e1;
+  border-radius: 999px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root[data-theme='dark'] .toggle-slider {
+  background-color: #334155;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #20201e;
+}
+
+:root[data-theme='dark'] .toggle-switch input:checked + .toggle-slider {
+  background-color: #f1f5f9;
+}
+
+:root[data-theme='dark'] .toggle-switch input:checked + .toggle-slider:before {
+  background-color: #0f172a;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* Bloc d'affichage de lien & bouton de copie */
+.export-link-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--paper-subtle, #f8fafc);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 12px;
+  padding: 6px 8px 6px 12px;
+  transition: all 0.15s ease;
+}
+
+:root[data-theme='dark'] .export-link-box {
+  background: #171d26;
+  border-color: #2b3646;
+}
+
+.export-link-box:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.export-link-url-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.export-link-icon {
+  color: var(--muted, #94a3b8);
+  flex-shrink: 0;
+}
+
+.export-link-input {
+  flex: 1;
+  min-width: 0;
+  border: none !important;
+  background: transparent !important;
+  font-family: 'DM Mono', monospace;
+  font-size: 12.5px;
+  color: var(--ink);
+  padding: 4px 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  cursor: text;
+}
+
+.export-copy-btn {
+  background: #20201e;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+:root[data-theme='dark'] .export-copy-btn {
+  background: #f0ede7;
+  color: #1a1b18;
+}
+
+.export-copy-btn:hover {
+  transform: scale(1.02);
+}
+
+.export-copy-btn.copied {
+  background: #16a34a !important;
+  color: #ffffff !important;
+}
+
+.export-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.export-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.export-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.export-header-badge-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+:root[data-theme='dark'] .export-header-badge-item {
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
 }
 /* ==========================================================================
    MODALES MINIMALISTES D'EXPORTATION (STYLE APP)
@@ -20238,23 +20478,34 @@ h2 {
 }
 
 /* Saisie Figma Commentaire */
-.figma-comment-input-card {
+.figma-comment-pin.drafting {
+  z-index: 40;
+}
+
+.figma-comment-pin-badge.active {
+  background: #0d99ff;
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px rgba(13, 153, 255, 0.25);
+}
+
+.figma-comment-input-card.attached-popup {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  width: 270px;
+  width: 280px;
   background: var(--white, #ffffff);
   border: 1px solid #0d99ff;
   border-radius: 14px;
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.22);
-  z-index: 32;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.25);
+  z-index: 45;
   overflow: hidden;
   animation: modalPop 0.16s ease;
 }
 
-:root[data-theme='dark'] .figma-comment-input-card {
+:root[data-theme='dark'] .figma-comment-input-card.attached-popup {
   background: #1e2530;
+  border-color: #0d99ff;
 }
 
 .figma-comment-input-head {
@@ -20273,7 +20524,6 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  position: relative;
 }
 
 .figma-name-input {
@@ -20287,17 +20537,64 @@ h2 {
   color: var(--ink);
 }
 
-.figma-comment-input-body textarea {
+:root[data-theme='dark'] .figma-name-input {
+  background: #252d3a;
+  border-color: #384556;
+  color: #f1f5f9;
+}
+
+.figma-textarea-wrap {
+  position: relative;
   width: 100%;
-  min-height: 55px;
+}
+
+.figma-textarea-wrap textarea {
+  width: 100%;
+  min-height: 60px;
   border: 1px solid var(--line, #cbd5e1);
-  border-radius: 6px;
-  padding: 6px 34px 6px 8px;
+  border-radius: 8px;
+  padding: 8px 36px 8px 10px;
+  font-family: inherit;
   font-size: 13px;
+  line-height: 1.4;
   outline: none;
   resize: none !important;
   background: var(--paper);
   color: var(--ink);
+}
+
+:root[data-theme='dark'] .figma-textarea-wrap textarea {
+  background: #252d3a;
+  border-color: #384556;
+  color: #f1f5f9;
+}
+
+.figma-send-icon-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #0d99ff;
+  color: #ffffff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.figma-send-icon-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+  background: #0080e6;
+}
+
+.figma-send-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* Stickers d'élèves déposés (z-index: 2, sous le texte à z-index: 5) */
@@ -20320,66 +20617,65 @@ h2 {
   z-index: 6;
 }
 
-/* Barre de stickers flottante en bas */
-.shared-sticker-bar {
+/* Dock vertical de stickers en bas à droite (élèves) */
+.shared-vertical-sticker-dock {
   position: fixed;
+  right: 20px;
   bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 25;
-  background: var(--paper-glass, rgba(255, 255, 255, 0.9));
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--paper-glass, rgba(255, 255, 255, 0.88));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-line, rgba(0, 0, 0, 0.1));
   border-radius: 999px;
-  padding: 6px 16px;
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.12);
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  padding: 8px 6px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.14);
 }
 
-:root[data-theme='dark'] .shared-sticker-bar {
-  background: rgba(30, 36, 48, 0.92);
+:root[data-theme='dark'] .shared-vertical-sticker-dock {
+  background: rgba(30, 36, 48, 0.9);
   border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
 }
 
-.shared-sticker-bar-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.shared-sticker-list {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.shared-sticker-btn {
+.shared-sticker-dock-btn {
   background: transparent;
-  border: 1px solid transparent;
+  border: 1.5px solid transparent;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
   font-size: 20px;
   line-height: 1;
-  padding: 4px 7px;
-  border-radius: 8px;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
   transition: all 0.15s ease;
+  padding: 0;
 }
 
-.shared-sticker-btn:hover {
-  transform: scale(1.2);
-  background: rgba(0, 0, 0, 0.05);
+.shared-sticker-dock-btn:active {
+  cursor: grabbing;
 }
 
-.shared-sticker-btn.selected {
+.shared-sticker-dock-btn:hover {
+  transform: scale(1.22);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme='dark'] .shared-sticker-dock-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.shared-sticker-dock-btn.selected {
   background: rgba(37, 99, 235, 0.15);
   border-color: #2563eb;
-  transform: scale(1.2);
+  transform: scale(1.25);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
 .shared-viewer-body {
@@ -20391,11 +20687,11 @@ h2 {
   padding: 30px 40px 140px;
 }
 
-/* Bouton Devoir Flottant */
+/* Bouton Devoir Flottant (en bas à gauche pour ne pas gêner les stickers à droite) */
 .shared-floating-homework-btn {
   position: fixed;
   bottom: 24px;
-  right: 28px;
+  left: 28px;
   z-index: 25;
   background: #2563eb;
   color: #ffffff;

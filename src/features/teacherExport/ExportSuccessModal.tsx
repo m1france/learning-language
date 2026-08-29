@@ -30,14 +30,32 @@ export function ExportSuccessModal({ lesson, onClose }: ExportSuccessModalProps)
 
   return (
     <div className="teacher-export-overlay" onClick={onClose}>
-      <div className="teacher-export-card success-card" onClick={(e) => e.stopPropagation()}>
+      <div className="teacher-export-card success-card" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
         <header className="teacher-export-card-head">
           <div className="teacher-export-icon-badge success">
-            <Check size={22} />
+            <Check size={20} />
           </div>
-          <div>
-            <h3>Leçon exportée avec succès !</h3>
-            <p>Votre lien unique est prêt à être partagé avec vos élèves.</p>
+          <div className="export-header-meta">
+            <span className="export-header-title">{lesson.resourceTitle}</span>
+            <div className="export-header-badges">
+              {lesson.tooltips.length > 0 && (
+                <span className="export-header-badge-item" title={`${lesson.tooltips.length} infobulle(s)`}>
+                  <HelpCircle size={13} style={{ color: '#ea580c' }} />
+                  <span>{lesson.tooltips.length}</span>
+                </span>
+              )}
+              {lesson.wordComments.length > 0 && (
+                <span className="export-header-badge-item" title={`${lesson.wordComments.length} commentaire(s)`}>
+                  <MessageSquare size={13} style={{ color: '#d97706' }} />
+                  <span>{lesson.wordComments.length}</span>
+                </span>
+              )}
+              {lesson.homework && (
+                <span className="export-header-badge-item" title="Devoir inclus">
+                  <GraduationCap size={13} style={{ color: '#2563eb' }} />
+                </span>
+              )}
+            </div>
           </div>
           <button className="teacher-export-close-btn" onClick={onClose} title="Fermer">
             <X size={16} />
@@ -48,7 +66,7 @@ export function ExportSuccessModal({ lesson, onClose }: ExportSuccessModalProps)
           {/* Bloc d'affichage du lien avec bouton de copie */}
           <div className="export-link-box">
             <div className="export-link-url-line">
-              <Globe size={18} className="export-link-icon" />
+              <Globe size={16} className="export-link-icon" />
               <input
                 type="text"
                 readOnly
@@ -57,59 +75,34 @@ export function ExportSuccessModal({ lesson, onClose }: ExportSuccessModalProps)
                 onClick={(e) => (e.target as HTMLInputElement).select()}
               />
             </div>
-            <button className={`export-copy-btn ${copied ? 'copied' : ''}`} onClick={handleCopy}>
+            <button
+              type="button"
+              className={`export-copy-btn ${copied ? 'copied' : ''}`}
+              onClick={handleCopy}
+            >
               {copied ? (
                 <>
-                  <Check size={16} />
+                  <Check size={14} />
                   <span>Copié !</span>
                 </>
               ) : (
                 <>
-                  <Copy size={16} />
+                  <Copy size={14} />
                   <span>Copier le lien</span>
                 </>
               )}
             </button>
           </div>
 
-          {/* Résumé des éléments exportés */}
-          <div className="export-summary-pills">
-            <div className="export-summary-pill">
-              <strong>{lesson.resourceTitle}</strong> &bull; {lesson.pages?.length || lesson.totalPages || 1} page{(lesson.pages?.length || lesson.totalPages || 1) > 1 ? 's' : ''}
-            </div>
-            {lesson.tooltips.length > 0 && (
-              <div className="export-summary-pill">
-                <HelpCircle size={13} />
-                <span>
-                  {lesson.tooltips.length} infobulle{lesson.tooltips.length > 1 ? 's' : ''}
-                </span>
-              </div>
-            )}
-            {lesson.wordComments.length > 0 && (
-              <div className="export-summary-pill">
-                <MessageSquare size={13} />
-                <span>
-                  {lesson.wordComments.length} commentaire{lesson.wordComments.length > 1 ? 's' : ''}
-                </span>
-              </div>
-            )}
-            {lesson.homework && (
-              <div className="export-summary-pill highlight">
-                <GraduationCap size={13} />
-                <span>Devoir inclus</span>
-              </div>
-            )}
-          </div>
-
-          <p className="export-info-subtext">
+          <p className="export-info-subtext" style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
             Vous pourrez retrouver, consulter et dépublier vos leçons partagées à tout moment dans{' '}
-            <strong>Paramètres &gt; Mes leçons</strong>.
+            <strong style={{ color: 'var(--ink)' }}>Paramètres &gt; Mes leçons</strong>.
           </p>
         </div>
 
         <footer className="teacher-export-card-foot">
           <button type="button" className="outline" onClick={handleOpenDirect}>
-            <ExternalLink size={15} />
+            <ExternalLink size={14} />
             <span>Voir la page</span>
           </button>
           <button type="button" className="primary" onClick={onClose} autoFocus>
