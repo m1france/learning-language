@@ -38,6 +38,7 @@ type ExportPreviewFrameProps = {
   fontSize: number
   teacherUsername: string
   teacherName?: string
+  existingLesson?: ExportedLesson | null
   onCancel: () => void
   onExport: (exportedLesson: ExportedLesson) => void
 }
@@ -51,6 +52,7 @@ export function ExportPreviewFrame({
   fontSize,
   teacherUsername,
   teacherName,
+  existingLesson,
   onCancel,
   onExport,
 }: ExportPreviewFrameProps) {
@@ -66,8 +68,10 @@ export function ExportPreviewFrame({
     return map
   })
 
-  // Infobulles créées dans la frame
-  const [tooltips, setTooltips] = useState<ExportedLessonTooltip[]>([])
+  // Infobulles initialisées avec celles de la leçon existante
+  const [tooltips, setTooltips] = useState<ExportedLessonTooltip[]>(
+    () => existingLesson?.tooltips || []
+  )
   const [draftTooltip, setDraftTooltip] = useState<{
     pageIndex: number
     xPercent: number
@@ -76,8 +80,10 @@ export function ExportPreviewFrame({
   } | null>(null)
   const [activeTooltipId, setActiveTooltipId] = useState<string | null>(null)
 
-  // Commentaires sur les mots
-  const [wordComments, setWordComments] = useState<ExportedLessonComment[]>([])
+  // Commentaires sur les mots initialisés avec ceux de la leçon existante
+  const [wordComments, setWordComments] = useState<ExportedLessonComment[]>(
+    () => existingLesson?.wordComments || []
+  )
   const [draftComment, setDraftComment] = useState<{
     pageIndex: number
     wordKey: string
@@ -104,17 +110,23 @@ export function ExportPreviewFrame({
   // Devoir
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [homeworkModalOpen, setHomeworkModalOpen] = useState(false)
-  const [homework, setHomework] = useState<ExportedLessonHomework | null>(null)
-  const [hwTitle, setHwTitle] = useState('')
-  const [hwAttachmentName, setHwAttachmentName] = useState('')
-  const [hwAttachmentData, setHwAttachmentData] = useState('')
-  const [hwDueDate, setHwDueDate] = useState('')
-  const [hwInstructions, setHwInstructions] = useState('')
+  const [homework, setHomework] = useState<ExportedLessonHomework | null>(
+    () => existingLesson?.homework || null
+  )
+  const [hwTitle, setHwTitle] = useState(() => existingLesson?.homework?.title || '')
+  const [hwAttachmentName, setHwAttachmentName] = useState(() => existingLesson?.homework?.attachmentName || '')
+  const [hwAttachmentData, setHwAttachmentData] = useState(() => existingLesson?.homework?.attachmentData || '')
+  const [hwDueDate, setHwDueDate] = useState(() => existingLesson?.homework?.dueDate || '')
+  const [hwInstructions, setHwInstructions] = useState(() => existingLesson?.homework?.instructions || '')
 
   // Modal final de configuration d'export (toggles)
   const [finalizeModalOpen, setFinalizeModalOpen] = useState(false)
-  const [allowReactions, setAllowReactions] = useState(true)
-  const [allowComments, setAllowComments] = useState(true)
+  const [allowReactions, setAllowReactions] = useState(
+    () => existingLesson?.allowReactions ?? true
+  )
+  const [allowComments, setAllowComments] = useState(
+    () => existingLesson?.allowComments ?? true
+  )
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({})
@@ -417,7 +429,7 @@ export function ExportPreviewFrame({
 
     const firstPage = exportedPages[0]
     const exported: ExportedLesson = {
-      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      id: existingLesson?.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       username: teacherUsername,
       teacherDisplayName: teacherName || teacherUsername,
       resourceId: resource.id,
@@ -444,11 +456,11 @@ export function ExportPreviewFrame({
         : null,
       allowReactions,
       allowComments,
-      reactions: {},
-      studentComments: [],
-      figmaComments: [],
-      stickers: [],
-      createdAt: new Date().toISOString(),
+      reactions: existingLesson?.reactions || {},
+      studentComments: existingLesson?.studentComments || [],
+      figmaComments: existingLesson?.figmaComments || [],
+      stickers: existingLesson?.stickers || [],
+      createdAt: existingLesson?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
 
@@ -571,16 +583,26 @@ export function ExportPreviewFrame({
                                               <MessageSquare size={12} />
                                               <strong>{commentObj.wordText}</strong>
                                             </div>
-                                            <button
-                                              type="button"
-                                              className="export-del-btn"
-                                              onClick={() =>
-                                                setWordComments((prev) => prev.filter((c) => c.id !== commentObj.id))
-                                              }
-                                              title="Supprimer ce commentaire"
-                                            >
-                                              <Trash2 size={12} />
-                                            </button>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                              <button
+                                                type="button"
+                                                className="export-del-btn danger"
+                                                onClick={() =>
+                                                  setWordComments((prev) => prev.filter((c) => c.id !== commentObj.id))
+                                                }
+                                                title="Supprimer ce commentaire"
+                                              >
+                                                <Trash2 size={12} />
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="export-popup-close"
+                                                onClick={() => setActiveCommentId(null)}
+                                                title="Fermer"
+                                              >
+                                                <X size={12} />
+                                              </button>
+                                            </div>
                                           </div>
                                           <span className="export-word-comment-body">{commentObj.comment}</span>
                                         </div>
@@ -750,15 +772,28 @@ export function ExportPreviewFrame({
                           {isOpen && (
                             <div className="export-tooltip-popover">
                               <div className="export-tooltip-popover-head">
-                                <span>Infobulle</span>
-                                <button
-                                  type="button"
-                                  className="export-del-btn"
-                                  onClick={() => setTooltips((prev) => prev.filter((item) => item.id !== t.id))}
-                                  title="Supprimer"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <HelpCircle size={13} style={{ color: '#ea580c' }} />
+                                  <span>Infobulle</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <button
+                                    type="button"
+                                    className="export-del-btn danger"
+                                    onClick={() => setTooltips((prev) => prev.filter((item) => item.id !== t.id))}
+                                    title="Supprimer"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="export-popup-close"
+                                    onClick={() => setActiveTooltipId(null)}
+                                    title="Fermer"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
                               </div>
                               <p className="export-tooltip-popover-text">{t.text}</p>
                             </div>
@@ -910,7 +945,7 @@ export function ExportPreviewFrame({
               className="primary"
               onClick={() => setFinalizeModalOpen(true)}
             >
-              <span>Exporter</span>
+              <span>{existingLesson ? 'Mettre à jour' : 'Exporter'}</span>
               <ArrowRight size={15} />
             </button>
           </div>
@@ -1104,7 +1139,7 @@ export function ExportPreviewFrame({
                 Retour
               </button>
               <button type="button" className="primary" onClick={handleFinalize}>
-                <span>Générer le lien unique</span>
+                <span>{existingLesson ? 'Mettre à jour la leçon' : 'Générer le lien unique'}</span>
                 <ArrowRight size={15} />
               </button>
             </footer>

@@ -71,10 +71,10 @@ export function TeacherUsernameModal({ initialValue = '', onSave, onCancel }: Te
           </div>
 
           <footer className="teacher-export-card-foot">
-            <button type="button" className="btn-secondary" onClick={onCancel}>
+            <button type="button" className="outline" onClick={onCancel}>
               Annuler
             </button>
-            <button type="submit" className="btn-primary" disabled={!clean || clean.length < 2}>
+            <button type="submit" className="primary" disabled={!clean || clean.length < 2}>
               <span>Continuer</span>
               <ArrowRight size={16} />
             </button>

@@ -19830,13 +19830,14 @@ h2 {
   white-space: pre-wrap;
 }
 
-/* Boutons de suppression stylisés et modernes */
-.export-del-btn {
+/* Boutons de fermeture et suppression pour les popups / infobulles / commentaires */
+.export-del-btn,
+.export-popup-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border-radius: 6px;
   border: 1px solid transparent;
@@ -19844,9 +19845,22 @@ h2 {
   color: var(--muted, #94a3b8);
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
-.export-del-btn:hover {
+.export-del-btn:hover,
+.export-popup-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .export-del-btn:hover,
+:root[data-theme='dark'] .export-popup-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+}
+
+.export-del-btn.danger:hover {
   background: rgba(239, 68, 68, 0.12);
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.25);

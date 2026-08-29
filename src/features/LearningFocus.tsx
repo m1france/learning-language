@@ -1417,6 +1417,7 @@ export function LearningFocus({
         fontSize={fontSize}
         teacherUsername={getTeacherUsername({ teacherUsername, name: teacherName }) || 'prof'}
         teacherName={teacherName}
+        existingLesson={publishedLesson}
         onCancel={() => setPreviewFrameOpen(false)}
         onExport={handleFinishExport}
       />
