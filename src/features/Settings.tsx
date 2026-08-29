@@ -156,6 +156,127 @@ const OPENROUTER_VOICES = [
   { id: 'shimmer', label: 'Shimmer (Clair & doux)' },
 ]
 
+const PROVIDER_MODEL_PRESETS: Record<string, string[]> = {
+  openrouter: [
+    'nvidia/nemotron-3-ultra-550b-a55b:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'google/gemini-2.0-flash-exp:free',
+    'google/gemini-2.5-flash',
+    'google/gemini-2.5-pro',
+    'anthropic/claude-3.5-sonnet',
+    'anthropic/claude-3.5-haiku',
+    'deepseek/deepseek-chat',
+    'deepseek/deepseek-r1:free',
+    'openai/gpt-4o-mini',
+    'openai/gpt-4o',
+    'qwen/qwen-2.5-72b-instruct:free',
+    'mistralai/mistral-large-2411',
+  ],
+  nvidia: [
+    'meta/llama-3.3-70b-instruct',
+    'nvidia/nemotron-4-340b-instruct',
+    'mistralai/mistral-large-2-instruct',
+    'deepseek-ai/deepseek-r1',
+  ],
+  kimi: [
+    'moonshot-v1-8k',
+    'moonshot-v1-32k',
+    'moonshot-v1-128k',
+  ],
+  google: [
+    'gemini-2.0-flash',
+    'gemini-2.5-flash',
+    'gemini-1.5-pro',
+    'gemini-2.0-flash-lite',
+  ],
+  openai: [
+    'gpt-4o-mini',
+    'gpt-4o',
+    'o3-mini',
+    'gpt-4.5-preview',
+  ],
+}
+
+const GOOGLE_IMAGE_MODELS = [
+  'gemini-2.5-flash-image',
+  'gemini-2.5-flash-preview-image',
+  'imagen-3.0-generate-002',
+]
+
+type AiTaskRowProps = {
+  title: string
+  description: string
+  value: string | undefined
+  placeholder?: string
+  onChange: (val: string) => void
+  onReset?: () => void
+  isMain?: boolean
+  datalistId?: string
+  disabled?: boolean
+  warningNotice?: React.ReactNode
+  extraContent?: React.ReactNode
+  badgeDefault?: string
+  badgeCustom?: string
+  resetTitle?: string
+}
+
+function AiTaskRow({
+  title,
+  description,
+  value,
+  placeholder,
+  onChange,
+  onReset,
+  isMain,
+  datalistId,
+  disabled,
+  warningNotice,
+  extraContent,
+  badgeDefault = 'Par défaut',
+  badgeCustom = 'Personnalisé',
+  resetTitle = 'Rétablir le modèle par défaut',
+}: AiTaskRowProps) {
+  const isCustom = Boolean(value && value.trim() !== '')
+  return (
+    <div className={`conn-task-row ${isMain ? 'is-main' : ''}`}>
+      <div className="conn-task-info">
+        <strong>{title}</strong>
+        <small>{description}</small>
+        {extraContent}
+        {warningNotice && <div className="conn-task-warning">{warningNotice}</div>}
+      </div>
+      <div className="conn-task-input-wrap">
+        <div className="conn-task-input-with-actions">
+          <input
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            list={datalistId}
+            disabled={disabled}
+          />
+          {!isMain && (
+            <>
+              <span className={`conn-model-badge ${isCustom ? 'custom' : 'default'}`}>
+                {isCustom ? badgeCustom : badgeDefault}
+              </span>
+              {isCustom && onReset && (
+                <button
+                  type="button"
+                  className="conn-reset-btn"
+                  onClick={onReset}
+                  title={resetTitle}
+                >
+                  <RotateCcw size={12} />
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const DEFAULT_CATEGORIES: { id: string; label: string }[] = [
   { id: 'story', label: 'Histoire' },
   { id: 'article', label: 'Article' },
@@ -871,8 +992,27 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
 
         {tab === 'connections' && <>
           <SettingHeading title={t.connectionsTitle} detail={t.connectionsDetail} />
-          
-          {/* SECTION 1 : CLÉS D'API */}
+
+          {/* Datalists for model suggestions */}
+          <datalist id="task-model-suggestions">
+            {(PROVIDER_MODEL_PRESETS[draft.api.agentProvider || 'openrouter'] || []).map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+          <datalist id="google-image-model-suggestions">
+            {GOOGLE_IMAGE_MODELS.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+          <datalist id="tts-openrouter-model-suggestions">
+            {OPENROUTER_TTS_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </datalist>
+
+          {/* SECTION 1 : CLÉS D'API & FOURNISSEURS */}
           <div className="connection-card">
             <div>
               <h3>{t.section1ApiKeys}</h3>
@@ -903,6 +1043,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
             </div>
 
             <div className="conn-keys-list">
+              {/* Clé du fournisseur principal */}
               {(() => {
                 const activeProvider = AGENT_PROVIDERS.find((p) => p.id === (draft.api.agentProvider || 'openrouter')) || AGENT_PROVIDERS[0]
                 return (
@@ -942,6 +1083,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                 )
               })()}
 
+              {/* Clé DeepL */}
               <div className="conn-key-row">
                 <label>
                   <span>{t.deepLKeyLabel}</span>
@@ -975,10 +1117,58 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                   </div>
                 )}
               </div>
+
+              {/* Clé Google AI Studio (si le fournisseur principal n'est pas Google) */}
+              {(draft.api.agentProvider || 'openrouter') !== 'google' && (
+                <div className="conn-key-row">
+                  <label>
+                    <span>{t.googleKeyLabel}</span>
+                    <input
+                      type="password"
+                      value={draft.api.googleKey || ''}
+                      onChange={(e) => updateApi('googleKey', e.target.value)}
+                      placeholder="AIzaSy…"
+                      autoComplete="off"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* Clé ElevenLabs (si sélectionné en TTS) */}
+              {draft.api.ttsProvider === 'elevenlabs' && (
+                <div className="conn-key-row">
+                  <label>
+                    <span>{t.elevenLabsKeyLabel}</span>
+                    <input
+                      type="password"
+                      value={draft.api.elevenLabsKey || ''}
+                      onChange={(e) => updateApi('elevenLabsKey', e.target.value)}
+                      placeholder="sk_…"
+                      autoComplete="off"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* Clé Fish Audio (si sélectionné en TTS) */}
+              {draft.api.ttsProvider === 'fish' && (
+                <div className="conn-key-row">
+                  <label>
+                    <span>{t.fishKeyLabel}</span>
+                    <input
+                      type="password"
+                      value={draft.api.fishKey || ''}
+                      onChange={(e) => updateApi('fishKey', e.target.value)}
+                      placeholder="Clé api.fish.audio"
+                      autoComplete="off"
+                    />
+                  </label>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* SECTION 2 : MODÈLES D'IA PAR TÂCHE */}
+          {/* SECTION 2 : MODÈLES D'IA & MOTEURS PAR TÂCHE */}
           <div className="connection-card">
             <div>
               <h3>{t.section2Models}</h3>
@@ -986,25 +1176,301 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
             </div>
 
             <div className="conn-models-list">
-              {/* Option 1 : Modèle Principal */}
+              {/* GROUPE 1 : AGENT PRINCIPAL & FOURNISSEUR */}
+              <div className="conn-task-group-title">{t.groupMainAgent}</div>
+
               {(() => {
                 const activeProvider = AGENT_PROVIDERS.find((p) => p.id === (draft.api.agentProvider || 'openrouter')) || AGENT_PROVIDERS[0]
                 return (
-                  <div className="conn-task-row is-main">
-                    <div className="conn-task-info">
-                      <strong>{t.mainAgentModel}</strong>
-                      <small>{t.mainAgentModelDesc}</small>
-                    </div>
-                    <div className="conn-task-input-wrap">
-                      <input
-                        value={draft.api.agentModel || ''}
-                        onChange={(e) => updateApi('agentModel', e.target.value)}
-                        placeholder={activeProvider.defaultModel}
-                      />
-                    </div>
-                  </div>
+                  <AiTaskRow
+                    title={t.mainAgentModel}
+                    description={t.mainAgentModelDesc}
+                    value={draft.api.agentModel}
+                    placeholder={activeProvider.defaultModel}
+                    onChange={(val) => updateApi('agentModel', val)}
+                    onReset={() => updateApi('agentModel', activeProvider.defaultModel)}
+                    isMain
+                    datalistId="task-model-suggestions"
+                    badgeDefault={t.defaultModelBadge}
+                    badgeCustom={t.customModelBadge}
+                    resetTitle={t.resetToDefault}
+                  />
                 )
               })()}
+
+              {/* GROUPE 2 : LECTURE, VOCABULAIRE & WEB */}
+              <div className="conn-task-group-title">{t.groupReadingVocab}</div>
+
+              {/* Rédaction de ressources */}
+              <AiTaskRow
+                title={t.taskResourceGen}
+                description={t.taskResourceGenDesc}
+                value={draft.api.taskModelResourceGeneration}
+                placeholder={t.useMainModelDefault}
+                onChange={(val) => updateApi('taskModelResourceGeneration', val)}
+                onReset={() => updateApi('taskModelResourceGeneration', '')}
+                datalistId="task-model-suggestions"
+                badgeDefault={t.defaultModelBadge}
+                badgeCustom={t.customModelBadge}
+                resetTitle={t.resetToDefault}
+              />
+
+              {/* Génération de couvertures Nano Banana */}
+              <AiTaskRow
+                title={t.taskCoverGen}
+                description={t.taskCoverGenDesc}
+                value={draft.api.googleImageModel}
+                placeholder="gemini-2.5-flash-image (par défaut)"
+                onChange={(val) => updateApi('googleImageModel', val)}
+                onReset={() => updateApi('googleImageModel', '')}
+                datalistId="google-image-model-suggestions"
+                warningNotice={!draft.api.googleKey?.trim() ? t.taskCoverGenNoKey : undefined}
+                badgeDefault={t.defaultModelBadge}
+                badgeCustom={t.customModelBadge}
+                resetTitle={t.resetToDefault}
+              />
+
+              {/* Analyse des mots enregistrés (IPA, tags, dictionnaire) */}
+              <AiTaskRow
+                title={t.taskWordAnalysis}
+                description={t.taskWordAnalysisDesc}
+                value={draft.api.taskModelWordAnalysis}
+                placeholder={t.useMainModelDefault}
+                onChange={(val) => updateApi('taskModelWordAnalysis', val)}
+                onReset={() => updateApi('taskModelWordAnalysis', '')}
+                datalistId="task-model-suggestions"
+                badgeDefault={t.defaultModelBadge}
+                badgeCustom={t.customModelBadge}
+                resetTitle={t.resetToDefault}
+              />
+
+              {/* Extraction et nettoyage URL */}
+              <AiTaskRow
+                title={t.taskUrlExtraction}
+                description={t.taskUrlExtractionDesc}
+                value={draft.api.taskModelUrlExtraction}
+                placeholder={t.useMainModelDefault}
+                onChange={(val) => updateApi('taskModelUrlExtraction', val)}
+                onReset={() => updateApi('taskModelUrlExtraction', '')}
+                datalistId="task-model-suggestions"
+                badgeDefault={t.defaultModelBadge}
+                badgeCustom={t.customModelBadge}
+                resetTitle={t.resetToDefault}
+              />
+
+              {/* GROUPE 3 : ÉCRITURE & EXERCICES INTERACTIFS */}
+              <div className="conn-task-group-title">{t.groupWritingExercises}</div>
+
+              {/* Correction et annotations d'écriture */}
+              <AiTaskRow
+                title={t.taskWritingCorrection}
+                description={t.taskWritingCorrectionDesc}
+                value={draft.api.taskModelWritingCorrection}
+                placeholder={t.useMainModelDefault}
+                onChange={(val) => updateApi('taskModelWritingCorrection', val)}
+                onReset={() => updateApi('taskModelWritingCorrection', '')}
+                datalistId="task-model-suggestions"
+                badgeDefault={t.defaultModelBadge}
+                badgeCustom={t.customModelBadge}
+                resetTitle={t.resetToDefault}
+                extraContent={
+                  <label
+                    className="toggle-field-inline"
+                    style={{ marginTop: 8, display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}
+                  >
+                    <input
+                      type="checkbox"
+                      style={{ marginTop: 2 }}
+                      checked={!!draft.api.writingCorrectionAdvancedFormatting}
+                      onChange={(e) => updateApi('writingCorrectionAdvancedFormatting', e.target.checked)}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--ink)' }}>
+                      <strong>{t.advancedFormatting}</strong>
+                      <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
+                        {t.advancedFormattingDesc}
+                      </span>
+                    </span>
+                  </label>
+                }
+              />
+
+              {/* Exercices Builder */}
+              <AiTaskRow
+                title={t.taskExerciseBuilder}
+                description={t.taskExerciseBuilderDesc}
+                value={draft.api.taskModelExerciseBuilder}
+                placeholder={t.useMainModelDefault}
+                onChange={(val) => updateApi('taskModelExerciseBuilder', val)}
+                onReset={() => updateApi('taskModelExerciseBuilder', '')}
+                datalistId="task-model-suggestions"
+                badgeDefault={t.defaultModelBadge}
+                badgeCustom={t.customModelBadge}
+                resetTitle={t.resetToDefault}
+              />
+
+              {/* Fidélité & Alignement Teacher Mode */}
+              <AiTaskRow
+                title={t.taskTeacherAlignment}
+                description={t.taskTeacherAlignmentDesc}
+                value={draft.api.taskModelTeacherAlignment}
+                placeholder={t.useMainModelDefault}
+                onChange={(val) => updateApi('taskModelTeacherAlignment', val)}
+                onReset={() => updateApi('taskModelTeacherAlignment', '')}
+                datalistId="task-model-suggestions"
+                badgeDefault={t.defaultModelBadge}
+                badgeCustom={t.customModelBadge}
+                resetTitle={t.resetToDefault}
+              />
+
+              {/* GROUPE 4 : ORAL, VIDÉO & SYNTHÈSE VOCALE */}
+              <div className="conn-task-group-title">{t.groupOralAudio}</div>
+
+              {/* Traduction dans Speaking */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>{t.taskSpeakingTranslation}</strong>
+                  <small>{t.taskSpeakingTranslationDesc}</small>
+                </div>
+                <div className="conn-task-input-wrap dual">
+                  <select
+                    value={draft.api.speakingTranslationProvider || 'deepl'}
+                    onChange={(e) => updateApi('speakingTranslationProvider', e.target.value as 'deepl' | 'ai')}
+                  >
+                    <option value="deepl">{t.providerDeepl}</option>
+                    <option value="ai">{t.providerAi}</option>
+                  </select>
+                  {draft.api.speakingTranslationProvider === 'ai' && (
+                    <div className="conn-task-input-with-actions">
+                      <input
+                        value={draft.api.taskModelSpeakingTranslation || ''}
+                        onChange={(e) => updateApi('taskModelSpeakingTranslation', e.target.value)}
+                        placeholder={t.useMainModelDefault}
+                        list="task-model-suggestions"
+                      />
+                      {draft.api.taskModelSpeakingTranslation && (
+                        <button
+                          type="button"
+                          className="conn-reset-btn"
+                          onClick={() => updateApi('taskModelSpeakingTranslation', '')}
+                          title={t.resetToDefault}
+                        >
+                          <RotateCcw size={12} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Analyse vidéo & élocution Speaking */}
+              <AiTaskRow
+                title={t.taskSpeakingAnalysis}
+                description={t.taskSpeakingAnalysisDesc}
+                value={draft.api.taskModelSpeakingAnalysis}
+                placeholder="google/gemini-2.0-flash-exp:free (par défaut)"
+                onChange={(val) => updateApi('taskModelSpeakingAnalysis', val)}
+                onReset={() => updateApi('taskModelSpeakingAnalysis', '')}
+                datalistId="task-model-suggestions"
+                badgeDefault={t.defaultModelBadge}
+                badgeCustom={t.customModelBadge}
+                resetTitle={t.resetToDefault}
+              />
+
+              {/* Synthèse Vocale (TTS) */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>{t.ttsTitle}</strong>
+                  <small>{t.ttsDesc}</small>
+                </div>
+                <div className="conn-task-input-wrap dual">
+                  <select
+                    value={draft.api.ttsProvider || 'google'}
+                    onChange={(e) => {
+                      updateApi('ttsProvider', e.target.value as UserSettings['api']['ttsProvider'])
+                      setTtsTestStatus(null)
+                    }}
+                  >
+                    {TTS_PROVIDERS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {draft.api.ttsProvider === 'openrouter' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <input
+                        value={draft.api.ttsModel || ''}
+                        onChange={(e) => updateApi('ttsModel', e.target.value)}
+                        placeholder="openai/gpt-4o-mini-tts-2025-12-15"
+                        list="tts-openrouter-model-suggestions"
+                      />
+                      <select
+                        value={draft.api.ttsVoice || 'alloy'}
+                        onChange={(e) => updateApi('ttsVoice', e.target.value)}
+                        title={t.openRouterVoiceLabel}
+                      >
+                        {OPENROUTER_VOICES.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {draft.api.ttsProvider === 'elevenlabs' && (
+                    <input
+                      value={draft.api.elevenLabsVoice || ''}
+                      onChange={(e) => updateApi('elevenLabsVoice', e.target.value)}
+                      placeholder="ID de voix (ex. 21m00Tcm4TlvDq8ikWAM)"
+                    />
+                  )}
+
+                  {draft.api.ttsProvider === 'fish' && (
+                    <input
+                      value={draft.api.fishReferenceId || ''}
+                      onChange={(e) => updateApi('fishReferenceId', e.target.value)}
+                      placeholder="ID de référence Fish Audio"
+                    />
+                  )}
+
+                  {draft.api.ttsProvider === 'browser' && (
+                    <select
+                      value={draft.api.ttsVoice || ''}
+                      onChange={(e) => updateApi('ttsVoice', e.target.value)}
+                    >
+                      <option value="">Voix système par défaut</option>
+                      {voices.map((v) => (
+                        <option key={v.name} value={v.name}>
+                          {v.name} ({v.lang})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              {/* Bouton de test TTS */}
+              <div className="connection-test-row" style={{ marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="connection-test-btn"
+                  onClick={handleTestTts}
+                  disabled={testingTts || (draft.api.ttsProvider === 'openrouter' && !draft.api.openRouterKey?.trim())}
+                  title={t.ttsTestBtn}
+                >
+                  {testingTts ? <Loader2 size={13} className="spin" /> : <Volume2 size={13} />}
+                  <span>{testingTts ? t.ttsGenerating : t.ttsTestBtn}</span>
+                </button>
+
+                {ttsTestStatus && (
+                  <div className={`connection-status-badge ${ttsTestStatus.ok ? 'success' : 'error'}`}>
+                    {ttsTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                    <span>{ttsTestStatus.message}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </>}

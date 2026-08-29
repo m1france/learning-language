@@ -34,7 +34,12 @@ import {
   addStudentSticker,
   getExportedLesson,
 } from './teacherExportService'
-import type { Stroke, Liaison } from '../LearningFocus'
+import type { Stroke, Liaison, TextNote } from '../LearningFocus'
+import {
+  resolveLiaisonGeometry,
+  resolveTextNoteGeometry,
+  resolveStrokeGeometry,
+} from './annotationAnchorService'
 
 type SharedLessonViewerProps = {
   lesson: ExportedLesson
@@ -74,12 +79,7 @@ export function SharedLessonViewer({
   const [studentName, setStudentName] = useState(() => localStorage.getItem('vivre_student_name') || '')
 
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({})
-
-  // Recharger les données si le stockage local change
-  useEffect(() => {
-    const refreshed = getExportedLesson(lesson.id)
-    if (refreshed) setLesson(refreshed)
-  }, [lesson.id])
+  const [, forceRedraw] = useState(0)
 
   // Normalisation des pages : toutes les pages si disponibles
   const allPages: ExportedLessonPage[] = useMemo(() => {
@@ -95,6 +95,24 @@ export function SharedLessonViewer({
       },
     ]
   }, [lesson])
+
+  // Écouteur de redimensionnement de la fenêtre et des conteneurs pour synchroniser les ancres à 60fps
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      forceRedraw((n) => n + 1)
+    })
+    Object.values(pageRefs.current).forEach((el) => {
+      if (el) ro.observe(el)
+    })
+    return () => ro.disconnect()
+  }, [allPages])
+
+  // Recharger les données si le stockage local change
+  useEffect(() => {
+    const refreshed = getExportedLesson(lesson.id)
+    if (refreshed) setLesson(refreshed)
+  }, [lesson.id])
 
   // Map des commentaires de mots du professeur
   const wordCommentMap = useMemo(() => {
@@ -410,28 +428,31 @@ export function SharedLessonViewer({
                   {/* Layer 3 : Dessins SVG du professeur au-dessus du texte (z-index: 10) */}
                   <svg className="export-drawing-svg focus-ink" aria-hidden="true">
                     {p.annotations.strokes.map((stroke, sIdx) => (
-                      <StrokeRender key={sIdx} stroke={stroke} />
+                      <StrokeRender key={sIdx} stroke={stroke} boardEl={pageRefs.current[p.pageIndex]} />
                     ))}
                     {p.annotations.liaisons.map((liaison, lIdx) => (
-                      <LiaisonRender key={lIdx} liaison={liaison} />
+                      <LiaisonRender key={lIdx} liaison={liaison} boardEl={pageRefs.current[p.pageIndex]} />
                     ))}
                   </svg>
 
                   {/* Layer 4 : Notes textuelles du professeur (z-index: 12) */}
-                  {p.annotations.texts.map((note) => (
-                    <div
-                      key={note.id}
-                      className="export-text-note-pin focus-text-note read-only"
-                      style={{
-                        left: note.x,
-                        top: note.y,
-                        fontSize: note.size || 22,
-                        color: note.color || '#20201e',
-                      }}
-                    >
-                      <span>{note.runs.map((r) => r.t).join('')}</span>
-                    </div>
-                  ))}
+                  {p.annotations.texts.map((note) => {
+                    const resolvedPos = resolveTextNoteGeometry(note, pageRefs.current[p.pageIndex])
+                    return (
+                      <div
+                        key={note.id}
+                        className="export-text-note-pin focus-text-note read-only"
+                        style={{
+                          left: resolvedPos.left,
+                          top: resolvedPos.top,
+                          fontSize: note.size || 22,
+                          color: note.color || '#20201e',
+                        }}
+                      >
+                        <span>{note.runs.map((r) => r.t).join('')}</span>
+                      </div>
+                    )
+                  })}
 
                   {/* Layer 5 : Infobulles du professeur (Icône orange minimaliste) (z-index: 15) */}
                   {pageTooltips.map((tip) => {
@@ -707,50 +728,51 @@ export function SharedLessonViewer({
   )
 }
 
-function StrokeRender({ stroke }: { stroke: Stroke }) {
-  const opacity = stroke.kind === 'highlighter' ? 0.35 : 1
+function StrokeRender({ stroke, boardEl }: { stroke: Stroke; boardEl?: HTMLElement | null }) {
+  const resolved = resolveStrokeGeometry(stroke, boardEl ?? null)
+  const opacity = resolved.kind === 'highlighter' ? 0.35 : 1
   const common = {
-    stroke: stroke.color,
-    strokeWidth: stroke.width,
+    stroke: resolved.color,
+    strokeWidth: resolved.width,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
     fill: 'none',
     opacity,
   }
-  const [first, ...rest] = stroke.points
+  const [first, ...rest] = resolved.points
   if (!first) return null
 
-  if (stroke.points.length <= 1) {
-    return <circle cx={first.x} cy={first.y} r={stroke.width / 2} fill={stroke.color} opacity={opacity} />
+  if (resolved.points.length <= 1) {
+    return <circle cx={first.x} cy={first.y} r={resolved.width / 2} fill={resolved.color} opacity={opacity} />
   }
 
-  if (stroke.kind === 'pen' || stroke.kind === 'highlighter') {
+  if (resolved.kind === 'pen' || resolved.kind === 'highlighter') {
     const d = `M ${first.x} ${first.y} ` + rest.map((p) => `L ${p.x} ${p.y}`).join(' ')
     return <path d={d} {...common} />
   }
 
-  const last = stroke.points[stroke.points.length - 1] ?? first
+  const last = resolved.points[resolved.points.length - 1] ?? first
   const x = Math.min(first.x, last.x)
   const y = Math.min(first.y, last.y)
   const w = Math.abs(last.x - first.x)
   const h = Math.abs(last.y - first.y)
 
-  if (stroke.kind === 'rect') return <rect x={x} y={y} width={w} height={h} rx={4} {...common} />
-  if (stroke.kind === 'ellipse') return <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2} ry={h / 2} {...common} />
-  if (stroke.kind === 'line') return <line x1={first.x} y1={first.y} x2={last.x} y2={last.y} {...common} />
+  if (resolved.kind === 'rect') return <rect x={x} y={y} width={w} height={h} rx={4} {...common} />
+  if (resolved.kind === 'ellipse') return <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2} ry={h / 2} {...common} />
+  if (resolved.kind === 'line') return <line x1={first.x} y1={first.y} x2={last.x} y2={last.y} {...common} />
 
   const angle = Math.atan2(last.y - first.y, last.x - first.x)
-  const head = 10 + stroke.width
+  const head = 10 + resolved.width
   const a1 = angle + Math.PI * 0.82
   const a2 = angle - Math.PI * 0.82
 
   return (
     <g {...common}>
-      <line x1={first.x} y1={first.y} x2={last.x} y2={last.y} stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" />
+      <line x1={first.x} y1={first.y} x2={last.x} y2={last.y} stroke={resolved.color} strokeWidth={resolved.width} strokeLinecap="round" />
       <path
         d={`M ${last.x} ${last.y} L ${last.x + head * Math.cos(a1)} ${last.y + head * Math.sin(a1)} M ${last.x} ${last.y} L ${last.x + head * Math.cos(a2)} ${last.y + head * Math.sin(a2)}`}
-        stroke={stroke.color}
-        strokeWidth={stroke.width}
+        stroke={resolved.color}
+        strokeWidth={resolved.width}
         strokeLinecap="round"
         fill="none"
       />
@@ -758,11 +780,11 @@ function StrokeRender({ stroke }: { stroke: Stroke }) {
   )
 }
 
-function LiaisonRender({ liaison }: { liaison: Liaison }) {
-  const midX = (liaison.x1 + liaison.x2) / 2
+function LiaisonRender({ liaison, boardEl }: { liaison: Liaison; boardEl?: HTMLElement | null }) {
+  const geo = resolveLiaisonGeometry(liaison, boardEl ?? null)
   return (
     <path
-      d={`M ${liaison.x1} ${liaison.y} Q ${midX} ${liaison.y + 22}, ${liaison.x2} ${liaison.y}`}
+      d={geo.d}
       fill="none"
       stroke={liaison.color || '#d64545'}
       strokeWidth="2.5"

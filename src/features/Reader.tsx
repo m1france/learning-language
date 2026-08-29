@@ -38,6 +38,7 @@ import { speak } from '../ai'
 import { analyzeWordWithAi } from './speaking/wordAiService'
 import { getResourceWordStats, extractPageUniqueWords } from './readingProgressUtils'
 import { PageSavedWordsModal } from './vocabulary/PageSavedWordsModal'
+import { resourcesCopy } from '../i18n'
 import {
   ResourceContextMenu,
   EditContentModal,
@@ -268,6 +269,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   onAiTaskChange?: (running: boolean, label?: string) => void
 }) {
   const t = readerCopy[ui]
+  const resT = resourcesCopy[ui] || resourcesCopy.fr
   const settings = state.settings
   const categoryLabel = (typeId: string) => copy[ui].categories[typeId] ?? state.customCategories.find((c) => c.id === typeId)?.label ?? typeId
   const [pageIndex, setPageIndex] = useState(() => Number(localStorage.getItem(`vivre-page-${resource.id}`) ?? 0) || 0)
@@ -840,8 +842,8 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             <button
               className="cover-hide-info-btn"
               onClick={(event) => { event.stopPropagation(); toggleLeftPanel() }}
-              title="Masquer les informations de la ressource"
-              aria-label="Masquer les informations de la ressource"
+              title={resT.hideResourceInfo}
+              aria-label={resT.hideResourceInfo}
             >
               <EyeOff size={14} />
             </button>
@@ -1062,6 +1064,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     {resourceMenuTarget && (
       <ResourceContextMenu
         target={resourceMenuTarget}
+        ui={ui}
         onSelectAction={handleResourceAction}
         onClose={() => setResourceMenuTarget(null)}
       />
@@ -1070,6 +1073,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     {editingContent && (
       <EditContentModal
         resource={resource}
+        ui={ui}
         onSave={(updated) => onUpdate(updated)}
         onClose={() => setEditingContent(false)}
       />
@@ -1078,6 +1082,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     {renaming && (
       <RenameModal
         resource={resource}
+        ui={ui}
         onSave={(updated) => onUpdate(updated)}
         onClose={() => setRenaming(false)}
       />
@@ -1086,6 +1091,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     {deleting && (
       <DeleteModal
         resource={resource}
+        ui={ui}
         onConfirm={(id) => {
           onDelete(id)
           onBack()
@@ -1224,7 +1230,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 setWordContextMenu(null)
               }}
             >
-              <i><BookmarkPlus size={14} /></i> Enregistrer le mot
+              <i><BookmarkPlus size={14} /></i> {resT.saveWordAction}
             </button>
             <button
               type="button"
@@ -1236,7 +1242,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 void handleSaveWordWithAi(raw, sent)
               }}
             >
-              <i>{savingWordAi === cleanRaw(wordContextMenu.raw) ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}</i> Enregistrer avec l'IA
+              <i>{savingWordAi === cleanRaw(wordContextMenu.raw) ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}</i> {resT.saveWordWithAiAction}
             </button>
           </>
         ) : (
@@ -1248,7 +1254,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               setWordContextMenu(null)
             }}
           >
-            <i><Trash2 size={14} /></i> Supprimer le mot enregistré
+            <i><Trash2 size={14} /></i> {resT.deleteSavedWordAction}
           </button>
         )}
       </div>
@@ -1269,14 +1275,14 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           onClick={handleSaveAllPageWordsWithAi}
           disabled={isBatchSavingAi}
         >
-          <i><Sparkles size={15} /></i> Enregistrer tous les mots
+          <i><Sparkles size={15} /></i> {resT.saveAllPageWords}
         </button>
         <button
           type="button"
           className="page-context-item"
           onClick={handleMarkPageAsDone}
         >
-          <i><Check size={15} /></i> Terminé
+          <i><Check size={15} /></i> {resT.markPageDone}
         </button>
       </div>
     )}
@@ -1290,7 +1296,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         }}
         role="button"
         tabIndex={0}
-        title="Cliquer pour afficher la liste complète des mots enregistrés"
+        title={resT.savedToastSub}
       >
         <div className="saved-toast-icon-wrap">
           <Sparkles size={16} />
@@ -1299,10 +1305,10 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         <div className="saved-toast-text">
           <strong>
             {savedPageWordsList.length === 1
-              ? '1 mot enregistré avec succès'
-              : `${savedPageWordsList.length} mots enregistrés avec succès`}
+              ? resT.savedToastSingle
+              : resT.savedToastMultiple(savedPageWordsList.length)}
           </strong>
-          <span>Clique pour voir la liste complète et modifier</span>
+          <span>{resT.savedToastSub}</span>
         </div>
         <button
           type="button"
@@ -1311,7 +1317,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             e.stopPropagation()
             setShowSavedToast(false)
           }}
-          title="Fermer"
+          title={resT.cancelBtn}
         >
           <X size={14} />
         </button>
@@ -1329,6 +1335,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           })
           .filter((w) => state.words.some((sw) => sw.normalized === w.normalized && sw.language === resource.language))}
         language={resource.language}
+        ui={ui}
         api={state.settings.api}
         onEditWord={(word) => {
           setSelected({

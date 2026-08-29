@@ -3,6 +3,7 @@ import type { SpeakingSessionRecord, SpeakingVideoAdviceCategory, SpeakingVideoA
 import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { NotionSpeakingEditor } from './NotionSpeakingEditor'
 import { useCamera } from './CameraContext'
+import { speakingCopy } from '../../i18n'
 import {
   ArrowLeft,
   Play,
@@ -97,6 +98,7 @@ export function SpeakingWorkspace({
   onDelete,
   onBack,
 }: SpeakingWorkspaceProps) {
+  const t = speakingCopy[ui || 'fr'] || speakingCopy.fr
   const { triggerSessionAnalysis } = useCamera()
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -508,7 +510,7 @@ export function SpeakingWorkspace({
                   <button
                     className="yt-btn"
                     onClick={togglePlay}
-                    title={isPlaying ? 'Pause (Espace)' : 'Lecture (Espace)'}
+                    title={isPlaying ? t.pauseSpace : t.playSpace}
                   >
                     {isPlaying ? <Pause size={18} /> : <Play size={18} fill="currentColor" />}
                   </button>
@@ -517,7 +519,7 @@ export function SpeakingWorkspace({
                     <button
                       className="yt-btn volume-btn"
                       onClick={toggleMute}
-                      title={isMuted ? 'Activer le son (M)' : 'Couper le son (M)'}
+                      title={isMuted ? t.unmuteM : t.muteM}
                     >
                       {isMuted || volume === 0 ? (
                         <VolumeX size={18} />
@@ -562,7 +564,7 @@ export function SpeakingWorkspace({
                   <button
                     className="yt-btn"
                     onClick={toggleFullscreen}
-                    title={isFullscreen ? 'Quitter le plein écran (F)' : 'Plein écran (F)'}
+                    title={isFullscreen ? t.exitFullscreenF : t.fullscreenF}
                   >
                     {isFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
                   </button>
@@ -580,20 +582,14 @@ export function SpeakingWorkspace({
                   <Sparkles size={16} />
                 </div>
                 <div>
-                  <h3 className="ai-analysis-title">
-                    {ui === 'fr' ? 'Conseils & Analyse IA' : 'AI Speech Coaching & Analysis'}
-                  </h3>
-                  <p className="ai-analysis-subtitle">
-                    {ui === 'fr'
-                      ? 'Prononciation, débit, structure et horodatages précis'
-                      : 'Pronunciation, pacing, syntax and precise timestamps'}
-                  </p>
+                  <h3 className="ai-analysis-title">{t.aiCoachingTitle}</h3>
+                  <p className="ai-analysis-subtitle">{t.aiCoachingSubtitle}</p>
                 </div>
               </div>
 
               <div className="ai-analysis-actions">
                 {analysis?.overallScore !== undefined && (
-                  <div className="ai-score-pill" title="Score global d’élocution et de maîtrise">
+                  <div className="ai-score-pill" title={t.overallScoreTitle}>
                     <span className="score-num">{analysis.overallScore}</span>
                     <span className="score-max">/100</span>
                   </div>
@@ -603,17 +599,11 @@ export function SpeakingWorkspace({
                   className={`ai-reanalyze-btn ${isAnalyzing ? 'loading' : ''}`}
                   onClick={() => void triggerSessionAnalysis(session.id)}
                   disabled={isAnalyzing}
-                  title="Relancer une analyse IA sur cette prise"
+                  title={t.reanalyzeTitle}
                 >
                   <RotateCcw size={13} className={isAnalyzing ? 'spin' : ''} />
                   <span>
-                    {isAnalyzing
-                      ? ui === 'fr'
-                        ? 'Analyse en cours…'
-                        : 'Analyzing…'
-                      : ui === 'fr'
-                      ? 'Relancer'
-                      : 'Re-analyze'}
+                    {isAnalyzing ? t.analyzingBtn : t.reanalyzeBtn}
                   </span>
                 </button>
               </div>
@@ -629,12 +619,8 @@ export function SpeakingWorkspace({
                   <Mic size={22} className="radar-mic" />
                 </div>
                 <div className="ai-analyzing-text">
-                  <strong>{ui === 'fr' ? 'Analyse de ta vidéo en cours…' : 'Analyzing your recording…'}</strong>
-                  <p>
-                    {ui === 'fr'
-                      ? 'L’IA écoute ta prononciation, mesure ton rythme et vérifie la syntaxe avec OpenRouter.'
-                      : 'The AI is listening to your phonetics, measuring pacing, and verifying syntax via OpenRouter.'}
-                  </p>
+                  <strong>{t.analyzingRecording}</strong>
+                  <p>{t.analyzingDesc}</p>
                 </div>
               </div>
             )}
@@ -644,14 +630,8 @@ export function SpeakingWorkspace({
               <div className="ai-limit-alert">
                 <Info size={18} className="limit-icon" />
                 <div className="limit-content">
-                  <strong>
-                    {ui === 'fr' ? 'Prise de plus de 3 minutes' : 'Take longer than 3 minutes'}
-                  </strong>
-                  <p>
-                    {ui === 'fr'
-                      ? 'Pour garantir une analyse instantanée et détaillée, l’analyse IA automatique est réservée aux vidéos de moins de 3 minutes (180s).'
-                      : 'To ensure instant and in-depth feedback, automatic AI coaching is reserved for takes under 3 minutes (180s).'}
-                  </p>
+                  <strong>{t.takeTooLongTitle}</strong>
+                  <p>{t.takeTooLongDesc}</p>
                 </div>
               </div>
             )}
@@ -661,15 +641,13 @@ export function SpeakingWorkspace({
               <div className="ai-error-alert">
                 <AlertTriangle size={18} className="error-icon" />
                 <div className="error-content">
-                  <strong>
-                    {ui === 'fr' ? 'Échec de l’analyse' : 'Analysis failed'}
-                  </strong>
-                  <p>{session.analysisError || 'Une erreur est survenue lors de l’appel à OpenRouter.'}</p>
+                  <strong>{t.analysisFailedTitle}</strong>
+                  <p>{session.analysisError || 'OpenRouter API Error'}</p>
                   <button
                     className="error-retry-btn"
                     onClick={() => void triggerSessionAnalysis(session.id)}
                   >
-                    <RotateCcw size={12} /> {ui === 'fr' ? 'Réessayer' : 'Retry'}
+                    <RotateCcw size={12} /> {t.retryBtn}
                   </button>
                 </div>
               </div>
@@ -678,17 +656,13 @@ export function SpeakingWorkspace({
             {/* STATE 4: Idle / Not Analyzed Yet */}
             {!isAnalyzing && !isTooLong && analysisStatus === 'idle' && !analysis && (
               <div className="ai-idle-box">
-                <p>
-                  {ui === 'fr'
-                    ? 'Aucune analyse IA effectuée pour le moment. Lance l’analyse pour obtenir des conseils détaillés sur ta voix, ton rythme et tes phrases.'
-                    : 'No AI analysis yet. Launch the analysis to get detailed coaching on your voice, pacing, and syntax.'}
-                </p>
+                <p>{t.noAnalysisDesc}</p>
                 <button
                   className="primary-analyze-trigger-btn"
                   onClick={() => void triggerSessionAnalysis(session.id)}
                 >
                   <Sparkles size={14} />
-                  <span>{ui === 'fr' ? 'Analyser cette vidéo avec l’IA' : 'Analyze this video with AI'}</span>
+                  <span>{t.analyzeVideoBtn}</span>
                 </button>
               </div>
             )}

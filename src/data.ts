@@ -1,4 +1,5 @@
-import type { Language } from './domain'
+import type { Language, UiLanguage } from './domain'
+import { vocabCopy } from './i18n'
 
 export type DefaultPromptWord = {
   id: string
@@ -11,87 +12,92 @@ export type DefaultPromptWord = {
   knowledge: number
 }
 
-export const DEFAULT_PROMPTS_DATA: DefaultPromptWord[] = [
-  {
-    id: 'def-neighborhood',
-    word: 'neighborhood',
-    normalized: 'neighborhood',
-    language: 'en',
-    translation: 'quartier, voisinage',
-    phonetic: 'ˈneɪ.bər.hʊd',
-    contextSentence: 'It is a quiet and friendly neighborhood with lots of green trees.',
-    knowledge: 2,
-  },
-  {
-    id: 'def-glow',
-    word: 'glow',
-    normalized: 'glow',
-    language: 'en',
-    translation: 'lueur, briller doucement',
-    phonetic: 'ɡloʊ',
-    contextSentence: 'The warm glow of the morning sun lit up the entire room.',
-    knowledge: 2,
-  },
-  {
-    id: 'def-usual',
-    word: 'usual',
-    normalized: 'usual',
-    language: 'en',
-    translation: 'habituel, ordinaire',
-    phonetic: 'ˈjuː.ʒu.əl',
-    contextSentence: 'As usual, she was the first person to arrive at the meeting.',
-    knowledge: 3,
-  },
-  {
-    id: 'def-corner',
-    word: 'corner',
-    normalized: 'corner',
-    language: 'en',
-    translation: 'coin, angle',
-    phonetic: 'ˈkɔːr.nər',
-    contextSentence: 'There is a cozy little coffee shop right around the corner.',
-    knowledge: 2,
-  },
-  {
-    id: 'def-exhibit',
-    word: 'exhibit',
-    normalized: 'exhibit',
-    language: 'en',
-    translation: 'exposer, pièce d’exposition',
-    phonetic: 'ɪɡˈzɪb.ɪt',
-    contextSentence: 'The gallery will exhibit modern paintings and sculptures next week.',
-    knowledge: 2,
-  },
-  {
-    id: 'def-awake',
-    word: 'awake',
-    normalized: 'awake',
-    language: 'en',
-    translation: 'éveillé, réveillé',
-    phonetic: 'əˈweɪk',
-    contextSentence: 'I stayed awake late into the night, listening to the calm rain.',
-    knowledge: 2,
-  },
-  {
-    id: 'def-friendly',
-    word: 'friendly',
-    normalized: 'friendly',
-    language: 'en',
-    translation: 'amical, chaleureux',
-    phonetic: 'ˈfrend.li',
-    contextSentence: 'The locals were extremely welcoming and friendly to all visitors.',
-    knowledge: 3,
-  },
-  {
-    id: 'def-remember',
-    word: 'remember',
-    normalized: 'remember',
-    language: 'en',
-    translation: 'se souvenir, se rappeler',
-    phonetic: 'rɪˈmem.bər',
-    contextSentence: 'I still remember the first day I started learning this language.',
-    knowledge: 3,
-  },
-]
+export function getDefaultPrompts(ui: UiLanguage = 'fr'): DefaultPromptWord[] {
+  const t = vocabCopy[ui]?.defaultPrompts || vocabCopy.fr.defaultPrompts
+  return [
+    {
+      id: 'def-neighborhood',
+      word: 'neighborhood',
+      normalized: 'neighborhood',
+      language: 'en',
+      translation: t.neighborhood.translation,
+      phonetic: 'ˈneɪ.bər.hʊd',
+      contextSentence: t.neighborhood.context,
+      knowledge: 2,
+    },
+    {
+      id: 'def-glow',
+      word: 'glow',
+      normalized: 'glow',
+      language: 'en',
+      translation: t.glow.translation,
+      phonetic: 'ɡloʊ',
+      contextSentence: t.glow.context,
+      knowledge: 2,
+    },
+    {
+      id: 'def-usual',
+      word: 'usual',
+      normalized: 'usual',
+      language: 'en',
+      translation: t.usual.translation,
+      phonetic: 'ˈjuː.ʒu.əl',
+      contextSentence: t.usual.context,
+      knowledge: 3,
+    },
+    {
+      id: 'def-corner',
+      word: 'corner',
+      normalized: 'corner',
+      language: 'en',
+      translation: t.corner.translation,
+      phonetic: 'ˈkɔːr.nər',
+      contextSentence: t.corner.context,
+      knowledge: 2,
+    },
+    {
+      id: 'def-exhibit',
+      word: 'exhibit',
+      normalized: 'exhibit',
+      language: 'en',
+      translation: t.exhibit.translation,
+      phonetic: 'ɪɡˈzɪb.ɪt',
+      contextSentence: t.exhibit.context,
+      knowledge: 2,
+    },
+    {
+      id: 'def-awake',
+      word: 'awake',
+      normalized: 'awake',
+      language: 'en',
+      translation: t.awake.translation,
+      phonetic: 'əˈweɪk',
+      contextSentence: t.awake.context,
+      knowledge: 2,
+    },
+    {
+      id: 'def-friendly',
+      word: 'friendly',
+      normalized: 'friendly',
+      language: 'en',
+      translation: t.friendly.translation,
+      phonetic: 'ˈfrend.li',
+      contextSentence: t.friendly.context,
+      knowledge: 3,
+    },
+    {
+      id: 'def-remember',
+      word: 'remember',
+      normalized: 'remember',
+      language: 'en',
+      translation: t.remember.translation,
+      phonetic: 'rɪˈmem.bər',
+      contextSentence: t.remember.context,
+      knowledge: 3,
+    },
+  ]
+}
+
+export const DEFAULT_PROMPTS_DATA: DefaultPromptWord[] = getDefaultPrompts('fr')
 
 export const prompts = DEFAULT_PROMPTS_DATA.map((p) => p.word)

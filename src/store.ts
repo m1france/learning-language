@@ -57,8 +57,17 @@ export const defaultSettings: UserSettings = {
     deepLKey: '',
     deepLTargetLang: 'EN-US',
     youtubeTranscriptApiKey: '',
+    speakingTranslationProvider: 'deepl',
+    taskModelSpeakingTranslation: '',
     taskModelSpeakingAnalysis: 'google/gemini-2.0-flash-exp:free',
+    taskModelResourceGeneration: '',
+    googleImageModel: '',
+    taskModelWordAnalysis: '',
+    taskModelUrlExtraction: '',
+    taskModelWritingCorrection: '',
+    writingCorrectionAdvancedFormatting: false,
     taskModelExerciseBuilder: '',
+    taskModelTeacherAlignment: '',
   },
 }
 

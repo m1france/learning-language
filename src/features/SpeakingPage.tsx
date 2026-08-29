@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import type { Language, ApiSettings } from '../domain'
+import type { Language, ApiSettings, UiLanguage } from '../domain'
 import { GLOBAL_CATEGORIES, GlobalTopicCategory, NicheTopic, getPromptText } from './speaking/speakingTopics'
 import { useCamera } from './speaking/CameraContext'
 import { TeleprompterOverlay } from './speaking/TeleprompterOverlay'
@@ -7,6 +7,7 @@ import { SpeakingWorkspace } from './speaking/SpeakingWorkspace'
 import { QuickWordLookup, StageWordRequest } from './speaking/QuickWordLookup'
 import { StagedWord, analyzeWordWithAi } from './speaking/wordAiService'
 import { StagedWordsReviewModal } from './speaking/StagedWordsReviewModal'
+import { speakingCopy } from '../i18n'
 import {
   Camera,
   CameraOff,
@@ -29,7 +30,7 @@ import {
 } from 'lucide-react'
 
 type SpeakingPageProps = {
-  ui: 'fr' | 'en'
+  ui?: UiLanguage
   language: Language
   api: ApiSettings
   customPrompterText?: string | null
@@ -47,61 +48,8 @@ type SpeakingPageProps = {
   }) => void
 }
 
-const L = {
-  fr: {
-    heading: 'Studio vocal',
-    sub: 'Entraîne ton éloquence face caméra : lis avec prompteur ou parle librement sur des sujets variés.',
-    enableCamTitle: 'Active la caméra pour commencer',
-    enableCamBtn: 'Activer la caméra',
-    camOff: 'Caméra désactivée',
-    micOff: 'Micro désactivé',
-    record: 'Enregistrer',
-    stop: 'Terminer',
-    pause: 'Pause',
-    resume: 'Reprendre',
-    chooseTopic: 'Choisir un sujet',
-    changeTopic: 'Changer de sujet',
-    clearTopic: 'Enlever le sujet',
-    closeCam: 'Couper la caméra',
-    prompterPromptTitle: 'Utiliser un prompteur ?',
-    withPrompter: 'Oui',
-    withoutPrompter: 'Non',
-    talkingPoints: 'Pistes de réflexion :',
-    takesHeading: 'Mes sessions',
-    noTakes: 'Aucune prise enregistrée. Lance ta première session !',
-    openReview: 'Ouvrir l’Espace Notes',
-    deleteTake: 'Supprimer',
-    downloadTake: 'Télécharger',
-  },
-  en: {
-    heading: 'Voice studio',
-    sub: 'Practice speaking on camera: read with a teleprompter or speak freely on various topics.',
-    enableCamTitle: 'Activate the camera to get started',
-    enableCamBtn: 'Activate camera',
-    camOff: 'Camera off',
-    micOff: 'Microphone off',
-    record: 'Record',
-    stop: 'Finish',
-    pause: 'Pause',
-    resume: 'Resume',
-    chooseTopic: 'Choose a topic',
-    changeTopic: 'Change topic',
-    clearTopic: 'Clear topic',
-    closeCam: 'Turn off camera',
-    prompterPromptTitle: 'Use a teleprompter?',
-    withPrompter: 'Yes',
-    withoutPrompter: 'No',
-    talkingPoints: 'Talking points:',
-    takesHeading: 'My sessions',
-    noTakes: 'No recorded takes yet. Start your very first session!',
-    openReview: 'Open Notes Workspace',
-    deleteTake: 'Delete',
-    downloadTake: 'Download',
-  },
-} as const
-
 export function SpeakingPage({
-  ui,
+  ui = 'fr',
   language,
   api,
   customPrompterText,
@@ -110,7 +58,7 @@ export function SpeakingPage({
   onAiTaskChange,
   onSaveWord,
 }: SpeakingPageProps) {
-  const t = L[ui]
+  const t = speakingCopy[ui] || speakingCopy.fr
   const {
     stream,
     cameraActive,
@@ -767,16 +715,10 @@ export function SpeakingPage({
           </div>
           <div className="staged-notif-content">
             <strong className="staged-notif-title">
-              {stagedWords.length === 1
-                ? ui === 'fr'
-                  ? '1 mot enregistré à revoir'
-                  : '1 saved word to review'
-                : ui === 'fr'
-                ? `${stagedWords.length} mots enregistrés à revoir`
-                : `${stagedWords.length} saved words to review`}
+              {stagedWords.length} {t.stagedWordLabel}
             </strong>
             <span className="staged-notif-sub">
-              {ui === 'fr' ? 'Clique pour valider la fiche IA' : 'Click to review AI card'}
+              {t.stagedModalBadge}
             </span>
           </div>
           <button
@@ -787,7 +729,7 @@ export function SpeakingPage({
               setShowReviewModal(true)
             }}
           >
-            {ui === 'fr' ? 'Revoir' : 'Review'}
+            {t.openReview}
           </button>
         </aside>
       )}
@@ -798,6 +740,7 @@ export function SpeakingPage({
         onClose={() => setShowReviewModal(false)}
         stagedWords={stagedWords}
         language={language}
+        ui={ui}
         api={api}
         existingTags={existingTags}
         onApprove={handleApproveWord}

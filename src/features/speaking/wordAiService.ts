@@ -214,11 +214,12 @@ Return ONLY a JSON object with this exact structure (no other markdown or commen
   }
 }
 
-/** Tests the main AI Agent connection by sending a lightweight prompt. */
+/** Tests an AI Agent connection by sending a lightweight prompt. */
 export async function testAgentConnection(
   api: ApiSettings,
+  overrideModel?: string,
 ): Promise<{ ok: boolean; model: string; error?: string }> {
-  const config = getAgentConfig(api)
+  const config = getAgentConfig(api, overrideModel)
   if (!config || !config.key) {
     return { ok: false, model: '', error: 'Aucune clé API renseignée pour ce fournisseur' }
   }

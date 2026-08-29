@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
-import type { AppState, Language, LearnedWord, WordRelationType } from '../../domain'
+import type { AppState, Language, LearnedWord, UiLanguage, WordRelationType } from '../../domain'
 import { ObsidianWordGraph } from './ObsidianWordGraph'
 import { renderPhoneticFormatted } from './phoneticUtils'
 import { speak } from '../../ai'
 import { downloadAnkiExport } from './ankiExporter'
+import { vocabCopy } from '../../i18n'
 import {
   BookOpen,
   Plus,
@@ -19,6 +20,7 @@ import {
 type VocabularyVaultModalProps = {
   state: AppState
   language: Language
+  ui?: UiLanguage
   onSaveWord: (args: {
     raw: string
     sentence?: string
@@ -150,10 +152,14 @@ function TagInput({
 export function VocabularyVaultModal({
   state,
   language,
+  ui,
   onSaveWord,
   onDeleteWord,
   onClose,
 }: VocabularyVaultModalProps) {
+  const currentUi = ui || state.settings.uiLanguage || 'fr'
+  const t = vocabCopy[currentUi] || vocabCopy.fr
+
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTag, setSelectedTag] = useState<string>('')
   const [selectedWord, setSelectedWord] = useState<LearnedWord | null>(null)
@@ -191,7 +197,7 @@ export function VocabularyVaultModal({
   // Available tags
   const allTags = useMemo(() => {
     const set = new Set<string>()
-    words.forEach((w) => (w.tags || []).forEach((t) => set.add(t)))
+    words.forEach((w) => (w.tags || []).forEach((tagItem) => set.add(tagItem)))
     return Array.from(set)
   }, [words])
 
@@ -250,7 +256,7 @@ export function VocabularyVaultModal({
   }
 
   const handleDelete = (word: LearnedWord) => {
-    if (window.confirm(`Supprimer définitivement le mot "${word.word}" ?`)) {
+    if (window.confirm(`${t.deleteWordConfirm} "${word.word}" ?`)) {
       onDeleteWord(word.word, language)
       if (selectedWord?.id === word.id) setSelectedWord(null)
       if (editingWord?.id === word.id) {
@@ -279,7 +285,7 @@ export function VocabularyVaultModal({
             <Search size={14} className="search-icon" />
             <input
               type="text"
-              placeholder="Filtrer par mot, traduction ou racine..."
+              placeholder={t.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -297,16 +303,16 @@ export function VocabularyVaultModal({
                 className={`tag-chip-btn ${!selectedTag ? 'active' : ''}`}
                 onClick={() => setSelectedTag('')}
               >
-                Tous
+                {t.allTags}
               </button>
-              {allTags.map((t) => (
+              {allTags.map((tagItem) => (
                 <button
-                  key={t}
+                  key={tagItem}
                   type="button"
-                  className={`tag-chip-btn ${selectedTag === t ? 'active' : ''}`}
-                  onClick={() => setSelectedTag(selectedTag === t ? '' : t)}
+                  className={`tag-chip-btn ${selectedTag === tagItem ? 'active' : ''}`}
+                  onClick={() => setSelectedTag(selectedTag === tagItem ? '' : tagItem)}
                 >
-                  #{t}
+                  #{tagItem}
                 </button>
               ))}
             </div>
@@ -317,18 +323,18 @@ export function VocabularyVaultModal({
               type="button"
               className="outline icon-btn-sm"
               onClick={() => downloadAnkiExport(words, state.resources, `vocab-export-${language}.tsv`)}
-              title="Exporter tout en TSV Anki"
+              title={t.exportAnkiTitle}
             >
               <Download size={14} />
-              <span>Export Anki</span>
+              <span>{t.exportAnki}</span>
             </button>
 
             <button type="button" className="primary btn-sm" onClick={openAddForm}>
               <Plus size={14} />
-              <span>Nouveau mot</span>
+              <span>{t.newWord}</span>
             </button>
 
-            <button type="button" className="vault-modal-close-btn" onClick={onClose} title="Fermer">
+            <button type="button" className="vault-modal-close-btn" onClick={onClose} title={t.close}>
               <X size={16} />
             </button>
           </div>
@@ -342,6 +348,7 @@ export function VocabularyVaultModal({
                 words={filteredWords}
                 selectedWordId={selectedWord?.normalized || selectedWord?.word.toLowerCase().trim()}
                 onSelectWord={setSelectedWord}
+                ui={currentUi}
               />
             </div>
           </div>
@@ -349,7 +356,7 @@ export function VocabularyVaultModal({
           <div className="vault-list-panel">
             <div className="panel-title-bar">
               <h4>
-                Liste des mots <span className="counter-badge">{filteredWords.length}</span>
+                {t.wordsListTitle} <span className="counter-badge">{filteredWords.length}</span>
               </h4>
             </div>
 
@@ -357,7 +364,7 @@ export function VocabularyVaultModal({
                 {filteredWords.length === 0 ? (
                   <div className="empty-vocab-msg">
                     <BookOpen size={28} className="empty-icon" />
-                    <p>Aucun mot ne correspond à ta recherche.</p>
+                    <p>{t.noWordsFound}</p>
                   </div>
                 ) : (
                   <div className="words-cards-list">
@@ -379,14 +386,14 @@ export function VocabularyVaultModal({
                               <span
                                 className="knowledge-indicator-dot"
                                 style={{ background: kColor }}
-                                title={w.knowledge === 6 ? 'Connu par cœur' : `Niveau de maîtrise : ${w.knowledge ?? 1} / 5`}
+                                title={w.knowledge === 6 ? t.masteryKnown : `${t.masteryLevel} ${w.knowledge ?? 1} / 5`}
                               />
                             </div>
 
                             {w.translation && <p className="word-translation-text">{w.translation}</p>}
 
                             {w.parent && (
-                              <span className="word-root-badge">Racine : {w.parent}</span>
+                              <span className="word-root-badge">{t.rootWord} {w.parent}</span>
                             )}
 
                             {w.contextSentence && (
@@ -401,7 +408,7 @@ export function VocabularyVaultModal({
                               type="button"
                               className="icon-action-btn"
                               onClick={(e) => handleSpeak(e, w.word)}
-                              title="Écouter la prononciation"
+                              title={t.listenPronunciation}
                             >
                               <Volume2 size={14} className={speakingWord === w.word ? 'spinning' : ''} />
                             </button>
@@ -412,7 +419,7 @@ export function VocabularyVaultModal({
                                 e.stopPropagation()
                                 openEditForm(w)
                               }}
-                              title="Modifier"
+                              title={t.editWord}
                             >
                               <Edit2 size={14} />
                             </button>
@@ -423,7 +430,7 @@ export function VocabularyVaultModal({
                                 e.stopPropagation()
                                 handleDelete(w)
                               }}
-                              title="Supprimer"
+                              title={t.deleteWord}
                             >
                               <Trash2 size={14} />
                             </button>
@@ -442,12 +449,12 @@ export function VocabularyVaultModal({
           <div className="vocab-form-drawer-overlay" onClick={() => setIsAddingNew(false)}>
             <div className="vocab-word-panel-card" onClick={(e) => e.stopPropagation()}>
               <div className="word-panel-top-bar">
-                <h3>{editingWord ? 'Modifier le mot' : 'Enregistrer un mot'}</h3>
+                <h3>{editingWord ? t.editWordTitle : t.saveWordTitle}</h3>
                 <button
                   type="button"
                   className="vault-modal-close-btn"
                   onClick={() => setIsAddingNew(false)}
-                  title="Fermer"
+                  title={t.close}
                 >
                   <X size={16} />
                 </button>
@@ -470,8 +477,8 @@ export function VocabularyVaultModal({
                   <button
                     type="button"
                     className={formKnowledge === 6 ? 'kl-btn known active' : 'kl-btn known'}
-                    title="Connu par cœur"
-                    aria-label="Connu par cœur"
+                    title={t.masteryKnown}
+                    aria-label={t.masteryKnown}
                     onClick={() => setFormKnowledge(formKnowledge === 6 ? undefined : 6)}
                   >
                     <Check size={14} />
@@ -481,11 +488,11 @@ export function VocabularyVaultModal({
 
               {/* 2. Word Input */}
               <div className="wp-field">
-                <span>Mot</span>
+                <span>{t.wordField}</span>
                 <input
                   type="text"
                   value={formRaw}
-                  placeholder="Mot à enregistrer"
+                  placeholder={t.wordField}
                   autoFocus
                   onChange={(e) => setFormRaw(e.target.value)}
                 />
@@ -493,32 +500,32 @@ export function VocabularyVaultModal({
 
               {/* 3. Reference Word (Parent / Lemma) */}
               <div className="wp-field">
-                <span>Mot de référence</span>
+                <span>{t.referenceWordField}</span>
                 <input
                   type="text"
                   value={formParent}
-                  placeholder="Mot de référence"
+                  placeholder={t.referenceWordPlaceholder}
                   onChange={(e) => setFormParent(e.target.value)}
                 />
               </div>
 
               {/* 4. Pronunciation */}
               <div className="wp-field">
-                <span>Prononciation</span>
+                <span>{t.pronunciationField}</span>
                 <input
                   type="text"
                   value={formPronunciation}
-                  placeholder="Prononciation"
+                  placeholder="/.../"
                   onChange={(e) => setFormPronunciation(e.target.value)}
                 />
               </div>
 
               {/* 5. Translation */}
               <div className="wp-field">
-                <span>Traduction</span>
+                <span>{t.translationField}</span>
                 <textarea
                   value={formTranslation}
-                  placeholder="Traduction"
+                  placeholder={t.translationField}
                   rows={2}
                   onChange={(e) => setFormTranslation(e.target.value)}
                 />
@@ -529,14 +536,14 @@ export function VocabularyVaultModal({
                 <TagInput
                   allTags={allTags}
                   existingTags={formTags}
-                  onAdd={(t) => {
-                    const clean = t.trim().replace(/^#/, '')
+                  onAdd={(tagItem) => {
+                    const clean = tagItem.trim().replace(/^#/, '')
                     if (clean && !formTags.includes(clean)) {
                       setFormTags([...formTags, clean])
                     }
                   }}
-                  onRemove={(t) => setFormTags(formTags.filter((x) => x !== t))}
-                  label="Tags"
+                  onRemove={(tagItem) => setFormTags(formTags.filter((x) => x !== tagItem))}
+                  label={t.associatedTags}
                 />
               </div>
 
@@ -549,7 +556,7 @@ export function VocabularyVaultModal({
                   onClick={handleSaveForm}
                 >
                   <span className="wp-save-btn-label">
-                    {editingWord ? <><Check size={14} /> Enregistrer les modifications</> : <><Plus size={14} /> Enregistrer le mot</>}
+                    {editingWord ? <><Check size={14} /> {t.save}</> : <><Plus size={14} /> {t.save}</>}
                   </span>
                   {formRaw.trim() && <em className="wp-save-btn-word">{formRaw.trim()}</em>}
                 </button>
@@ -562,7 +569,7 @@ export function VocabularyVaultModal({
                     onClick={() => handleDelete(editingWord)}
                   >
                     <Trash2 size={13} />
-                    <span>Supprimer ce mot</span>
+                    <span>{t.deleteWord}</span>
                   </button>
                 )}
               </div>
@@ -573,3 +580,4 @@ export function VocabularyVaultModal({
     </div>
   )
 }
+

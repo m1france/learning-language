@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Check, FileText, Image, Pencil, Trash2, X } from 'lucide-react'
-import type { Resource } from '../domain'
+import type { Resource, UiLanguage } from '../domain'
 import { toChapters } from '../importer'
+import { resourcesCopy } from '../i18n'
 
 export type ResourceContextTarget = {
   resource: Resource
@@ -13,13 +14,16 @@ export type ResourceAction = 'editContent' | 'rename' | 'changeCover' | 'delete'
 
 export function ResourceContextMenu({
   target,
+  ui = 'fr',
   onSelectAction,
   onClose,
 }: {
   target: ResourceContextTarget
+  ui?: UiLanguage
   onSelectAction: (action: ResourceAction, resource: Resource) => void
   onClose: () => void
 }) {
+  const t = resourcesCopy[ui] || resourcesCopy.fr
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -63,7 +67,7 @@ export function ResourceContextMenu({
           onSelectAction('editContent', target.resource)
         }}
       >
-        <i><FileText size={15} /></i> Modifier le contenu
+        <i><FileText size={15} /></i> {t.editContentAction}
       </button>
 
       <button
@@ -74,7 +78,7 @@ export function ResourceContextMenu({
           onSelectAction('rename', target.resource)
         }}
       >
-        <i><Pencil size={15} /></i> Renommer
+        <i><Pencil size={15} /></i> {t.renameAction}
       </button>
 
       <button
@@ -85,7 +89,7 @@ export function ResourceContextMenu({
           onSelectAction('changeCover', target.resource)
         }}
       >
-        <i><Image size={15} /></i> Modifier la couverture
+        <i><Image size={15} /></i> {t.changeCoverAction}
       </button>
 
       <div className="page-context-sep" />
@@ -98,7 +102,7 @@ export function ResourceContextMenu({
           onSelectAction('delete', target.resource)
         }}
       >
-        <i><Trash2 size={15} /></i> Supprimer
+        <i><Trash2 size={15} /></i> {t.deleteAction}
       </button>
     </div>
   )
@@ -106,13 +110,16 @@ export function ResourceContextMenu({
 
 export function EditContentModal({
   resource,
+  ui = 'fr',
   onSave,
   onClose,
 }: {
   resource: Resource
+  ui?: UiLanguage
   onSave: (updated: Resource) => void
   onClose: () => void
 }) {
+  const t = resourcesCopy[ui] || resourcesCopy.fr
   const initialText = resource.chapters.flatMap((c) => c.paragraphs).join('\n\n')
   const [content, setContent] = useState(initialText)
 
@@ -142,20 +149,20 @@ export function EditContentModal({
       <div className="edit-content-modal" onMouseDown={(e) => e.stopPropagation()}>
         <header className="edit-content-header">
           <div>
-            <p className="eyebrow">MODIFIER LE CONTENU</p>
+            <p className="eyebrow">{t.editContentEyebrow}</p>
             <h2>{resource.title}</h2>
           </div>
-          <button className="modal-close" onClick={onClose} aria-label="Fermer">
+          <button className="modal-close" onClick={onClose} aria-label={t.cancelBtn}>
             <X size={18} />
           </button>
         </header>
 
         <div className="edit-content-meta-bar">
-          <span>{words} mots</span>
+          <span>{words} {t.wordsCount}</span>
           <span>·</span>
-          <span>{chars} caractères</span>
+          <span>{chars} {t.charsCount}</span>
           <span>·</span>
-          <span>{paragraphsCount} paragraphes</span>
+          <span>{paragraphsCount} {t.paragraphsCount}</span>
         </div>
 
         <div className="edit-content-body">
@@ -163,17 +170,17 @@ export function EditContentModal({
             className="edit-content-textarea"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Écrivez ou collez le texte de la ressource ici..."
+            placeholder={t.editContentPlaceholder}
             autoFocus
           />
         </div>
 
         <footer className="edit-content-footer">
           <button type="button" className="outline" onClick={onClose}>
-            Annuler
+            {t.cancelBtn}
           </button>
           <button type="button" className="primary" onClick={handleSave}>
-            <Check size={16} /> Enregistrer les modifications
+            <Check size={16} /> {t.saveChangesBtn}
           </button>
         </footer>
       </div>
@@ -183,13 +190,16 @@ export function EditContentModal({
 
 export function RenameModal({
   resource,
+  ui = 'fr',
   onSave,
   onClose,
 }: {
   resource: Resource
+  ui?: UiLanguage
   onSave: (updated: Resource) => void
   onClose: () => void
 }) {
+  const t = resourcesCopy[ui] || resourcesCopy.fr
   const [title, setTitle] = useState(resource.title)
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -203,14 +213,14 @@ export function RenameModal({
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="rename-modal-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="rename-modal-head">
-          <h3>Renommer la ressource</h3>
-          <button className="modal-close" onClick={onClose} aria-label="Fermer">
+          <h3>{t.renameModalTitle}</h3>
+          <button className="modal-close" onClick={onClose} aria-label={t.cancelBtn}>
             <X size={18} />
           </button>
         </div>
         <form onSubmit={handleSubmit}>
           <div className="rename-modal-field">
-            <label>Nouveau titre</label>
+            <label>{t.newTitleLabel}</label>
             <input
               type="text"
               autoFocus
@@ -223,10 +233,10 @@ export function RenameModal({
           </div>
           <div className="rename-modal-actions">
             <button type="button" className="outline" onClick={onClose}>
-              Annuler
+              {t.cancelBtn}
             </button>
             <button type="submit" className="primary" disabled={!title.trim()}>
-              <Check size={15} /> Renommer
+              <Check size={15} /> {t.renameBtn}
             </button>
           </div>
         </form>
@@ -237,28 +247,31 @@ export function RenameModal({
 
 export function DeleteModal({
   resource,
+  ui = 'fr',
   onConfirm,
   onClose,
 }: {
   resource: Resource
+  ui?: UiLanguage
   onConfirm: (resourceId: string) => void
   onClose: () => void
 }) {
+  const t = resourcesCopy[ui] || resourcesCopy.fr
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="delete-modal-card" onMouseDown={(e) => e.stopPropagation()}>
         <div className="delete-modal-head">
-          <h3>Supprimer la ressource</h3>
-          <button className="modal-close" onClick={onClose} aria-label="Fermer">
+          <h3>{t.deleteModalTitle}</h3>
+          <button className="modal-close" onClick={onClose} aria-label={t.cancelBtn}>
             <X size={18} />
           </button>
         </div>
         <p className="delete-modal-msg">
-          Êtes-vous sûr de vouloir supprimer <strong>« {resource.title} »</strong> ? Cette action est irréversible.
+          {t.deleteConfirmMsg} <strong>« {resource.title} »</strong> ? {t.irreversibleWarning}
         </p>
         <div className="delete-modal-actions">
           <button type="button" className="outline" onClick={onClose}>
-            Annuler
+            {t.cancelBtn}
           </button>
           <button
             type="button"
@@ -268,10 +281,11 @@ export function DeleteModal({
               onClose()
             }}
           >
-            <Trash2 size={15} /> Supprimer définitivement
+            <Trash2 size={15} /> {t.deletePermanentlyBtn}
           </button>
         </div>
       </div>
     </div>
   )
 }
+

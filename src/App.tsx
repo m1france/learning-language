@@ -298,7 +298,7 @@ export default function App() {
               {page === 'reading' && <ReadingLibrary state={state} t={t} onOpen={(resource) => setReaderId(resource.id)} onAdd={(resource) => change(upsertResource(state, resource))} onChange={change} onAiTaskChange={setIsAiTaskRunning} />}
               {page === 'speaking' && (
                 <SpeakingPage
-                  ui={baseUi(ui)}
+                  ui={ui}
                   language={state.settings.learningLanguage}
                   api={state.settings.api}
                   customPrompterText={speakingPrompterText}
@@ -369,6 +369,7 @@ export default function App() {
             onUpdateResource={(updated) => change(upsertResource(state, updated))}
             onClose={() => setFocusId(null)}
             ui={state.settings.uiLanguage}
+            api={state.settings.api}
           />
         )}
         
@@ -822,6 +823,7 @@ function Dashboard({
 }
 
 function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: { state: AppState; t: UI; onOpen: (r: Resource) => void; onAdd: (r: Resource) => void; onChange: (state: AppState) => void; onAiTaskChange?: (running: boolean) => void }) {
+  const ui = state.settings.uiLanguage
   const [type, setType] = useState('all')
   const [difficulty, setDifficulty] = useState<Difficulty | 'all'>('all')
   const [adding, setAdding] = useState(false)
@@ -974,15 +976,16 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
         <p>{t.emptyHint}</p>
         <button className="primary" onClick={() => setAdding(true)}><Plus size={16} /> {t.add} <ArrowRight size={16} /></button>
       </section>}
-    {menuTarget && <ResourceContextMenu target={menuTarget} onSelectAction={handleAction} onClose={() => setMenuTarget(null)} />}
-    {editingResource && <EditContentModal resource={editingResource} onSave={(updated) => onChange(upsertResource(state, updated))} onClose={() => setEditingResource(null)} />}
-    {renamingResource && <RenameModal resource={renamingResource} onSave={(updated) => onChange(upsertResource(state, updated))} onClose={() => setRenamingResource(null)} />}
-    {deletingResource && <DeleteModal resource={deletingResource} onConfirm={(id) => onChange(deleteResource(state, id))} onClose={() => setDeletingResource(null)} />}
-    {adding && <AddResourceModal t={t} state={state} close={() => setAdding(false)} onAdd={(resource) => { onAdd(resource); setAdding(false) }} onChange={onChange} onAiTaskChange={onAiTaskChange} />}
+    {menuTarget && <ResourceContextMenu target={menuTarget} ui={ui} onSelectAction={handleAction} onClose={() => setMenuTarget(null)} />}
+    {editingResource && <EditContentModal resource={editingResource} ui={ui} onSave={(updated) => onChange(upsertResource(state, updated))} onClose={() => setEditingResource(null)} />}
+    {renamingResource && <RenameModal resource={renamingResource} ui={ui} onSave={(updated) => onChange(upsertResource(state, updated))} onClose={() => setRenamingResource(null)} />}
+    {deletingResource && <DeleteModal resource={deletingResource} ui={ui} onConfirm={(id) => onChange(deleteResource(state, id))} onClose={() => setDeletingResource(null)} />}
+    {adding && <AddResourceModal t={t} state={state} ui={ui} close={() => setAdding(false)} onAdd={(resource) => { onAdd(resource); setAdding(false) }} onChange={onChange} onAiTaskChange={onAiTaskChange} />}
     {vocabVaultOpen && (
       <VocabularyVaultModal
         state={state}
         language={state.settings.learningLanguage}
+        ui={ui}
         onSaveWord={(args) => onChange(upsertWordDetails(state, args))}
         onDeleteWord={(raw, lang) => onChange(deleteWord(state, raw, lang))}
         onClose={() => setVocabVaultOpen(false)}

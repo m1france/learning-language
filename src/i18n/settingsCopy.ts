@@ -110,6 +110,8 @@ export type SettingsCopy = {
   taskUrlExtractionDesc: string
   taskWritingCorrection: string
   taskWritingCorrectionDesc: string
+  taskTeacherAlignment: string
+  taskTeacherAlignmentDesc: string
   advancedFormatting: string
   advancedFormattingDesc: string
   taskSpeakingTranslation: string
@@ -122,6 +124,19 @@ export type SettingsCopy = {
   ttsDesc: string
   ttsTestBtn: string
   ttsGenerating: string
+  useMainModelDefault: string
+  customModelBadge: string
+  defaultModelBadge: string
+  resetToDefault: string
+  groupMainAgent: string
+  groupReadingVocab: string
+  groupWritingExercises: string
+  groupOralAudio: string
+  elevenLabsKeyLabel: string
+  fishKeyLabel: string
+  openRouterVoiceLabel: string
+  providerDeepl: string
+  providerAi: string
   // Data
   dataTitle: string
   dataDetail: string
@@ -237,6 +252,8 @@ const frSettings: SettingsCopy = {
   taskUrlExtractionDesc: 'Nettoyage intelligent des pages web (retrait des pubs et menus)',
   taskWritingCorrection: "Correction et annotations d'écriture (« Correction IA »)",
   taskWritingCorrectionDesc: 'Analyse orthographique, syntaxique, restructuration et conseils de style en temps réel',
+  taskTeacherAlignment: 'Fidélité & Alignement Teacher Mode (« Alignement IA »)',
+  taskTeacherAlignmentDesc: 'Analyse sémantique des annotations, rattachement aux mots/lettres et garantie de fidélité multi-écrans',
   advancedFormatting: 'Activer le formatage avancé',
   advancedFormattingDesc: "L'IA optimise automatiquement la taille, la disposition et l'espacement du texte manuscrit selon l'espace disponible",
   taskSpeakingTranslation: 'Traduction dans Speaking',
@@ -249,6 +266,19 @@ const frSettings: SettingsCopy = {
   ttsDesc: 'Lecture audio de la prononciation et des phrases',
   ttsTestBtn: 'Tester la synthèse vocale (TTS)',
   ttsGenerating: 'Génération audio…',
+  useMainModelDefault: 'Utilise le modèle principal par défaut',
+  customModelBadge: 'Personnalisé',
+  defaultModelBadge: 'Par défaut',
+  resetToDefault: 'Rétablir le modèle par défaut',
+  groupMainAgent: 'Agent Principal & Fournisseur',
+  groupReadingVocab: 'Lecture, Vocabulaire & Web',
+  groupWritingExercises: 'Écriture & Exercices',
+  groupOralAudio: 'Oral, Vidéo & Synthèse Vocale',
+  elevenLabsKeyLabel: 'Clé API ElevenLabs (Optionnel — Voix audio)',
+  fishKeyLabel: 'Clé API Fish Audio (Optionnel — Voix S2)',
+  openRouterVoiceLabel: 'Voix du modèle',
+  providerDeepl: 'DeepL (par défaut)',
+  providerAi: 'Agent IA',
   dataTitle: 'Tes données',
   dataDetail: 'Ressources, deck, écrits et réglages sont stockés localement dans ce navigateur.',
   localDefault: 'Local par défaut',
@@ -363,6 +393,8 @@ const enSettings: SettingsCopy = {
   taskUrlExtractionDesc: 'Intelligent web page cleaning (removes ads and navigation menus)',
   taskWritingCorrection: 'Writing Correction & Notes ("AI Correction")',
   taskWritingCorrectionDesc: 'Real-time spelling, grammar, restructuring, and style advice',
+  taskTeacherAlignment: 'Teacher Mode Fidelity & Alignment ("AI Alignment")',
+  taskTeacherAlignmentDesc: 'Semantic analysis of annotations, word/letter anchoring, and cross-device visual fidelity guarantee',
   advancedFormatting: 'Enable advanced formatting',
   advancedFormattingDesc: 'AI automatically optimizes handwritten note size, layout, and spacing based on available space',
   taskSpeakingTranslation: 'Translation in Speaking',
@@ -375,6 +407,19 @@ const enSettings: SettingsCopy = {
   ttsDesc: 'Audio playback of pronunciation and sentences',
   ttsTestBtn: 'Test Text-to-Speech (TTS)',
   ttsGenerating: 'Generating audio…',
+  useMainModelDefault: 'Uses main model by default',
+  customModelBadge: 'Custom',
+  defaultModelBadge: 'Default',
+  resetToDefault: 'Reset to default model',
+  groupMainAgent: 'Main Agent & Provider',
+  groupReadingVocab: 'Reading, Vocabulary & Web',
+  groupWritingExercises: 'Writing & Exercises',
+  groupOralAudio: 'Speaking, Video & Speech Synthesis',
+  elevenLabsKeyLabel: 'ElevenLabs API Key (Optional — Audio voices)',
+  fishKeyLabel: 'Fish Audio API Key (Optional — S2 Voices)',
+  openRouterVoiceLabel: 'Model voice',
+  providerDeepl: 'DeepL (default)',
+  providerAi: 'AI Agent',
   dataTitle: 'Your data',
   dataDetail: 'Resources, vocabulary deck, writings, and settings are stored locally in this browser.',
   localDefault: 'Local by default',
@@ -489,6 +534,8 @@ const esSettings: SettingsCopy = {
   taskUrlExtractionDesc: 'Limpieza inteligente de páginas web (elimina anuncios y menús)',
   taskWritingCorrection: 'Corrección y anotaciones de escritura («Corrección IA»)',
   taskWritingCorrectionDesc: 'Análisis ortográfico, sintáctico, reestructuración y consejos de estilo',
+  taskTeacherAlignment: 'Fidelidad y Alineación Teacher Mode («Alineación IA»)',
+  taskTeacherAlignmentDesc: 'Análisis semántico de anotaciones, anclaje a palabras/letras y garantía de fidelidad multidispositivo',
   advancedFormatting: 'Activar formato avanzado',
   advancedFormattingDesc: 'La IA optimiza automáticamente el tamaño, disposición y espaciado de notas según el espacio',
   taskSpeakingTranslation: 'Traducción en Speaking',
@@ -501,6 +548,19 @@ const esSettings: SettingsCopy = {
   ttsDesc: 'Reproducción de audio de pronunciación y frases',
   ttsTestBtn: 'Probar síntesis de voz (TTS)',
   ttsGenerating: 'Generando audio…',
+  useMainModelDefault: 'Usa el modelo principal por defecto',
+  customModelBadge: 'Personalizado',
+  defaultModelBadge: 'Por defecto',
+  resetToDefault: 'Restablecer al modelo por defecto',
+  groupMainAgent: 'Agente Principal y Proveedor',
+  groupReadingVocab: 'Lectura, Vocabulario y Web',
+  groupWritingExercises: 'Escritura y Ejercicios',
+  groupOralAudio: 'Oral, Vídeo y Síntesis de Voz',
+  elevenLabsKeyLabel: 'Clave API ElevenLabs (Opcional — Voces de audio)',
+  fishKeyLabel: 'Clave API Fish Audio (Opcional — Voces S2)',
+  openRouterVoiceLabel: 'Voz del modelo',
+  providerDeepl: 'DeepL (por defecto)',
+  providerAi: 'Agente IA',
   dataTitle: 'Tus datos',
   dataDetail: 'Recursos, mazo de vocabulario, escritos y ajustes se guardan localmente en este navegador.',
   localDefault: 'Local por defecto',
@@ -615,6 +675,8 @@ const zhSettings: SettingsCopy = {
   taskUrlExtractionDesc: '智能抓取清洗网页正文（自动剔除广告、导航与无关内容）',
   taskWritingCorrection: '写作批改与精修 (「AI 批改」)',
   taskWritingCorrectionDesc: '实时进行拼写语法检查、句子重构与地道行文建议',
+  taskTeacherAlignment: 'Teacher Mode 教学批注对齐与保真 (「AI 智能对齐」)',
+  taskTeacherAlignmentDesc: '语义化解析板书批注，智能吸附至对应词汇与字母，确保不同学生端屏幕完美复刻',
   advancedFormatting: '启用高级自适应排版',
   advancedFormattingDesc: 'AI 会根据可用空间自动优化手写批注的大小、版式与间距',
   taskSpeakingTranslation: '口语实时翻译',
@@ -627,6 +689,19 @@ const zhSettings: SettingsCopy = {
   ttsDesc: '单词发音与长句自然原声朗读',
   ttsTestBtn: '测试语音合成 (TTS)',
   ttsGenerating: '正在合成试听音频…',
+  useMainModelDefault: '默认使用主智能体模型',
+  customModelBadge: '自定义',
+  defaultModelBadge: '默认',
+  resetToDefault: '重置为默认模型',
+  groupMainAgent: '主智能体与服务商',
+  groupReadingVocab: '阅读、词汇与网页导入',
+  groupWritingExercises: '写作与互动练习',
+  groupOralAudio: '口语、视频与语音合成',
+  elevenLabsKeyLabel: 'ElevenLabs API 密钥 (可选 — 语音合成)',
+  fishKeyLabel: 'Fish Audio API 密钥 (可选 — S2 语音)',
+  openRouterVoiceLabel: '模型声音',
+  providerDeepl: 'DeepL (默认)',
+  providerAi: 'AI 智能体',
   dataTitle: '数据存储与安全',
   dataDetail: '所有文章资源、生词本、作文和偏好设置均安全存放在当前浏览器中。',
   localDefault: '默认全本地化存储',
@@ -741,6 +816,8 @@ const ruSettings: SettingsCopy = {
   taskUrlExtractionDesc: 'Умная очистка веб-страниц (удаление рекламы и меню)',
   taskWritingCorrection: 'Проверка и исправление текстов («Проверка ИИ»)',
   taskWritingCorrectionDesc: 'Анализ орфографии, грамматики, перефразирование и советы по стилю',
+  taskTeacherAlignment: 'Точность и выравнивание Teacher Mode («Выравнивание ИИ»)',
+  taskTeacherAlignmentDesc: 'Семантический анализ заметок, привязка к словам/буквам и гарантия точного отображения на всех экранах',
   advancedFormatting: 'Включить адаптивное форматирование',
   advancedFormattingDesc: 'ИИ автоматически оптимизирует размер и расположение рукописных заметок',
   taskSpeakingTranslation: 'Перевод в разделе Speaking',
@@ -753,6 +830,19 @@ const ruSettings: SettingsCopy = {
   ttsDesc: 'Озвучка произношения и фраз',
   ttsTestBtn: 'Проверить синтез речи (TTS)',
   ttsGenerating: 'Генерация аудио…',
+  useMainModelDefault: 'По умолчанию используется основная модель',
+  customModelBadge: 'Свой',
+  defaultModelBadge: 'По умолчанию',
+  resetToDefault: 'Сбросить на модель по умолчанию',
+  groupMainAgent: 'Основной агент и провайдер',
+  groupReadingVocab: 'Чтение, словарь и веб',
+  groupWritingExercises: 'Письмо и упражнения',
+  groupOralAudio: 'Устная речь, видео и синтез речи',
+  elevenLabsKeyLabel: 'Ключ API ElevenLabs (Опционально — Аудио голоса)',
+  fishKeyLabel: 'Ключ API Fish Audio (Опционально — S2 Голоса)',
+  openRouterVoiceLabel: 'Голос модели',
+  providerDeepl: 'DeepL (по умолчанию)',
+  providerAi: 'ИИ Агент',
   dataTitle: 'Ваши данные',
   dataDetail: 'Материалы, словарь, тексты и настройки хранятся локально в этом браузере.',
   localDefault: 'Локально по умолчанию',
@@ -867,6 +957,8 @@ const ptSettings: SettingsCopy = {
   taskUrlExtractionDesc: 'Limpeza inteligente de páginas web (remove anúncios e menus)',
   taskWritingCorrection: 'Correção e anotações de escrita («Correção IA»)',
   taskWritingCorrectionDesc: 'Análise ortográfica, sintática, reestruturação e conselhos de estilo',
+  taskTeacherAlignment: 'Fidelidade e Alinhamento Teacher Mode («Alinhamento IA»)',
+  taskTeacherAlignmentDesc: 'Análise semântica de anotações, ancoragem a palavras/letras e garantia de fidelidade multidispositivo',
   advancedFormatting: 'Ativar formatação avançada',
   advancedFormattingDesc: 'A IA otimiza automaticamente o tamanho e disposição de notas segundo o espaço disponível',
   taskSpeakingTranslation: 'Tradução no Speaking',
@@ -879,6 +971,19 @@ const ptSettings: SettingsCopy = {
   ttsDesc: 'Leitura áudio da pronúncia e frases',
   ttsTestBtn: 'Testar síntese de voz (TTS)',
   ttsGenerating: 'A gerar áudio…',
+  useMainModelDefault: 'Usa o modelo principal por padrão',
+  customModelBadge: 'Personalizado',
+  defaultModelBadge: 'Padrão',
+  resetToDefault: 'Redefinir para o modelo padrão',
+  groupMainAgent: 'Agente Principal e Provedor',
+  groupReadingVocab: 'Leitura, Vocabulário e Web',
+  groupWritingExercises: 'Escrita e Exercícios',
+  groupOralAudio: 'Oral, Vídeo e Síntese de Voz',
+  elevenLabsKeyLabel: 'Chave API ElevenLabs (Opcional — Vozes de áudio)',
+  fishKeyLabel: 'Chave API Fish Audio (Opcional — Vozes S2)',
+  openRouterVoiceLabel: 'Voz do modelo',
+  providerDeepl: 'DeepL (por padrão)',
+  providerAi: 'Agente IA',
   dataTitle: 'Os teus dados',
   dataDetail: 'Recursos, baralho de vocabulário, textos e definições ficam guardados localmente neste navegador.',
   localDefault: 'Local por defeito',

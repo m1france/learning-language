@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import type { LearnedWord } from '../../domain'
+import type { LearnedWord, UiLanguage } from '../../domain'
 import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Minimize2, Search, Sparkles } from 'lucide-react'
 import { renderPhoneticFormatted } from './phoneticUtils'
+import { vocabCopy } from '../../i18n'
 
 type Node = {
   id: string
@@ -31,6 +32,7 @@ type ObsidianWordGraphProps = {
   selectedWordId?: string | null
   onSelectWord?: (word: LearnedWord) => void
   compact?: boolean
+  ui?: UiLanguage
 }
 
 const KNOWLEDGE_COLORS: Record<number, string> = {
@@ -47,7 +49,9 @@ export function ObsidianWordGraph({
   selectedWordId,
   onSelectWord,
   compact = false,
+  ui = 'fr',
 }: ObsidianWordGraphProps) {
+  const t = vocabCopy[ui] || vocabCopy.fr
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -493,10 +497,10 @@ export function ObsidianWordGraph({
       {/* Top Floating Controls Bar */}
       <div className="graph-top-controls">
         <div className="graph-search-box">
-          <Search size={13} className="search-icon" />
+          <Search size={14} className="search-icon" />
           <input
             type="text"
-            placeholder="Rechercher un mot..."
+            placeholder={t.filterNodesPlaceholder}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -509,9 +513,9 @@ export function ObsidianWordGraph({
 
         <div className="graph-stats-chip">
           <Sparkles size={12} />
-          <span>{nodes.length} mots</span>
+          <span>{nodes.length} {t.wordsCount}</span>
           <span>·</span>
-          <span>{edges.length} liens</span>
+          <span>{edges.length} {t.linksCount}</span>
         </div>
 
         <div className="graph-action-buttons">
@@ -521,7 +525,7 @@ export function ObsidianWordGraph({
             onClick={() => {
               targetCameraRef.current.scale = Math.min(3.5, targetCameraRef.current.scale * 1.3)
             }}
-            title="Zoom avant"
+            title={t.zoomIn}
           >
             <ZoomIn size={14} />
           </button>
@@ -531,18 +535,18 @@ export function ObsidianWordGraph({
             onClick={() => {
               targetCameraRef.current.scale = Math.max(0.2, targetCameraRef.current.scale * 0.7)
             }}
-            title="Zoom arrière"
+            title={t.zoomOut}
           >
             <ZoomOut size={14} />
           </button>
-          <button type="button" className="graph-btn" onClick={resetCamera} title="Recentrer la vue">
+          <button type="button" className="graph-btn" onClick={resetCamera} title={t.resetView}>
             <RotateCcw size={14} />
           </button>
           <button
             type="button"
             className="graph-btn"
             onClick={() => setIsFullscreen(!isFullscreen)}
-            title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+            title={isFullscreen ? t.exitFullscreen : t.fullscreen}
           >
             {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
@@ -572,7 +576,7 @@ export function ObsidianWordGraph({
             <p className="tooltip-trans">{hoveredNode.translation}</p>
           )}
           {hoveredNode.parent && (
-            <span className="tooltip-parent">Racine : {hoveredNode.parent}</span>
+            <span className="tooltip-parent">{t.rootWord} {hoveredNode.parent}</span>
           )}
           {hoveredNode.tags && hoveredNode.tags.length > 0 && (
             <div className="tooltip-tags">

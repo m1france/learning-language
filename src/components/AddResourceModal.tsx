@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react'
-import type { AppState, Difficulty, Resource } from '../domain'
+import type { AppState, Difficulty, Resource, UiLanguage } from '../domain'
 import { BUILTIN_CATEGORIES } from '../domain'
 import type { AppCopy } from '../i18n'
+import { resourcesCopy } from '../i18n'
 import { importFromFile, importFromUrl, paragraphsToResource } from '../importer'
 import { generateResourceWithAi, type StoryLength } from '../features/resourceAiService'
 import {
@@ -18,17 +19,20 @@ type ImportFormat = 'ai' | 'text' | 'file' | 'url'
 export function AddResourceModal({
   t,
   state,
+  ui = 'fr',
   close,
   onAdd,
   onAiTaskChange,
 }: {
   t: AppCopy
   state: AppState
+  ui?: UiLanguage
   close: () => void
   onAdd: (r: Resource) => void
   onChange?: (state: AppState) => void
   onAiTaskChange?: (running: boolean) => void
 }) {
+  const resT = resourcesCopy[ui] || resourcesCopy.fr
   const [format, setFormat] = useState<ImportFormat>('ai')
 
   // AI Story generation state
@@ -62,7 +66,6 @@ export function AddResourceModal({
     setErrorMessage(null)
 
     if (format === 'ai') {
-      // 1. GENERATION IA : Quitter la popup immédiatement et exécuter en arrière-plan
       const promptToRun = isRandomPrompt ? undefined : aiPrompt
       const isRandom = isRandomPrompt
       const difficultyToRun = aiDifficulty
@@ -73,7 +76,6 @@ export function AddResourceModal({
       close()
       onAiTaskChange?.(true)
 
-      // Exécution en tâche de fond
       void (async () => {
         try {
           const aiResult = await generateResourceWithAi({
@@ -99,99 +101,102 @@ export function AddResourceModal({
             })
             onAdd(newRes)
           } else {
-            console.error('[AddResourceModal] Erreur IA:', aiResult.error)
+            console.error('[AddResourceModal] AI generation failed:', aiResult.error)
           }
         } catch (err) {
-          console.error('[AddResourceModal] Erreur de génération:', err)
+          console.error('[AddResourceModal] Unexpected error in background generation:', err)
         } finally {
           onAiTaskChange?.(false)
         }
       })()
+
       return
     }
 
-    if (format === 'url') {
-      if (!url.trim()) {
-        setErrorMessage('Veuillez saisir une URL.')
+    if (format === 'text') {
+      const text = pastedText.trim()
+      if (!text) {
+        setErrorMessage(resT.importError)
         return
       }
+
       setStatus('loading')
-      onAiTaskChange?.(true)
       try {
-        const result = await importFromUrl(url.trim(), state.settings.learningLanguage, {
+        const title = pastedTitle.trim() || text.slice(0, 40).replace(/\n/g, ' ') + '...'
+        const res = paragraphsToResource({
+          title,
+          author: state.settings.name || 'Moi',
+          paragraphs: text.split(/\n+/).map((p) => p.trim()).filter(Boolean),
+          language: state.settings.learningLanguage,
           type: category,
-          difficulty: difficulty === 'auto' ? undefined : difficulty,
-          api: state.settings.api,
-          customCategories: existingCategoriesList,
+          difficulty: difficulty === 'auto' ? 'intermediate' : difficulty,
         })
-        if (result.ok) {
-          onAdd(result.resource)
-          close()
-        } else {
-          setStatus('failed')
-          setErrorMessage(t.importError)
-        }
-      } catch (err) {
+        onAdd(res)
+        close()
+      } catch (err: any) {
+        setErrorMessage(err.message || resT.importError)
         setStatus('failed')
-        setErrorMessage(err instanceof Error ? err.message : 'Erreur lors de l’importation.')
-      } finally {
-        onAiTaskChange?.(false)
       }
       return
     }
 
     if (format === 'file') {
       if (!selectedFile) {
-        setErrorMessage('Veuillez sélectionner un fichier.')
+        setErrorMessage(resT.pickFile)
         return
       }
+
       setStatus('loading')
       try {
         const result = await importFromFile(selectedFile, state.settings.learningLanguage, {
-          type: category,
           difficulty: difficulty === 'auto' ? undefined : difficulty,
+          type: category,
         })
         if (result.ok) {
           onAdd(result.resource)
           close()
         } else {
+          setErrorMessage(resT.importError)
           setStatus('failed')
-          setErrorMessage('Impossible de lire le fichier sélectionné.')
         }
-      } catch (err) {
+      } catch (err: any) {
+        setErrorMessage(err.message || resT.importError)
         setStatus('failed')
-        setErrorMessage(err instanceof Error ? err.message : 'Erreur lors de la lecture du fichier.')
       }
       return
     }
 
-    if (format === 'text') {
-      const paragraphs = pastedText
-        .split(/\n{2,}|\r?\n(?=\S)/)
-        .map((p) => p.replace(/\s+/g, ' ').trim())
-        .filter((p) => p.length > 1)
-
-      if (!paragraphs.length) {
-        setErrorMessage('Veuillez saisir ou coller un texte.')
+    if (format === 'url') {
+      if (!url.trim()) {
+        setErrorMessage(resT.importError)
         return
       }
 
-      const newRes = paragraphsToResource({
-        title: pastedTitle.trim() || t.pastedTitle,
-        paragraphs,
-        language: state.settings.learningLanguage,
-        type: category,
-        difficulty: difficulty === 'auto' ? undefined : difficulty,
-      })
-      onAdd(newRes)
-      close()
+      setStatus('loading')
+      try {
+        const result = await importFromUrl(url.trim(), state.settings.learningLanguage, {
+          difficulty: difficulty === 'auto' ? undefined : difficulty,
+          type: category,
+          api: state.settings.api,
+        })
+        if (result.ok) {
+          onAdd(result.resource)
+          close()
+        } else {
+          setErrorMessage(resT.importError)
+          setStatus('failed')
+        }
+      } catch (err: any) {
+        setErrorMessage(err.message || resT.importError)
+        setStatus('failed')
+      }
     }
   }
 
   const handleFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (f) {
-      setSelectedFile(f)
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedFile(file)
       setErrorMessage(null)
     }
   }
@@ -199,18 +204,18 @@ export function AddResourceModal({
   return (
     <div className="modal-backdrop" onMouseDown={close}>
       <div className="add-resource-modal" onMouseDown={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={close} aria-label="Fermer">
+        <button className="modal-close" onClick={close} aria-label={resT.cancelBtn}>
           <X size={18} />
         </button>
 
         <header className="add-res-header">
-          <h2 className="add-res-title">Ajoute une nouvelle ressource</h2>
+          <h2 className="add-res-title">{resT.addResourceTitle}</h2>
         </header>
 
         {/* Sélection du format sous forme de dropdown épuré */}
         <div className="add-res-format-section">
           <label className="add-res-field-label">
-            <span>Format</span>
+            <span>{resT.formatLabel}</span>
             <div className="add-res-select-wrap">
               <select
                 className="add-res-format-dropdown"
@@ -220,10 +225,10 @@ export function AddResourceModal({
                   setErrorMessage(null)
                 }}
               >
-                <option value="ai">Génération IA</option>
-                <option value="text">Coller un texte</option>
-                <option value="file">Fichiers (.txt, .md, .epub, .pdf)</option>
-                <option value="url">URL</option>
+                <option value="ai">{resT.formatAi}</option>
+                <option value="text">{resT.formatText}</option>
+                <option value="file">{resT.formatFile}</option>
+                <option value="url">{resT.formatUrl}</option>
               </select>
             </div>
           </label>
@@ -234,7 +239,7 @@ export function AddResourceModal({
           <div className="add-res-content-pane">
             <div className="add-res-prompt-wrap">
               <label className="add-res-field-label">
-                <span>Sujet / Consignes</span>
+                <span>{resT.aiPromptLabel}</span>
               </label>
               <div className={`add-res-prompt-box ${isRandomPrompt ? 'is-random' : ''}`}>
                 <textarea
@@ -245,8 +250,8 @@ export function AddResourceModal({
                   disabled={isRandomPrompt}
                   placeholder={
                     isRandomPrompt
-                      ? 'Thème aléatoire surprise choisi par l’IA.'
-                      : 'Instructions ou sujet du texte...'
+                      ? resT.aiRandomPromptDesc
+                      : resT.aiPromptPlaceholder
                   }
                 />
                 <button
@@ -254,8 +259,8 @@ export function AddResourceModal({
                   className={`add-res-random-btn ${isRandomPrompt ? 'active' : ''}`}
                   title={
                     isRandomPrompt
-                      ? 'Désactiver le thème aléatoire'
-                      : 'Générer un thème aléatoire'
+                      ? resT.disableRandomPrompt
+                      : resT.enableRandomPrompt
                   }
                   onClick={() => setIsRandomPrompt((prev) => !prev)}
                 >
@@ -266,28 +271,28 @@ export function AddResourceModal({
 
             <div className="add-res-meta-row">
               <label className="add-res-field-label">
-                <span>Longueur</span>
+                <span>{resT.lengthLabel}</span>
                 <select
                   value={aiLength}
                   onChange={(e) => setAiLength(e.target.value as StoryLength)}
                 >
-                  <option value="short">Histoire courte (~3 pages)</option>
-                  <option value="medium">Histoire moyenne (~7 pages)</option>
-                  <option value="long">Histoire longue (~15 pages)</option>
-                  <option value="novel">Roman (+30 pages)</option>
+                  <option value="short">{resT.lengthShort}</option>
+                  <option value="medium">{resT.lengthMedium}</option>
+                  <option value="long">{resT.lengthLong}</option>
+                  <option value="novel">{resT.lengthNovel}</option>
                 </select>
               </label>
 
               <label className="add-res-field-label">
-                <span>Niveau</span>
+                <span>{resT.levelLabel}</span>
                 <select
                   value={aiDifficulty}
                   onChange={(e) => setAiDifficulty(e.target.value as Difficulty)}
                 >
-                  <option value="beginner">Débutant (A1 - A2)</option>
-                  <option value="intermediate">Intermédiaire (B1 - B2)</option>
-                  <option value="advanced">Avancé (C1)</option>
-                  <option value="native">Natif (C2)</option>
+                  <option value="beginner">{resT.levelBeginner}</option>
+                  <option value="intermediate">{resT.levelIntermediate}</option>
+                  <option value="advanced">{resT.levelAdvanced}</option>
+                  <option value="native">{resT.levelNative}</option>
                 </select>
               </label>
             </div>
@@ -298,46 +303,46 @@ export function AddResourceModal({
         {format === 'text' && (
           <div className="add-res-content-pane">
             <label className="add-res-field-label">
-              <span>Titre (optionnel)</span>
+              <span>{resT.titleOptional}</span>
               <input
                 type="text"
                 value={pastedTitle}
                 onChange={(e) => setPastedTitle(e.target.value)}
-                placeholder="Mon texte..."
+                placeholder={resT.titlePlaceholder}
               />
             </label>
 
             <label className="add-res-field-label">
-              <span>Contenu</span>
+              <span>{resT.contentLabel}</span>
               <textarea
                 className="add-res-textarea"
                 rows={5}
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
-                placeholder="Colle ton texte ici..."
+                placeholder={resT.contentPlaceholder}
               />
             </label>
 
             <div className="add-res-meta-row">
               <label className="add-res-field-label">
-                <span>{t.difficultyLabel}</span>
+                <span>{resT.difficultyLabel}</span>
                 <select
                   value={difficulty}
                   onChange={(e) => setDifficulty(e.target.value as Difficulty | 'auto')}
                 >
-                  <option value="auto">{t.auto}</option>
-                  <option value="beginner">{t.difficulty.beginner}</option>
-                  <option value="intermediate">{t.difficulty.intermediate}</option>
-                  <option value="advanced">{t.difficulty.advanced}</option>
+                  <option value="auto">{resT.auto}</option>
+                  <option value="beginner">{resT.levelBeginner}</option>
+                  <option value="intermediate">{resT.levelIntermediate}</option>
+                  <option value="advanced">{resT.levelAdvanced}</option>
                 </select>
               </label>
 
               <label className="add-res-field-label">
-                <span>{t.categoryLabel}</span>
+                <span>{resT.categoryLabel}</span>
                 <select value={category} onChange={(e) => setCategory(e.target.value)}>
                   {BUILTIN_CATEGORIES.map((catId) => (
                     <option value={catId} key={catId}>
-                      {t.categories[catId] ?? catId}
+                      {resT.categories[catId] ?? catId}
                     </option>
                   ))}
                   {state.customCategories.map((c) => (
@@ -368,30 +373,30 @@ export function AddResourceModal({
               onClick={() => fileRef.current?.click()}
             >
               <Upload size={22} />
-              <strong>{selectedFile ? selectedFile.name : t.pickFile}</strong>
+              <strong>{selectedFile ? selectedFile.name : resT.pickFile}</strong>
               <small>{selectedFile ? `${Math.round(selectedFile.size / 1024)} Ko` : '.txt, .md, .epub, .pdf'}</small>
             </button>
 
             <div className="add-res-meta-row">
               <label className="add-res-field-label">
-                <span>{t.difficultyLabel}</span>
+                <span>{resT.difficultyLabel}</span>
                 <select
                   value={difficulty}
                   onChange={(e) => setDifficulty(e.target.value as Difficulty | 'auto')}
                 >
-                  <option value="auto">{t.auto}</option>
-                  <option value="beginner">{t.difficulty.beginner}</option>
-                  <option value="intermediate">{t.difficulty.intermediate}</option>
-                  <option value="advanced">{t.difficulty.advanced}</option>
+                  <option value="auto">{resT.auto}</option>
+                  <option value="beginner">{resT.levelBeginner}</option>
+                  <option value="intermediate">{resT.levelIntermediate}</option>
+                  <option value="advanced">{resT.levelAdvanced}</option>
                 </select>
               </label>
 
               <label className="add-res-field-label">
-                <span>{t.categoryLabel}</span>
+                <span>{resT.categoryLabel}</span>
                 <select value={category} onChange={(e) => setCategory(e.target.value)}>
                   {BUILTIN_CATEGORIES.map((catId) => (
                     <option value={catId} key={catId}>
-                      {t.categories[catId] ?? catId}
+                      {resT.categories[catId] ?? catId}
                     </option>
                   ))}
                   {state.customCategories.map((c) => (
@@ -423,24 +428,24 @@ export function AddResourceModal({
 
             <div className="add-res-meta-row">
               <label className="add-res-field-label">
-                <span>{t.difficultyLabel}</span>
+                <span>{resT.difficultyLabel}</span>
                 <select
                   value={difficulty}
                   onChange={(e) => setDifficulty(e.target.value as Difficulty | 'auto')}
                 >
-                  <option value="auto">{t.auto}</option>
-                  <option value="beginner">{t.difficulty.beginner}</option>
-                  <option value="intermediate">{t.difficulty.intermediate}</option>
-                  <option value="advanced">{t.difficulty.advanced}</option>
+                  <option value="auto">{resT.auto}</option>
+                  <option value="beginner">{resT.levelBeginner}</option>
+                  <option value="intermediate">{resT.levelIntermediate}</option>
+                  <option value="advanced">{resT.levelAdvanced}</option>
                 </select>
               </label>
 
               <label className="add-res-field-label">
-                <span>{t.categoryLabel}</span>
+                <span>{resT.categoryLabel}</span>
                 <select value={category} onChange={(e) => setCategory(e.target.value)}>
                   {BUILTIN_CATEGORIES.map((catId) => (
                     <option value={catId} key={catId}>
-                      {t.categories[catId] ?? catId}
+                      {resT.categories[catId] ?? catId}
                     </option>
                   ))}
                   {state.customCategories.map((c) => (
@@ -473,11 +478,11 @@ export function AddResourceModal({
             {status === 'loading' ? (
               <>
                 <Loader2 size={16} className="spin" />
-                <span>Importation en cours…</span>
+                <span>{resT.importing}</span>
               </>
             ) : (
               <>
-                <span>Créer la ressource</span>
+                <span>{resT.createResourceBtn}</span>
                 <ArrowRight size={16} />
               </>
             )}

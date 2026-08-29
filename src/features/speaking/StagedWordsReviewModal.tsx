@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import type { ApiSettings, Language } from '../../domain'
+import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import type { StagedWord } from './wordAiService'
-import { speak, type SpeakResult } from '../../ai'
+import { speak } from '../../ai'
+import { speakingCopy } from '../../i18n'
 import {
   X,
   Volume2,
@@ -11,7 +12,6 @@ import {
   ChevronRight,
   Sparkles,
   Tag as TagIcon,
-  BookOpen,
 } from 'lucide-react'
 
 type StagedWordsReviewModalProps = {
@@ -19,6 +19,7 @@ type StagedWordsReviewModalProps = {
   onClose: () => void
   stagedWords: StagedWord[]
   language: Language
+  ui?: UiLanguage
   api: ApiSettings
   existingTags: string[]
   onApprove: (word: StagedWord) => void
@@ -30,11 +31,13 @@ export function StagedWordsReviewModal({
   onClose,
   stagedWords,
   language,
+  ui = 'fr',
   api,
   existingTags,
   onApprove,
   onDiscard,
 }: StagedWordsReviewModalProps) {
+  const t = speakingCopy[ui] || speakingCopy.fr
   const [currentIndex, setCurrentIndex] = useState(0)
   const [draftWord, setDraftWord] = useState<StagedWord | null>(null)
   const [isPlayingTts, setIsPlayingTts] = useState(false)
@@ -71,7 +74,7 @@ export function StagedWordsReviewModal({
     if (!draftWord) return
     const exists = draftWord.tags.includes(tag)
     const newTags = exists
-      ? draftWord.tags.filter((t) => t !== tag)
+      ? draftWord.tags.filter((tagItem) => tagItem !== tag)
       : [...draftWord.tags, tag]
     setDraftWord({ ...draftWord, tags: newTags })
   }
@@ -131,7 +134,7 @@ export function StagedWordsReviewModal({
           <div className="staged-modal-title-wrap">
             <div className="staged-modal-badge">
               <Sparkles size={14} />
-              <span>Fiche IA · Validation</span>
+              <span>{t.stagedModalBadge}</span>
             </div>
             {currentTotal > 1 && (
               <div className="staged-modal-pagination">
@@ -140,7 +143,7 @@ export function StagedWordsReviewModal({
                   className="staged-page-btn"
                   onClick={handlePrev}
                   disabled={currentIndex === 0}
-                  title="Précédent"
+                  title={t.prevBtn}
                 >
                   <ChevronLeft size={16} />
                 </button>
@@ -152,14 +155,14 @@ export function StagedWordsReviewModal({
                   className="staged-page-btn"
                   onClick={handleNext}
                   disabled={currentIndex >= currentTotal - 1}
-                  title="Suivant"
+                  title={t.nextBtn}
                 >
                   <ChevronRight size={16} />
                 </button>
               </div>
             )}
           </div>
-          <button className="staged-modal-close" onClick={onClose} title="Fermer">
+          <button className="staged-modal-close" onClick={onClose} title={t.closeBtn}>
             <X size={16} />
           </button>
         </div>
@@ -168,23 +171,23 @@ export function StagedWordsReviewModal({
         <div className="staged-modal-body">
           {/* Word row with Pronounce button */}
           <div className="staged-field-group">
-            <label className="staged-label">Mot enregistré</label>
+            <label className="staged-label">{t.stagedWordLabel}</label>
             <div className="staged-word-row">
               <input
                 type="text"
                 className="staged-input staged-word-input"
                 value={draftWord.word}
                 onChange={(e) => setDraftWord({ ...draftWord, word: e.target.value })}
-                placeholder="Mot..."
+                placeholder={t.stagedWordPlaceholder}
               />
               <button
                 type="button"
                 className={`staged-tts-btn ${isPlayingTts ? 'playing' : ''}`}
                 onClick={() => void handlePlayTts()}
-                title="Prononcer le mot (TTS)"
+                title={t.pronounceBtn}
               >
                 <Volume2 size={16} />
-                <span>Prononcer</span>
+                <span>{t.pronounceBtn}</span>
               </button>
             </div>
           </div>
@@ -192,8 +195,8 @@ export function StagedWordsReviewModal({
           {/* Pronunciation IPA US */}
           <div className="staged-field-group">
             <div className="staged-label-row">
-              <label className="staged-label">Prononciation (IPA US)</label>
-              <span className="staged-ai-tag">Généré par IA</span>
+              <label className="staged-label">{t.pronunciationLabel}</label>
+              <span className="staged-ai-tag">{t.aiGeneratedBadge}</span>
             </div>
             <input
               type="text"
@@ -206,31 +209,31 @@ export function StagedWordsReviewModal({
 
           {/* Translation */}
           <div className="staged-field-group">
-            <label className="staged-label">Traduction</label>
+            <label className="staged-label">{t.translationLabel}</label>
             <textarea
               className="staged-textarea"
               rows={2}
               value={draftWord.translation}
               onChange={(e) => setDraftWord({ ...draftWord, translation: e.target.value })}
-              placeholder="Traduction du mot..."
+              placeholder={t.translationPlaceholder}
             />
           </div>
 
           {/* Parent / Lemma */}
           <div className="staged-field-group">
-            <label className="staged-label">Mot de référence / Forme de base (optionnel)</label>
+            <label className="staged-label">{t.rootWordLabel}</label>
             <input
               type="text"
               className="staged-input"
               value={draftWord.parent}
               onChange={(e) => setDraftWord({ ...draftWord, parent: e.target.value })}
-              placeholder="ex. go (pour went), eat (pour eaten)..."
+              placeholder={t.rootWordPlaceholder}
             />
           </div>
 
           {/* Tags */}
           <div className="staged-field-group">
-            <label className="staged-label">Tags associés</label>
+            <label className="staged-label">{t.associatedTagsLabel}</label>
             <div className="staged-tags-container">
               {existingTags.length > 0 && (
                 <div className="staged-tags-list">
@@ -256,7 +259,7 @@ export function StagedWordsReviewModal({
                 <input
                   type="text"
                   className="staged-custom-tag-input"
-                  placeholder="Ajouter un tag..."
+                  placeholder={t.addTagPlaceholder}
                   value={newTagInput}
                   onChange={(e) => setNewTagInput(e.target.value)}
                   onKeyDown={handleAddCustomTag}
@@ -281,10 +284,10 @@ export function StagedWordsReviewModal({
             type="button"
             className="staged-discard-btn"
             onClick={handleDiscard}
-            title="Supprimer ce mot sans l'enregistrer"
+            title={t.discardBtn}
           >
             <Trash2 size={15} />
-            <span>Ignorer</span>
+            <span>{t.discardBtn}</span>
           </button>
           <button
             type="button"
@@ -293,10 +296,11 @@ export function StagedWordsReviewModal({
             disabled={!draftWord.word.trim()}
           >
             <Check size={16} />
-            <span>Approuver et enregistrer</span>
+            <span>{t.approveBtn}</span>
           </button>
         </div>
       </div>
     </div>
   )
 }
+

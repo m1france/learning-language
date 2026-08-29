@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Resource, UiLanguage } from '../domain'
+import type { Resource, UiLanguage, ApiSettings } from '../domain'
 import { teacherCopy } from '../i18n'
 import {
   MousePointer2,
@@ -25,6 +25,8 @@ import {
   Check,
   ExternalLink,
   Copy,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import { TeacherUsernameModal } from './teacherExport/TeacherUsernameModal'
 import { NoModificationsModal, ConfirmExportModal } from './teacherExport/ExportConfirmModal'
@@ -40,6 +42,17 @@ import {
   buildExportUrl,
 } from './teacherExport/teacherExportService'
 import type { ExportedLesson, ExportedLessonPage, ExportedLessonParagraph } from './teacherExport/teacherExportDomain'
+import {
+  findNearestWord,
+  findNearestLetter,
+  findNearestParagraph,
+  resolveLiaisonGeometry,
+  resolveTextNoteGeometry,
+  resolveStrokeGeometry,
+  type DockPosition,
+  type StrokeAnchor,
+} from './teacherExport/annotationAnchorService'
+import { optimizeAnnotationsWithAi } from './teacherExport/teacherAlignmentAiService'
 
 export type Tool = 'select' | 'pen' | 'highlighter' | 'text' | 'edit' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'liaison' | 'gray' | 'eraser'
 
@@ -50,11 +63,38 @@ export type Stroke = {
   color: string
   width: number
   points: Point[]
+  startAnchor?: StrokeAnchor
+  endAnchor?: StrokeAnchor
+  anchorWordKeys?: string[]
+  anchorParagraphKey?: string
+  relativeOffset?: Point
 }
-export type Liaison = { id: string; x1: number; x2: number; y: number; color: string }
+export type Liaison = {
+  id: string
+  x1: number
+  x2: number
+  y: number
+  color: string
+  fromLetterKey?: string
+  toLetterKey?: string
+  fromWordKey?: string
+  toWordKey?: string
+}
 /** Un segment de texte + sa couleur — permet plusieurs couleurs dans une note. */
 export type TextRun = { t: string; c: string }
-export type TextNote = { id: string; x: number; y: number; runs: TextRun[]; size: number; color: string }
+export type TextNote = {
+  id: string
+  x: number
+  y: number
+  runs: TextRun[]
+  size: number
+  color: string
+  anchorWordKey?: string
+  anchorParagraphKey?: string
+  dockPosition?: DockPosition
+  offsetX?: number
+  offsetY?: number
+}
 export type ActionRef = { kind: 'stroke' | 'liaison' | 'gray' | 'text'; id: string }
 export type PageAnnotations = { strokes: Stroke[]; liaisons: Liaison[]; texts: TextNote[]; grayed: string[]; order: ActionRef[] }
 export type AnnotationMap = Record<string, PageAnnotations>
@@ -322,6 +362,7 @@ export function LearningFocus({
   onSaveTeacherUsername,
   onOpenSharedLesson,
   ui = 'fr',
+  api,
 }: {
   resources: Resource[]
   initialResourceId: string
@@ -333,6 +374,7 @@ export function LearningFocus({
   onSaveTeacherUsername?: (username: string) => void
   onOpenSharedLesson?: (lesson: ExportedLesson) => void
   ui?: UiLanguage
+  api?: ApiSettings
 }) {
   const t = teacherCopy[ui] || teacherCopy.fr
   const resource = resources.find((item) => item.id === initialResourceId) ?? resources[0]
@@ -346,12 +388,16 @@ export function LearningFocus({
   const [originals, setOriginals] = useState<Record<string, string>>(() => loadOriginals(initialResourceId))
   const [legacyEdited, setLegacyEdited] = useState<string[]>(() => loadLegacyEdited(initialResourceId))
   const [editValues, setEditValues] = useState<Record<string, string>>({})
-  const [pendingLiaison, setPendingLiaison] = useState<Point | null>(null)
+  const [pendingLiaison, setPendingLiaison] = useState<{ point: Point; letterKey: string } | null>(null)
   const [draftNote, setDraftNote] = useState<DraftNote | null>(null)
   const [selectedNote, setSelectedNote] = useState<string | null>(null)
   const [selectedStroke, setSelectedStroke] = useState<string | null>(null)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [eraserPos, setEraserPos] = useState<Point | null>(null)
+
+  // Alignement & Fidélité IA
+  const [isAiAligning, setIsAiAligning] = useState(false)
+  const [aiAlignToast, setAiAlignToast] = useState<string | null>(null)
 
   // Modales et flux d'exportation
   const [usernameModalOpen, setUsernameModalOpen] = useState(false)
@@ -373,6 +419,17 @@ export function LearningFocus({
   const editorRef = useRef<HTMLDivElement | null>(null)
   const highlightAnchorRef = useRef<string | null>(null)
   const [, forceRedraw] = useState(0)
+
+  // Écouteur de redimensionnement pour synchroniser les ancres instantanément
+  useEffect(() => {
+    const el = boardRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      forceRedraw((n) => n + 1)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const paragraphs = useMemo(() => flattenParagraphs(resource), [resource])
   const pages = useMemo(() => paginate(paragraphs, 190), [paragraphs])
@@ -598,11 +655,39 @@ export function LearningFocus({
     const runs = el ? serializeEditor(el, noteDraft.baseColor) : []
     const total = runs.map((run) => run.t).join('').trim()
     if (runs.length && total) {
+      const nearest = findNearestWord({ x: noteDraft.x, y: noteDraft.y }, boardRef.current)
       updatePage((p) => {
         if (noteDraft.id) {
-          return { ...p, texts: p.texts.map((note) => (note.id === noteDraft.id ? { ...note, runs, size: noteDraft.size, color: runs[0]?.c ?? note.color } : note)) }
+          return {
+            ...p,
+            texts: p.texts.map((note) =>
+              note.id === noteDraft.id
+                ? {
+                    ...note,
+                    runs,
+                    size: noteDraft.size,
+                    color: runs[0]?.c ?? note.color,
+                    anchorWordKey: nearest?.wordKey ?? note.anchorWordKey,
+                    dockPosition: nearest?.dock ?? note.dockPosition,
+                    offsetX: nearest?.offsetX ?? note.offsetX,
+                    offsetY: nearest?.offsetY ?? note.offsetY,
+                  }
+                : note
+            ),
+          }
         }
-        const note: TextNote = { id: uid(), x: noteDraft.x, y: noteDraft.y, runs, size: noteDraft.size, color: runs[0]?.c ?? noteDraft.baseColor }
+        const note: TextNote = {
+          id: uid(),
+          x: noteDraft.x,
+          y: noteDraft.y,
+          runs,
+          size: noteDraft.size,
+          color: runs[0]?.c ?? noteDraft.baseColor,
+          anchorWordKey: nearest?.wordKey,
+          dockPosition: nearest?.dock || 'relative',
+          offsetX: nearest?.offsetX ?? 0,
+          offsetY: nearest?.offsetY ?? 0,
+        }
         return { ...p, texts: [...p.texts, note], order: [...p.order, { kind: 'text', id: note.id }] }
       })
     } else if (noteDraft.id) {
@@ -611,6 +696,30 @@ export function LearningFocus({
       updatePage((p) => ({ ...p, texts: p.texts.filter((note) => note.id !== removedId), order: p.order.filter((action) => action.id !== removedId) }))
     }
     setDraftNote(null)
+  }
+
+  // Alignement automatique sémantique des annotations par IA
+  const handleAiAlign = async () => {
+    if (isAiAligning) return
+    commitNote()
+    setIsAiAligning(true)
+    try {
+      const res = await optimizeAnnotationsWithAi({
+        paragraphs: exportParagraphs,
+        annotations: current,
+        api: api || ({} as ApiSettings),
+        uiLanguage: ui,
+      })
+      if (res.success) {
+        updatePage(() => res.updatedAnnotations)
+        setAiAlignToast(res.message)
+        setTimeout(() => setAiAlignToast(null), 4500)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIsAiAligning(false)
+    }
   }
 
   const quitAll = () => { commitNote(); onClose() }
@@ -791,6 +900,38 @@ export function LearningFocus({
       forceRedraw((n) => n + 1)
       return
     }
+
+    // Ancrage automatique des flèches et lignes
+    if (draft.kind === 'arrow' || draft.kind === 'line') {
+      const p0 = draft.points[0]
+      const p1 = draft.points[draft.points.length - 1]
+      const startWord = findNearestWord(p0, boardRef.current)
+      const endWord = findNearestWord(p1, boardRef.current)
+      if (startWord && startWord.distance < 120) {
+        draft.startAnchor = {
+          kind: 'word',
+          key: startWord.wordKey,
+          subPosition: startWord.dock === 'below' ? 'bottom' : startWord.dock === 'above' ? 'top' : startWord.dock === 'left' ? 'left' : 'right',
+          offsetX: startWord.offsetX,
+          offsetY: startWord.offsetY,
+        }
+      }
+      if (endWord && endWord.distance < 120) {
+        draft.endAnchor = {
+          kind: 'word',
+          key: endWord.wordKey,
+          subPosition: endWord.dock === 'below' ? 'bottom' : endWord.dock === 'above' ? 'top' : endWord.dock === 'left' ? 'left' : 'right',
+          offsetX: endWord.offsetX,
+          offsetY: endWord.offsetY,
+        }
+      }
+    } else if (draft.kind === 'pen') {
+      const nearestPar = findNearestParagraph(draft.points[0], boardRef.current)
+      if (nearestPar) {
+        draft.anchorParagraphKey = nearestPar.paragraphKey
+      }
+    }
+
     updatePage((p) => ({ ...p, strokes: [...p.strokes, draft], order: [...p.order, { kind: 'stroke', id: draft.id }] }))
   }
 
@@ -804,11 +945,13 @@ export function LearningFocus({
     const rect = el.getBoundingClientRect()
     const board = boardRef.current?.getBoundingClientRect()
     const y = rect.top - (board?.top ?? 0) + rect.height * 0.58
+    const wordKey = el.getAttribute('data-word') || undefined
     return {
       id: uid(),
       kind: 'highlighter',
       color,
       width: rect.height * 0.88,
+      anchorWordKeys: wordKey ? [wordKey] : undefined,
       points: [
         { x: rect.left - (board?.left ?? 0) + 1, y },
         { x: rect.right - (board?.left ?? 0) - 1, y },
@@ -966,15 +1109,28 @@ export function LearningFocus({
         })
       }
       if (!letterEl) return
+      const letterKey = letterEl.getAttribute('data-letter') || ''
       const rect = letterEl.getBoundingClientRect()
       const board = boardRef.current?.getBoundingClientRect()
       if (!board) return
       const point = { x: rect.left + rect.width / 2 - board.left, y: rect.bottom - board.top + 4 }
-      if (!pendingLiaison) setPendingLiaison(point)
-      else {
-        const [x1, x2] = [pendingLiaison.x, point.x].sort((a, b) => a - b)
+      if (!pendingLiaison) {
+        setPendingLiaison({ point, letterKey })
+      } else {
+        const [x1, x2] = [pendingLiaison.point.x, point.x].sort((a, b) => a - b)
+        const [fromLetterKey, toLetterKey] = pendingLiaison.point.x <= point.x
+          ? [pendingLiaison.letterKey, letterKey]
+          : [letterKey, pendingLiaison.letterKey]
         if (Math.abs(x2 - x1) > 4) {
-          const liaison: Liaison = { id: uid(), x1, x2, y: Math.max(pendingLiaison.y, point.y), color }
+          const liaison: Liaison = {
+            id: uid(),
+            x1,
+            x2,
+            y: Math.max(pendingLiaison.point.y, point.y),
+            color,
+            fromLetterKey,
+            toLetterKey,
+          }
           updatePage((p) => ({ ...p, liaisons: [...p.liaisons, liaison], order: [...p.order, { kind: 'liaison', id: liaison.id }] }))
         }
         setPendingLiaison(null)
@@ -1006,8 +1162,30 @@ export function LearningFocus({
     dragNoteRef.current = null
     if (!drag) return
     event.stopPropagation()
-    // clic simple (sans déplacement) → sélectionne la note et ses poignées
-    if (!drag.moved) {
+    // Si déplacée, mettre à jour son ancrage relatif au mot le plus proche
+    if (drag.moved) {
+      const finalNote = current.texts.find((n) => n.id === drag.id)
+      if (finalNote) {
+        const nearest = findNearestWord({ x: finalNote.x, y: finalNote.y }, boardRef.current)
+        if (nearest) {
+          updatePage((p) => ({
+            ...p,
+            texts: p.texts.map((n) =>
+              n.id === drag.id
+                ? {
+                    ...n,
+                    anchorWordKey: nearest.wordKey,
+                    dockPosition: nearest.dock,
+                    offsetX: nearest.offsetX,
+                    offsetY: nearest.offsetY,
+                  }
+                : n
+            ),
+          }))
+        }
+      }
+    } else {
+      // clic simple (sans déplacement) → sélectionne la note et ses poignées
       setSelectedStroke(null)
       setSelectedNote(note.id)
     }
@@ -1163,18 +1341,21 @@ export function LearningFocus({
           </div>)}
         </div>
 
-        {current.texts.filter((note) => note.id !== draftNote?.id).map((note) => <div key={note.id}
-          className={`focus-text-note ${selectedNote === note.id ? 'selected' : ''}`}
-          style={{ left: note.x, top: note.y, fontSize: note.size }}
-          onPointerDown={(event) => onNotePointerDown(event, note)}
-          onPointerMove={onNotePointerMove}
-          onPointerUp={(event) => onNotePointerUp(event, note)}
-          onDoubleClick={(event) => { event.stopPropagation(); if (tool === 'text' || tool === 'select') openNoteEditor(note) }}>
-          {note.runs.map((run, index) => <span key={index} style={{ color: run.c }}>{run.t}</span>)}
-          {selectedNote === note.id && ['nw', 'ne', 'sw', 'se'].map((corner) => <button key={corner}
-            className={`note-handle ${corner}`} aria-label={corner}
-            onPointerDown={(event) => startNoteResize(event, note, corner)} />)}
-        </div>)}
+        {current.texts.filter((note) => note.id !== draftNote?.id).map((note) => {
+          const resolved = resolveTextNoteGeometry(note, boardRef.current)
+          return <div key={note.id}
+            className={`focus-text-note ${selectedNote === note.id ? 'selected' : ''}`}
+            style={{ left: resolved.left, top: resolved.top, fontSize: note.size }}
+            onPointerDown={(event) => onNotePointerDown(event, note)}
+            onPointerMove={onNotePointerMove}
+            onPointerUp={(event) => onNotePointerUp(event, note)}
+            onDoubleClick={(event) => { event.stopPropagation(); if (tool === 'text' || tool === 'select') openNoteEditor(note) }}>
+            {note.runs.map((run, index) => <span key={index} style={{ color: run.c }}>{run.t}</span>)}
+            {selectedNote === note.id && ['nw', 'ne', 'sw', 'se'].map((corner) => <button key={corner}
+              className={`note-handle ${corner}`} aria-label={corner}
+              onPointerDown={(event) => startNoteResize(event, note, corner)} />)}
+          </div>
+        })}
 
         {draftNote && <NoteEditor key={draftNote.id ?? 'new'} x={draftNote.x} y={draftNote.y}
           size={draftNote.size} baseColor={draftNote.baseColor}
@@ -1186,14 +1367,17 @@ export function LearningFocus({
           onPointerMove={isInteractive ? onPointerMove : undefined}
           onPointerUp={isInteractive ? onPointerUp : undefined}
           onPointerLeave={isInteractive ? onPointerLeave : undefined}>
-          {current.strokes.map((stroke) => <StrokeShape stroke={stroke} key={stroke.id} />)}
+          {current.strokes.map((stroke) => {
+            const resolved = resolveStrokeGeometry(stroke, boardRef.current)
+            return <StrokeShape stroke={resolved} key={stroke.id} />
+          })}
           {draft && <StrokeShape stroke={draft} draft />}
           {current.liaisons.map((liaison) => {
-            const midX = (liaison.x1 + liaison.x2) / 2
-            return <path key={liaison.id} d={`M ${liaison.x1} ${liaison.y} Q ${midX} ${liaison.y + 22}, ${liaison.x2} ${liaison.y}`}
+            const geo = resolveLiaisonGeometry(liaison, boardRef.current)
+            return <path key={liaison.id} d={geo.d}
               fill="none" stroke={liaison.color} strokeWidth="2.5" strokeLinecap="round" />
           })}
-          {pendingLiaison && <circle cx={pendingLiaison.x} cy={pendingLiaison.y} r="5" fill={color} />}
+          {pendingLiaison && <circle cx={pendingLiaison.point.x} cy={pendingLiaison.point.y} r="5" fill={color} />}
           {selectionOverlay}
           {tool === 'eraser' && eraserPos && (
             <g className="focus-eraser-indicator" pointerEvents="none">
@@ -1205,6 +1389,14 @@ export function LearningFocus({
       </div>
     </div>
 
+    {/* Toast notification de confirmation d'alignement IA */}
+    {aiAlignToast && (
+      <div className="focus-ai-toast glass">
+        <Sparkles size={14} className="toast-sparkle" />
+        <span>{aiAlignToast}</span>
+      </div>
+    )}
+
     {/* navigation pages — haut centre */}
     <div className="focus-nav-pill glass">
       <button title={t.prevPage} disabled={safePage === 0} onClick={() => goto(safePage - 1)} aria-label={t.prevPage}><ChevronLeft size={16} /></button>
@@ -1212,8 +1404,18 @@ export function LearningFocus({
       <button title={t.nextPage} disabled={safePage >= pages.length - 1} onClick={() => goto(safePage + 1)} aria-label={t.nextPage}><ChevronRight size={16} /></button>
     </div>
 
-    {/* zoom + quitter — haut droite */}
+    {/* zoom + quitter + Fidélité IA — haut droite */}
     <div className="focus-actions-pill glass">
+      <button
+        className={`focus-ai-btn ${isAiAligning ? 'loading' : ''}`}
+        title={t.aiAlignTooltip}
+        onClick={handleAiAlign}
+        disabled={isAiAligning}
+      >
+        {isAiAligning ? <Loader2 size={13} className="spin-slow" /> : <Sparkles size={13} />}
+        <span>{isAiAligning ? t.aiAligning : t.aiAlignBtn}</span>
+      </button>
+      <span className="panel-sep" style={{ height: 16, margin: '0 4px' }} />
       <button title={t.zoomIn} onClick={() => setFontSize(Math.min(46, fontSize + 2))}>A+</button>
       <button title={t.zoomOut} onClick={() => setFontSize(Math.max(20, fontSize - 2))}>A−</button>
       <button className="focus-zoom" title={t.resetZoom} onClick={() => setFontSize(BASE_FONT)}>{zoom} %</button>
@@ -1421,6 +1623,7 @@ export function LearningFocus({
         onCancel={() => setPreviewFrameOpen(false)}
         onExport={handleFinishExport}
         ui={ui}
+        api={api}
       />
     )}
 

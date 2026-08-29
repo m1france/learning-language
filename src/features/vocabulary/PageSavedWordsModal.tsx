@@ -1,5 +1,5 @@
 import React from 'react'
-import type { Language, LearnedWord } from '../../domain'
+import type { Language, LearnedWord, UiLanguage } from '../../domain'
 import { renderPhoneticFormatted } from './phoneticUtils'
 import {
   X,
@@ -10,12 +10,14 @@ import {
   BookOpen,
 } from 'lucide-react'
 import { speak } from '../../ai'
+import { vocabCopy } from '../../i18n'
 
 export type PageSavedWordsModalProps = {
   isOpen: boolean
   onClose: () => void
   words: LearnedWord[]
   language: Language
+  ui?: UiLanguage
   onEditWord: (word: LearnedWord) => void
   onDeleteWord?: (raw: string, language: Language) => void
   api?: any
@@ -26,10 +28,12 @@ export function PageSavedWordsModal({
   onClose,
   words,
   language,
+  ui = 'fr',
   onEditWord,
   onDeleteWord,
   api,
 }: PageSavedWordsModalProps) {
+  const t = vocabCopy[ui] || vocabCopy.fr
   const [speakingWord, setSpeakingWord] = React.useState<string | null>(null)
 
   if (!isOpen) return null
@@ -59,9 +63,9 @@ export function PageSavedWordsModal({
               <Sparkles size={18} />
             </div>
             <div>
-              <h3>Mots enregistrés sur cette page</h3>
+              <h3>{t.savedPageWordsTitle}</h3>
               <p className="subtitle">
-                {words.length} {words.length === 1 ? 'mot analysé et enregistré' : 'mots analysés et enregistrés'} par l'IA
+                {words.length} {t.wordsCount} {t.savedPageWordsSubtitle}
               </p>
             </div>
           </div>
@@ -69,7 +73,7 @@ export function PageSavedWordsModal({
             type="button"
             className="vault-modal-close-btn"
             onClick={onClose}
-            title="Fermer"
+            title={t.close}
           >
             <X size={17} />
           </button>
@@ -79,7 +83,7 @@ export function PageSavedWordsModal({
           {words.length === 0 ? (
             <div className="empty-vocab-msg">
               <BookOpen size={30} className="empty-icon" />
-              <p>Aucun mot enregistré pour cette page.</p>
+              <p>{t.noSavedWordsOnPage}</p>
             </div>
           ) : (
             <div className="page-saved-words-list">
@@ -99,32 +103,28 @@ export function PageSavedWordsModal({
                     </div>
 
                     {w.translation && (
-                      <p className="word-translation">{w.translation}</p>
+                      <p className="word-translation-line">{w.translation}</p>
+                    )}
+
+                    {w.parent && (
+                      <span className="word-parent-chip">
+                        {t.rootWord} {w.parent}
+                      </span>
                     )}
 
                     {w.contextSentence && (
-                      <blockquote className="word-context-snippet">
+                      <blockquote className="word-context-line">
                         « {w.contextSentence} »
                       </blockquote>
-                    )}
-
-                    {w.tags && w.tags.length > 0 && (
-                      <div className="word-tags-row">
-                        {w.tags.map((t) => (
-                          <span key={t} className="word-tag-pill">
-                            #{t}
-                          </span>
-                        ))}
-                      </div>
                     )}
                   </div>
 
                   <div className="page-saved-word-actions">
                     <button
                       type="button"
-                      className="icon-action-btn"
+                      className="icon-action-btn speak"
                       onClick={(e) => handleSpeak(e, w.word)}
-                      title="Écouter la prononciation"
+                      title={t.listenPronunciation}
                     >
                       <Volume2
                         size={15}
@@ -135,7 +135,7 @@ export function PageSavedWordsModal({
                       type="button"
                       className="icon-action-btn edit"
                       onClick={() => onEditWord(w)}
-                      title="Modifier manuellement ce mot"
+                      title={t.editWord}
                     >
                       <Edit2 size={15} />
                     </button>
@@ -147,7 +147,7 @@ export function PageSavedWordsModal({
                           e.stopPropagation()
                           onDeleteWord(w.word, language)
                         }}
-                        title="Supprimer ce mot enregistré"
+                        title={t.deleteWord}
                       >
                         <Trash2 size={15} />
                       </button>
@@ -161,7 +161,7 @@ export function PageSavedWordsModal({
 
         <footer className="page-saved-modal-footer">
           <button type="button" className="primary btn-block" onClick={onClose}>
-            Fermer
+            {t.close}
           </button>
         </footer>
       </div>

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import type { ApiSettings, Language } from '../../domain'
+import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { translateText, type DeepLTranslationResult } from './deeplService'
 import { speak } from '../../ai'
+import { speakingCopy } from '../../i18n'
 import {
   Search,
   X,
@@ -24,7 +25,7 @@ type QuickWordLookupProps = {
   isOpen: boolean
   onClose: () => void
   language: Language
-  ui?: 'fr' | 'en'
+  ui?: UiLanguage
   api: ApiSettings
   existingTags?: string[]
   onRequestStageWord?: (req: StageWordRequest) => void
@@ -39,6 +40,7 @@ export function QuickWordLookup({
   existingTags = [],
   onRequestStageWord,
 }: QuickWordLookupProps) {
+  const t = speakingCopy[ui] || speakingCopy.fr
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('deepl')
   const [translation, setTranslation] = useState<DeepLTranslationResult | null>(null)
@@ -245,7 +247,7 @@ export function QuickWordLookup({
           key={idx}
           className="quick-dict-word-token"
           onClick={(e) => handleWordTokenClick(stripped, e, wordLang, text)}
-          title={`Cliquer pour prononcer ou enregistrer "${stripped}"`}
+          title={`${t.clickToPronounceOrSave} "${stripped}"`}
         >
           {token}
         </span>
@@ -281,7 +283,7 @@ export function QuickWordLookup({
               setActiveTab('linguee')
               setActiveWordMenu(null)
             }}
-            title={isMultiWord ? (ui === 'fr' ? 'Uniquement pour un seul mot' : 'Only available for a single word') : undefined}
+            title={isMultiWord ? t.singleWordOnly : undefined}
           >
             Linguee
           </button>
@@ -296,12 +298,12 @@ export function QuickWordLookup({
               setActiveWordMenu(null)
               openCambridgePopup(cleanWord)
             }}
-            title={isMultiWord ? (ui === 'fr' ? 'Uniquement pour un seul mot' : 'Only available for a single word') : undefined}
+            title={isMultiWord ? t.singleWordOnly : undefined}
           >
             Cambridge
           </button>
         </div>
-        <button className="quick-dict-close" onClick={onClose} title="Fermer">
+        <button className="quick-dict-close" onClick={onClose} title={t.closeBtn}>
           <X size={14} />
         </button>
       </div>
@@ -328,7 +330,7 @@ export function QuickWordLookup({
                 {isLoading ? (
                   <div className="quick-dict-loading">
                     <Loader2 size={13} className="spin" />
-                    <span>Traduction en cours…</span>
+                    <span>{t.translatingStatus}</span>
                   </div>
                 ) : (
                   <div className="quick-dict-translated-wrap">
@@ -340,14 +342,14 @@ export function QuickWordLookup({
                             type="button"
                             className={`quick-dict-speak-sentence-btn ${speakingText === translation.translatedText.trim() ? 'speaking' : ''}`}
                             onClick={(e) => handleSpeakSentence(translation.translatedText, language, e)}
-                            title={ui === 'fr' ? 'Prononcer la phrase entière' : 'Pronounce entire sentence'}
-                            aria-label={ui === 'fr' ? 'Prononcer la phrase entière' : 'Pronounce entire sentence'}
+                            title={t.speakEntireSentence}
+                            aria-label={t.speakEntireSentence}
                           >
                             <Volume2 size={14} />
                           </button>
                         </>
                       ) : (
-                        'Traduction…'
+                        t.translationPlaceholderQuick
                       )}
                     </div>
                     {translation && (
@@ -416,7 +418,7 @@ export function QuickWordLookup({
                 type="button"
                 className="word-popover-close"
                 onClick={() => setActiveWordMenu(null)}
-                title="Fermer"
+                title={t.closeBtn}
               >
                 <X size={13} />
               </button>
@@ -427,20 +429,20 @@ export function QuickWordLookup({
                 type="button"
                 className="word-popover-btn"
                 onClick={handlePronounce}
-                title="Prononcer le mot avec la voix configurée"
+                title={t.pronounceBtn}
               >
                 <Volume2 size={15} className="popover-icon" />
-                <span>Prononcer le mot</span>
+                <span>{t.pronounceBtn}</span>
               </button>
 
               <button
                 type="button"
                 className="word-popover-btn primary"
                 onClick={handleSaveWord}
-                title="Analyser par IA et ajouter aux mots à revoir"
+                title={t.approveBtn}
               >
                 <Sparkles size={15} className="popover-icon" />
-                <span>Enregistrer le mot</span>
+                <span>{t.stagedWordLabel}</span>
               </button>
             </div>
           </div>
