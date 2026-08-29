@@ -373,6 +373,7 @@ export function LearningFocus({
   const [isPublishedCopied, setIsPublishedCopied] = useState(false)
   const [reloadTrigger, setReloadTrigger] = useState(0)
 
+  const stageRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef<Stroke | null>(null)
   const isErasingRef = useRef(false)
@@ -538,6 +539,11 @@ export function LearningFocus({
     setSelectedNote(null)
     setSelectedStroke(null)
   }, [resource.id])
+
+  // Remet le défilement en haut lors d'un changement de page
+  useEffect(() => {
+    stageRef.current?.scrollTo({ top: 0, behavior: 'instant' })
+  }, [safePage])
 
   // en quittant le mode édition, on oublie les brouillons (le blur a déjà commité)
   useEffect(() => {
@@ -1126,7 +1132,7 @@ export function LearningFocus({
   const eraserTitle = eraserShortcut ? `Gomme (${eraserShortcut})` : 'Gomme'
 
   return <div className="focus-overlay">
-    <div className={`focus-stage ${tool !== 'edit' ? 'no-text-select' : ''}`}>
+    <div className={`focus-stage ${tool !== 'edit' ? 'no-text-select' : ''}`} ref={stageRef}>
       <div className={`focus-board ${tool !== 'edit' ? 'no-text-select' : ''}`} ref={boardRef} onClick={onBoardClick}>
         <div className={`focus-text-col ${tool !== 'edit' ? 'no-text-select' : ''}`}>
           {page.map((paragraph) => <div key={paragraph.key}>

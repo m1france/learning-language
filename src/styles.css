@@ -6207,7 +6207,7 @@ h2 {
   min-height: 100%;
   height: max-content;
   margin: 0 auto;
-  padding: 70px 54px 160px 54px;
+  padding: 70px 54px max(450px, 60vh) 54px;
   box-sizing: border-box;
 }
 
@@ -10498,8 +10498,12 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .focus-board {
+    padding: 60px 20px max(360px, 50vh) 20px;
+  }
+
   .focus-text-col {
-    padding: 0 20px;
+    padding: 0;
   }
 
   .focus-paragraph {
