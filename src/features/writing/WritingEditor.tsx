@@ -408,19 +408,6 @@ export function WritingEditor({
               </span>
             </div>
           )}
-
-          {/* Show "Pratiquer à l'oral" only when text has at least 10 words */}
-          {onNavigateToSpeaking && stats.words >= 10 && (
-            <button
-              type="button"
-              className="primary prompter-export-btn"
-              onClick={handleSendToPrompter}
-              title="Envoyer ce texte au prompteur du studio Parler"
-            >
-              <Video size={16} />
-              <span>Pratiquer à l'oral</span>
-            </button>
-          )}
         </div>
       </header>
 
@@ -708,16 +695,6 @@ export function WritingEditor({
                   </div>
 
                   <div className="card-actions">
-                    {onNavigateToSpeaking && entry.content?.trim() && (
-                      <button
-                        type="button"
-                        className="card-action-btn icon-only"
-                        onClick={() => onNavigateToSpeaking(entry.content)}
-                        title="Pratiquer au prompteur"
-                      >
-                        <Video size={13} />
-                      </button>
-                    )}
                     {onSelectEntry && (
                       <button
                         type="button"

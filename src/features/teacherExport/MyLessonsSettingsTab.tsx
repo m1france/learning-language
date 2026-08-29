@@ -138,57 +138,68 @@ export function MyLessonsSettingsTab({
                 <div className="my-lesson-card-head">
                   <div className="my-lesson-card-title-group">
                     <h4>{lesson.resourceTitle}</h4>
-                    <span className="my-lesson-meta">
-                      {lesson.chapterTitle ? `${lesson.chapterTitle} • ` : ''}Page {lesson.pageIndex + 1} / {lesson.totalPages}
-                    </span>
                   </div>
                   <span className="my-lesson-online-pill">En ligne</span>
                 </div>
 
                 {/* Lien partageable avec bouton de copie */}
                 <div className="my-lesson-url-box">
-                  <Globe size={14} />
+                  <Globe size={14} className="url-globe-icon" />
                   <span className="my-lesson-url-text">{url}</span>
                   <button
                     className={`my-lesson-copy-btn ${isCopied ? 'copied' : ''}`}
                     onClick={() => handleCopy(lesson)}
-                    title="Copier le lien"
+                    data-tooltip="Copier le lien"
                   >
-                    {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                    {isCopied ? <Check size={13} /> : <Copy size={13} />}
                     <span>{isCopied ? 'Copié' : 'Copier'}</span>
                   </button>
                 </div>
 
-                {/* Badges d'éléments inclus */}
-                <div className="my-lesson-badges">
+                {/* Métriques / Pilules épurées (icône + nombre uniquement, sans background ni bordure) */}
+                <div className="my-lesson-minimal-stats">
                   {lesson.tooltips.length > 0 && (
-                    <span className="my-lesson-badge" title="Infobulles créées">
-                      <HelpCircle size={12} />
-                      {lesson.tooltips.length} infobulle{lesson.tooltips.length > 1 ? 's' : ''}
+                    <span
+                      className="lesson-stat-pill"
+                      data-tooltip={`${lesson.tooltips.length} infobulle${lesson.tooltips.length > 1 ? 's' : ''} créée${lesson.tooltips.length > 1 ? 's' : ''}`}
+                    >
+                      <HelpCircle size={14} />
+                      <span className="stat-num">{lesson.tooltips.length}</span>
                     </span>
                   )}
                   {lesson.wordComments.length > 0 && (
-                    <span className="my-lesson-badge" title="Commentaires sur les mots">
-                      <MessageSquare size={12} />
-                      {lesson.wordComments.length} commentaire{lesson.wordComments.length > 1 ? 's' : ''}
+                    <span
+                      className="lesson-stat-pill"
+                      data-tooltip={`${lesson.wordComments.length} commentaire${lesson.wordComments.length > 1 ? 's' : ''} sur mots`}
+                    >
+                      <MessageSquare size={14} />
+                      <span className="stat-num">{lesson.wordComments.length}</span>
                     </span>
                   )}
                   {lesson.homework && (
-                    <span className="my-lesson-badge hw" title="Devoir inclus">
-                      <GraduationCap size={12} />
-                      Devoir inclus
+                    <span
+                      className="lesson-stat-pill hw"
+                      data-tooltip="Devoir inclus"
+                    >
+                      <GraduationCap size={14} />
                     </span>
                   )}
                   {lesson.allowReactions && (
-                    <span className="my-lesson-badge" title="Réactions élèves reçues">
-                      <Smile size={12} />
-                      {reactionsTotal} réaction{reactionsTotal > 1 ? 's' : ''}
+                    <span
+                      className="lesson-stat-pill"
+                      data-tooltip={`${reactionsTotal} réaction${reactionsTotal > 1 ? 's' : ''} reçue${reactionsTotal > 1 ? 's' : ''}`}
+                    >
+                      <Smile size={14} />
+                      <span className="stat-num">{reactionsTotal}</span>
                     </span>
                   )}
                   {lesson.allowComments && (
-                    <span className="my-lesson-badge" title="Questions / commentaires élèves">
-                      <MessageCircle size={12} />
-                      {commentsCount} message{commentsCount > 1 ? 's' : ''}
+                    <span
+                      className="lesson-stat-pill"
+                      data-tooltip={`${commentsCount} question${commentsCount > 1 ? 's' : ''} / message${commentsCount > 1 ? 's' : ''}`}
+                    >
+                      <MessageCircle size={14} />
+                      <span className="stat-num">{commentsCount}</span>
                     </span>
                   )}
                 </div>

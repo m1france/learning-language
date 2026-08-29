@@ -187,23 +187,24 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
 
   return (
     <div className={`exercises-builder-page ${activeExercise ? 'has-active-exercise' : ''}`}>
-      {/* Top Header: Minimal Title + History Icon on Top Right */}
-      <header className="builder-minimal-header">
-        <h1 className="builder-minimal-title">Crée ton propre exercice avec l'IA</h1>
-        <button
-          type="button"
-          className="history-icon-toggle-btn"
-          onClick={() => setIsHistoryOpen(true)}
-          title="Historique des entraînements"
-          aria-label="Historique des entraînements"
-        >
-          <HistoryIcon size={19} />
-        </button>
-      </header>
+      {/* Stack organisée : Titre à gauche, icône d'historique à droite et champ de saisie aligné */}
+      <div className="builder-header-stack">
+        <header className="builder-minimal-header">
+          <h1 className="builder-minimal-title">Crée ton propre exercice avec l'IA</h1>
+          <button
+            type="button"
+            className="history-icon-toggle-btn"
+            onClick={() => setIsHistoryOpen(true)}
+            title="Historique des entraînements"
+            aria-label="Historique des entraînements"
+          >
+            <HistoryIcon size={19} />
+          </button>
+        </header>
 
-      {/* Centered Modern Parent Input Container */}
-      {activeExercise ? (
-        <section className="minimal-prompt-parent is-compact-active">
+        {/* Centered Modern Parent Input Container */}
+        {activeExercise ? (
+          <section className="minimal-prompt-parent is-compact-active">
           <div className="compact-prompt-inline-row">
             <textarea
               ref={textareaRef}
@@ -323,6 +324,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
           </div>
         </section>
       )}
+      </div>
 
       {/* Error Banner */}
       {generationError && (

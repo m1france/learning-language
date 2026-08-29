@@ -193,16 +193,6 @@ export function WritingHistory({
                 </div>
 
                 <div className="card-actions">
-                  {onNavigateToSpeaking && entry.content.trim() && (
-                    <button
-                      type="button"
-                      className="card-action-btn"
-                      onClick={() => onNavigateToSpeaking(entry.content)}
-                      title="Pratiquer au prompteur face caméra"
-                    >
-                      <Video size={14} />
-                    </button>
-                  )}
                   <button
                     type="button"
                     className="card-action-btn"
