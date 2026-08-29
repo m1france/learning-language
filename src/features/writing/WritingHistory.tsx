@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import type { AppState, WritingEntry } from '../../domain'
+import type { AppState, WritingEntry, UiLanguage } from '../../domain'
+import { writeCopy } from '../../i18n'
 import {
   BookOpen,
   Search,
@@ -21,6 +22,7 @@ type WritingHistoryProps = {
   onDeleteEntry: (id: string) => void
   onNewSession: () => void
   onNavigateToSpeaking?: (text: string) => void
+  ui?: UiLanguage
 }
 
 export function WritingHistory({
@@ -29,7 +31,9 @@ export function WritingHistory({
   onDeleteEntry,
   onNewSession,
   onNavigateToSpeaking,
+  ui = 'fr',
 }: WritingHistoryProps) {
+  const t = writeCopy[ui] || writeCopy.fr
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedModeFilter, setSelectedModeFilter] = useState<string>('all')
 
@@ -64,18 +68,18 @@ export function WritingHistory({
       {/* Top Header */}
       <div className="history-head">
         <div className="head-title-block">
-          <button type="button" className="outline icon-btn" onClick={onNewSession} title="Retour">
+          <button type="button" className="outline icon-btn" onClick={onNewSession} title={t.dismiss}>
             <ArrowLeft size={16} />
           </button>
           <div>
-            <h1>Mes Écrits & Archives</h1>
-            <p className="subhead">Consulte, modifie et transforme tes textes rédigés en sessions orales.</p>
+            <h1>{t.historyTitle}</h1>
+            <p className="subhead">{t.noHistoryDesc}</p>
           </div>
         </div>
 
         <button type="button" className="primary new-session-btn" onClick={onNewSession}>
           <Plus size={16} />
-          <span>Nouvelle Rédaction</span>
+          <span>{t.newText}</span>
         </button>
       </div>
 
@@ -85,7 +89,7 @@ export function WritingHistory({
           <FileText size={18} className="metric-icon coral" />
           <div className="metric-meta">
             <strong>{stats.totalWritings}</strong>
-            <span>Textes rédigés</span>
+            <span>{t.historyTitle}</span>
           </div>
         </div>
 
@@ -93,7 +97,7 @@ export function WritingHistory({
           <Sparkles size={18} className="metric-icon gold" />
           <div className="metric-meta">
             <strong>{stats.totalWords}</strong>
-            <span>Mots écrits au total</span>
+            <span>{t.wordsCount}</span>
           </div>
         </div>
 
@@ -101,7 +105,7 @@ export function WritingHistory({
           <Check size={18} className="metric-icon green" />
           <div className="metric-meta">
             <strong>{stats.totalWordsUsed}</strong>
-            <span>Mots cibles activés</span>
+            <span>{t.wordsUsedCount}</span>
           </div>
         </div>
       </div>
@@ -112,7 +116,7 @@ export function WritingHistory({
           <Search size={15} className="search-icon" />
           <input
             type="text"
-            placeholder="Rechercher par titre, contenu ou mot cible..."
+            placeholder={t.editorPlaceholder}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -124,21 +128,14 @@ export function WritingHistory({
             className={selectedModeFilter === 'all' ? 'active' : ''}
             onClick={() => setSelectedModeFilter('all')}
           >
-            Tous
+            {t.allWords}
           </button>
           <button
             type="button"
             className={selectedModeFilter === 'reactivation' ? 'active' : ''}
             onClick={() => setSelectedModeFilter('reactivation')}
           >
-            Réactivation
-          </button>
-          <button
-            type="button"
-            className={selectedModeFilter === 'guided' ? 'active' : ''}
-            onClick={() => setSelectedModeFilter('guided')}
-          >
-            Journaling
+            {t.challengeWords}
           </button>
           <button
             type="button"
@@ -152,7 +149,7 @@ export function WritingHistory({
             className={selectedModeFilter === 'free' ? 'active' : ''}
             onClick={() => setSelectedModeFilter('free')}
           >
-            Essai Libre
+            {t.freeWriting}
           </button>
         </div>
       </div>
@@ -161,15 +158,11 @@ export function WritingHistory({
       {filtered.length === 0 ? (
         <div className="empty-history-state">
           <BookOpen size={40} className="empty-icon" />
-          <h3>Aucun écrit trouvé</h3>
-          <p>
-            {writings.length === 0
-              ? "Tu n'as pas encore enregistré de texte. Lance ta première session d'écriture !"
-              : 'Aucun texte ne correspond à ta recherche.'}
-          </p>
+          <h3>{t.noHistory}</h3>
+          <p>{t.noHistoryDesc}</p>
           <button type="button" className="primary" onClick={onNewSession}>
             <Plus size={16} />
-            <span>Commencer une session</span>
+            <span>{t.startFree}</span>
           </button>
         </div>
       ) : (
@@ -180,12 +173,10 @@ export function WritingHistory({
                 <div className="card-badge-row">
                   <span className={`mode-badge ${entry.mode}`}>
                     {entry.mode === 'reactivation'
-                      ? 'Réactivation'
-                      : entry.mode === 'guided'
-                      ? 'Journaling'
+                      ? t.challengeWords
                       : entry.mode === 'sprint'
                       ? 'Sprint'
-                      : 'Essai Libre'}
+                      : t.freeWriting}
                   </span>
                   <span className="card-date">
                     <Calendar size={12} /> {entry.date}
@@ -197,7 +188,7 @@ export function WritingHistory({
                     type="button"
                     className="card-action-btn"
                     onClick={() => onSelectEntry(entry)}
-                    title="Modifier ce texte"
+                    title={t.resumeText}
                   >
                     <Edit2 size={14} />
                   </button>
@@ -205,7 +196,7 @@ export function WritingHistory({
                     type="button"
                     className="card-action-btn danger"
                     onClick={() => onDeleteEntry(entry.id)}
-                    title="Supprimer"
+                    title={t.deleteText}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -237,10 +228,10 @@ export function WritingHistory({
               )}
 
               <div className="card-footer">
-                <span>{entry.wordCount || 0} mots</span>
+                <span>{entry.wordCount || 0} {t.wordsCount}</span>
                 <span>·</span>
                 <span>
-                  {entry.wordsUsed?.length || 0}/{entry.promptWords?.length || 0} cibles placées
+                  {entry.wordsUsed?.length || 0}/{entry.promptWords?.length || 0} {t.wordsUsedCount}
                 </span>
               </div>
             </article>

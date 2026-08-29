@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react'
+import type { UiLanguage } from '../../../domain'
+import { exercisesCopy } from '../../../i18n'
 import type { HandwrittenMasteryData, HandwrittenQuizQuestion } from '../exercisesDomain'
 import { Sparkles, Check, Award, ArrowRight, Lightbulb, Info, RotateCcw, CheckCircle2 } from 'lucide-react'
 
@@ -6,13 +8,16 @@ type HandwrittenCorrectionsProps = {
   data: HandwrittenMasteryData
   onCheckFinished?: (score: number, maxScore: number) => void
   isSubmitted?: boolean
+  ui?: UiLanguage
 }
 
 export function HandwrittenCorrections({
   data,
   onCheckFinished,
   isSubmitted = false,
+  ui = 'fr',
 }: HandwrittenCorrectionsProps) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const { coreTopic, goldenRule, lessonIntroduction, examples, quizQuestions } = data
 
   // Extract all questions either from quizQuestions or from practiceQuestion inside examples
@@ -87,7 +92,7 @@ export function HandwrittenCorrections({
         <div className="lesson-note-header">
           <div className="lesson-badge-pill">
             <Sparkles size={13} />
-            <span>Leçon complète</span>
+            <span>{t.ruleTip}</span>
           </div>
           <h3 className="lesson-title">{coreTopic}</h3>
           {goldenRule && <p className="lesson-golden-rule">{goldenRule}</p>}
@@ -143,7 +148,7 @@ export function HandwrittenCorrections({
                 <div className="lesson-why-box">
                   <div className="why-title-row">
                     <Lightbulb size={13} className="bulb-icon" />
-                    <strong>Pourquoi écrit-on cela ?</strong>
+                    <strong>{t.whyTitle}</strong>
                   </div>
                   <p className="why-text">{ex.whyExplanation}</p>
                 </div>
@@ -161,7 +166,7 @@ export function HandwrittenCorrections({
               onClick={handleStartQuiz}
             >
               <Award size={16} />
-              <span>Remplir le quizz ({totalQuestions} questions)</span>
+              <span>{t.startQuiz} ({totalQuestions})</span>
               <ArrowRight size={14} />
             </button>
           </div>
@@ -236,8 +241,8 @@ export function HandwrittenCorrections({
                 >
                   <span>
                     {currentQuestionIndex < totalQuestions - 1
-                      ? 'Question suivante'
-                      : 'Voir mes résultats'}
+                      ? t.nextQuestion
+                      : t.seeResults}
                   </span>
                   <ArrowRight size={14} />
                 </button>
@@ -253,9 +258,9 @@ export function HandwrittenCorrections({
           <div className="results-left">
             <Award size={20} className="award-icon" />
             <div>
-              <h4>Quiz terminé !</h4>
+              <h4>{t.quizCompleted}</h4>
               <p>
-                Score : <strong>{finalScore}</strong> / {totalQuestions} bonnes réponses (
+                {t.scoreLabel} : <strong>{finalScore}</strong> / {totalQuestions} (
                 {Math.round((finalScore / totalQuestions) * 100)}%)
               </p>
             </div>
@@ -266,7 +271,7 @@ export function HandwrittenCorrections({
             onClick={handleStartQuiz}
           >
             <RotateCcw size={13} />
-            <span>Rejouer le quizz</span>
+            <span>{t.replayQuiz}</span>
           </button>
         </div>
       )}

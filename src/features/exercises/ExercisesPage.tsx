@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import type { AppState, Difficulty, Language, UiLanguage } from '../../domain'
+import { exercisesCopy } from '../../i18n'
 import {
   type ExerciseDefinition,
   type ExerciseHistoryRecord,
   type ExerciseMode,
   EXERCISE_MODES_INFO,
+  getExerciseModeInfo,
 } from './exercisesDomain'
 import { generateExerciseWithAi } from './exerciseAiService'
 import {
@@ -45,7 +47,8 @@ type ExercisesPageProps = {
   onAiTaskChange?: (running: boolean) => void
 }
 
-export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: ExercisesPageProps) {
+export function ExercisesPage({ state, onChange, ui = 'fr', onAiTaskChange }: ExercisesPageProps) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const [promptInput, setPromptInput] = useState('')
   const [selectedMode, setSelectedMode] = useState<ExerciseMode>('auto')
   const [isModePickerOpen, setIsModePickerOpen] = useState(false)
@@ -183,20 +186,20 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
     await loadHistory()
   }
 
-  const selectedModeInfo = EXERCISE_MODES_INFO.find((m) => m.id === selectedMode)
+  const selectedModeInfo = getExerciseModeInfo(selectedMode, ui)
 
   return (
     <div className={`exercises-builder-page ${activeExercise ? 'has-active-exercise' : ''}`}>
       {/* Stack organisée : Titre à gauche, icône d'historique à droite et champ de saisie aligné */}
       <div className="builder-header-stack">
         <header className="builder-minimal-header">
-          <h1 className="builder-minimal-title">Crée ton propre exercice avec l'IA</h1>
+          <h1 className="builder-minimal-title">{t.createExerciseTitle}</h1>
           <button
             type="button"
             className="history-icon-toggle-btn"
             onClick={() => setIsHistoryOpen(true)}
-            title="Historique des entraînements"
-            aria-label="Historique des entraînements"
+            title={t.historyTitle}
+            aria-label={t.historyTitle}
           >
             <HistoryIcon size={19} />
           </button>
@@ -212,7 +215,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
               rows={1}
               value={promptInput}
               onChange={(e) => setPromptInput(e.target.value)}
-              placeholder="Taper une nouvelle consigne pour générer un autre exercice…"
+              placeholder={t.promptPlaceholderCompact}
               disabled={isGenerating}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -226,8 +229,8 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
               className={`minimal-send-btn ${isGenerating ? 'is-loading' : ''}`}
               onClick={handleGenerate}
               disabled={isGenerating || !promptInput.trim()}
-              title="Créer mon exercice"
-              aria-label="Créer mon exercice"
+              title={t.createBtn}
+              aria-label={t.createBtn}
             >
               {isGenerating ? (
                 <Loader2 size={18} className="spin-icon" />
@@ -245,7 +248,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
             rows={2}
             value={promptInput}
             onChange={(e) => setPromptInput(e.target.value)}
-            placeholder="Décris ce que tu souhaites travailler (ex: le vocabulaire informatique, la différence entre that et the, les prépositions in/on/at…)"
+            placeholder={t.promptPlaceholder}
             disabled={isGenerating}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -267,12 +270,12 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 {selectedMode === 'auto' ? (
                   <>
                     <SlidersHorizontal size={14} />
-                    <span>Mode d'exercice</span>
+                    <span>{t.modePickerLabel}</span>
                     <ChevronDown size={12} className="chevron-icon" />
                   </>
                 ) : (
                   <>
-                    <span>{selectedModeInfo?.icon} {selectedModeInfo?.labelFr}</span>
+                    <span>{selectedModeInfo.icon} {selectedModeInfo.label}</span>
                     <ChevronDown size={12} className="chevron-icon" />
                   </>
                 )}
@@ -281,26 +284,29 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
               {/* Mode Picker Dropdown Popover (Opens strictly below) */}
               {isModePickerOpen && (
                 <div className="mode-picker-popover">
-                  <div className="popover-title">Choisis un format d'exercice :</div>
+                  <div className="popover-title">{t.modePickerTitle}</div>
                   <div className="popover-modes-list">
-                    {EXERCISE_MODES_INFO.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        className={`mode-option-btn ${selectedMode === m.id ? 'active' : ''}`}
-                        onClick={() => {
-                          setSelectedMode(m.id)
-                          setIsModePickerOpen(false)
-                        }}
-                      >
-                        <span className="mode-opt-icon">{m.icon}</span>
-                        <div className="mode-opt-info">
-                          <strong className="mode-opt-label">{m.labelFr}</strong>
-                          <small className="mode-opt-desc">{m.descFr}</small>
-                        </div>
-                        {selectedMode === m.id && <Check size={14} className="check-icon" />}
-                      </button>
-                    ))}
+                    {EXERCISE_MODES_INFO.map((m) => {
+                      const info = getExerciseModeInfo(m.id, ui)
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          className={`mode-option-btn ${selectedMode === m.id ? 'active' : ''}`}
+                          onClick={() => {
+                            setSelectedMode(m.id)
+                            setIsModePickerOpen(false)
+                          }}
+                        >
+                          <span className="mode-opt-icon">{info.icon}</span>
+                          <div className="mode-opt-info">
+                            <strong className="mode-opt-label">{info.label}</strong>
+                            <small className="mode-opt-desc">{info.desc}</small>
+                          </div>
+                          {selectedMode === m.id && <Check size={14} className="check-icon" />}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -312,8 +318,8 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
               className={`minimal-send-btn ${isGenerating ? 'is-loading' : ''}`}
               onClick={handleGenerate}
               disabled={isGenerating || !promptInput.trim()}
-              title="Créer mon exercice"
-              aria-label="Créer mon exercice"
+              title={t.createBtn}
+              aria-label={t.createBtn}
             >
               {isGenerating ? (
                 <Loader2 size={18} className="spin-icon" />
@@ -343,7 +349,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
               className="action-btn secondary small"
               onClick={() => setActiveExercise(null)}
             >
-              Fermer
+              {t.close}
             </button>
           </div>
 
@@ -354,6 +360,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 data={activeExercise.handwrittenMasteryData}
                 onCheckFinished={handleCheckFinished}
                 isSubmitted={isExerciseSubmitted}
+                ui={ui}
               />
             )}
 
@@ -362,6 +369,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 data={activeExercise.crosswordData}
                 onCheckFinished={handleCheckFinished}
                 isSubmitted={isExerciseSubmitted}
+                ui={ui}
               />
             )}
 
@@ -370,6 +378,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 data={activeExercise.matchPairsData}
                 onCheckFinished={handleCheckFinished}
                 isSubmitted={isExerciseSubmitted}
+                ui={ui}
               />
             )}
 
@@ -378,6 +387,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 data={activeExercise.sentenceScrambleData}
                 onCheckFinished={handleCheckFinished}
                 isSubmitted={isExerciseSubmitted}
+                ui={ui}
               />
             )}
 
@@ -386,6 +396,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 data={activeExercise.fillInBlanksData}
                 onCheckFinished={handleCheckFinished}
                 isSubmitted={isExerciseSubmitted}
+                ui={ui}
               />
             )}
 
@@ -394,6 +405,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 data={activeExercise.errorHunterData}
                 onCheckFinished={handleCheckFinished}
                 isSubmitted={isExerciseSubmitted}
+                ui={ui}
               />
             )}
 
@@ -402,6 +414,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 data={activeExercise.dialogueRoleplayData}
                 onCheckFinished={handleCheckFinished}
                 isSubmitted={isExerciseSubmitted}
+                ui={ui}
               />
             )}
 
@@ -410,6 +423,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 data={activeExercise.grammarDeepdiveData}
                 onCheckFinished={handleCheckFinished}
                 isSubmitted={isExerciseSubmitted}
+                ui={ui}
               />
             )}
 
@@ -418,6 +432,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 data={activeExercise.imageAssociationData}
                 onCheckFinished={handleCheckFinished}
                 isSubmitted={isExerciseSubmitted}
+                ui={ui}
               />
             )}
           </div>
@@ -430,7 +445,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                 className="action-btn secondary"
                 onClick={handleReplayCurrent}
               >
-                <RotateCcw size={14} /> Rejouer cet exercice
+                <RotateCcw size={14} /> {t.replayBtn}
               </button>
               <button
                 type="button"
@@ -441,7 +456,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                   window.scrollTo({ top: 0, behavior: 'smooth' })
                 }}
               >
-                <Plus size={14} /> Nouvel exercice
+                <Plus size={14} /> {t.newExerciseBtn}
               </button>
             </div>
           )}
@@ -455,12 +470,13 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
             <div className="history-modal-header">
               <div className="header-title-wrap">
                 <Calendar size={18} />
-                <h3>Historique des entraînements</h3>
+                <h3>{t.historyTitle}</h3>
               </div>
               <button
                 type="button"
                 className="history-modal-close"
                 onClick={() => setIsHistoryOpen(false)}
+                title={t.close}
               >
                 <X size={18} />
               </button>
@@ -470,16 +486,16 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
               {isLoadingHistory ? (
                 <div className="history-loading-row">
                   <Loader2 size={16} className="spin-icon" />
-                  <span>Chargement de l'historique…</span>
+                  <span>{t.creating}</span>
                 </div>
               ) : history.length === 0 ? (
                 <div className="history-empty-card">
-                  <p>Aucun entraînement sauvegardé pour le moment.</p>
+                  <p>{t.noHistory}</p>
                 </div>
               ) : (
                 <div className="history-cards-stack">
                   {history.map((record) => {
-                    const modeInfo = EXERCISE_MODES_INFO.find((m) => m.id === record.mode)
+                    const modeInfo = getExerciseModeInfo(record.mode, ui)
                     const scorePercent =
                       record.score !== undefined && record.maxScore
                         ? Math.round((record.score / record.maxScore) * 100)
@@ -496,10 +512,10 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                                 color: modeInfo?.badgeColor,
                               }}
                             >
-                              {modeInfo?.icon} {modeInfo?.labelFr}
+                              {modeInfo?.icon} {modeInfo?.label}
                             </span>
                             <span className="history-date">
-                              {new Date(record.completedAt).toLocaleDateString('fr-FR', {
+                              {new Date(record.completedAt).toLocaleDateString(ui === 'fr' ? 'fr-FR' : (ui === 'en' ? 'en-US' : (ui === 'es' ? 'es-ES' : (ui === 'zh' ? 'zh-CN' : (ui === 'ru' ? 'ru-RU' : 'pt-PT')))), {
                                 day: 'numeric',
                                 month: 'short',
                                 hour: '2-digit',
@@ -518,23 +534,15 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                               <strong>{scorePercent}%</strong>
                             </span>
                           ) : (
-                            <span className="history-score-badge empty">Terminé</span>
+                            <span className="history-score-badge empty">{t.finish}</span>
                           )}
 
                           <div className="history-row-actions">
                             <button
                               type="button"
-                              className="history-btn review"
-                              onClick={() => handleReviewFromHistory(record)}
-                              title="Revoir le corrigé"
-                            >
-                              Voir le corrigé
-                            </button>
-                            <button
-                              type="button"
                               className="history-btn replay"
                               onClick={() => handleReplayFromHistory(record)}
-                              title="Rejouer"
+                              title={t.replayBtn}
                             >
                               <RotateCcw size={12} />
                             </button>
@@ -542,7 +550,7 @@ export function ExercisesPage({ state, onChange, ui, onAiTaskChange }: Exercises
                               type="button"
                               className="history-btn delete"
                               onClick={(e) => handleDeleteHistory(record.id, e)}
-                              title="Supprimer"
+                              title={t.close}
                             >
                               <Trash2 size={12} />
                             </button>

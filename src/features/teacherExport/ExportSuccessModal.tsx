@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { Check, Copy, ExternalLink, Globe, X, HelpCircle, MessageSquare, GraduationCap } from 'lucide-react'
+import type { UiLanguage } from '../../domain'
+import { teacherCopy } from '../../i18n'
 import type { ExportedLesson } from './teacherExportDomain'
 import { buildExportUrl } from './teacherExportService'
 
@@ -7,11 +9,13 @@ type ExportSuccessModalProps = {
   lesson: ExportedLesson
   onClose: () => void
   onOpenViewer?: (lesson: ExportedLesson) => void
+  ui?: UiLanguage
 }
 
-export function ExportSuccessModal({ lesson, onClose }: ExportSuccessModalProps) {
+export function ExportSuccessModal({ lesson, onClose, ui = 'fr' }: ExportSuccessModalProps) {
   const [copied, setCopied] = useState(false)
   const fullUrl = buildExportUrl(lesson.username, lesson.id)
+  const t = teacherCopy[ui] || teacherCopy.fr
 
   const handleCopy = async () => {
     try {
@@ -39,25 +43,25 @@ export function ExportSuccessModal({ lesson, onClose }: ExportSuccessModalProps)
             <span className="export-header-title">{lesson.resourceTitle}</span>
             <div className="export-header-badges">
               {lesson.tooltips.length > 0 && (
-                <span className="export-header-badge-item" title={`${lesson.tooltips.length} infobulle(s)`}>
+                <span className="export-header-badge-item" title={`${lesson.tooltips.length} ${t.statTooltips}`}>
                   <HelpCircle size={13} style={{ color: '#ea580c' }} />
                   <span>{lesson.tooltips.length}</span>
                 </span>
               )}
               {lesson.wordComments.length > 0 && (
-                <span className="export-header-badge-item" title={`${lesson.wordComments.length} commentaire(s)`}>
+                <span className="export-header-badge-item" title={`${lesson.wordComments.length} ${t.statComments}`}>
                   <MessageSquare size={13} style={{ color: '#d97706' }} />
                   <span>{lesson.wordComments.length}</span>
                 </span>
               )}
               {lesson.homework && (
-                <span className="export-header-badge-item" title="Devoir inclus">
+                <span className="export-header-badge-item" title={t.statHomework}>
                   <GraduationCap size={13} style={{ color: '#2563eb' }} />
                 </span>
               )}
             </div>
           </div>
-          <button className="teacher-export-close-btn" onClick={onClose} title="Fermer">
+          <button className="teacher-export-close-btn" onClick={onClose} title={t.close}>
             <X size={16} />
           </button>
         </header>
@@ -83,30 +87,29 @@ export function ExportSuccessModal({ lesson, onClose }: ExportSuccessModalProps)
               {copied ? (
                 <>
                   <Check size={14} />
-                  <span>Copié !</span>
+                  <span>{t.successCopied}</span>
                 </>
               ) : (
                 <>
                   <Copy size={14} />
-                  <span>Copier le lien</span>
+                  <span>{t.copyLink}</span>
                 </>
               )}
             </button>
           </div>
 
           <p className="export-info-subtext" style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
-            Vous pourrez retrouver, consulter et dépublier vos leçons partagées à tout moment dans{' '}
-            <strong style={{ color: 'var(--ink)' }}>Paramètres &gt; Mes leçons</strong>.
+            {t.successInfo}
           </p>
         </div>
 
         <footer className="teacher-export-card-foot">
           <button type="button" className="outline" onClick={handleOpenDirect}>
             <ExternalLink size={14} />
-            <span>Voir la page</span>
+            <span>{t.viewPage}</span>
           </button>
           <button type="button" className="primary" onClick={onClose} autoFocus>
-            <span>Terminer</span>
+            <span>{t.done}</span>
           </button>
         </footer>
       </div>

@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import type { AppState, LearnedWord, WritingEntry } from '../../domain'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
+import type { AppState, LearnedWord, WritingEntry, UiLanguage } from '../../domain'
+import { writeCopy } from '../../i18n'
 import { id, todayKey } from '../../domain'
 import { WordBricksTray } from './WordBricksTray'
 import { checkUsedWords } from './wordMatcher'
@@ -39,6 +40,7 @@ type WritingEditorProps = {
   onNewSession?: () => void
   onNavigateToSpeaking?: (text: string) => void
   onDraftStateChange?: (guardState: { hasDraftMoreThan10Words: boolean; saveDraft: () => void } | null) => void
+  ui?: UiLanguage
 }
 
 // Common logical connectors for English and French
@@ -67,13 +69,15 @@ export function WritingEditor({
   onNewSession,
   onNavigateToSpeaking,
   onDraftStateChange,
+  ui = 'fr',
 }: WritingEditorProps) {
+  const t = writeCopy[ui] || writeCopy.fr
   const learningLang = state.settings.learningLanguage
-  const [title, setTitle] = useState(initialEntry?.title || config.title)
+  const [title, setTitle] = useState(initialEntry?.title || config.title || t.myText)
   const [isTitleLocked, setIsTitleLocked] = useState(() => {
     // Lock if editing an existing entry with a real title, or if title is not default
-    const t = initialEntry?.title || config.title
-    return t !== 'Mon texte' && t.trim().length > 0
+    const currentT = initialEntry?.title || config.title
+    return currentT !== t.myText && currentT !== 'Mon texte' && currentT.trim().length > 0
   })
   const [content, setContent] = useState(initialEntry?.content || '')
   const [promptWords, setPromptWords] = useState<string[]>(
@@ -440,12 +444,13 @@ export function WritingEditor({
                 onClose={handleCloseCorrection}
                 isEditorView={isEditorRawView}
                 onToggleEditorView={() => setIsEditorRawView(!isEditorRawView)}
+                ui={ui}
               />
               {isEditorRawView && (
                 <textarea
                   ref={textareaRef}
                   className="writing-textarea"
-                  placeholder="Commence à rédiger ici... Exprime-toi librement dans ta langue d'apprentissage."
+                  placeholder={t.editorPlaceholder}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   autoFocus
@@ -456,7 +461,7 @@ export function WritingEditor({
             <textarea
               ref={textareaRef}
               className="writing-textarea"
-              placeholder="Commence à rédiger ici... Exprime-toi librement dans ta langue d'apprentissage."
+              placeholder={t.editorPlaceholder}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               autoFocus
@@ -467,12 +472,12 @@ export function WritingEditor({
             <div className="floating-title-area">
               {isTitleLocked ? (
                 <span className="locked-title-display">
-                  <span className="locked-title-text">{title || 'Mon texte'}</span>
+                  <span className="locked-title-text">{title || t.myText}</span>
                   <button
                     type="button"
                     className="title-edit-icon-btn"
                     onClick={() => setIsTitleLocked(false)}
-                    title="Modifier le titre"
+                    title={t.newText}
                   >
                     <Pencil size={11} />
                   </button>
@@ -481,10 +486,10 @@ export function WritingEditor({
                 <input
                   type="text"
                   className="inline-title-input"
-                  value={title === 'Mon texte' ? '' : title}
+                  value={title === t.myText || title === 'Mon texte' ? '' : title}
                   onChange={(e) => setTitle(e.target.value)}
                   onBlur={() => {
-                    if (title.trim().length > 0 && title !== 'Mon texte') {
+                    if (title.trim().length > 0 && title !== t.myText && title !== 'Mon texte') {
                       setIsTitleLocked(true)
                     }
                   }}
@@ -493,7 +498,7 @@ export function WritingEditor({
                       setIsTitleLocked(true)
                     }
                   }}
-                  placeholder="Titre de la note"
+                  placeholder={t.myText}
                 />
               )}
             </div>
@@ -502,10 +507,10 @@ export function WritingEditor({
                 type="button"
                 className="new-text-corner-btn"
                 onClick={handleNewTextClick}
-                title={initialEntry ? "Créer un nouveau texte vierge" : "Nouveau texte"}
+                title={initialEntry ? t.startNew : t.newText}
               >
                 <Plus size={13} />
-                <span>Nouveau texte</span>
+                <span>{t.newText}</span>
               </button>
             )}
           </div>
@@ -519,14 +524,14 @@ export function WritingEditor({
 
           <footer className="editor-bottom-bar">
             <div className="bottom-meta">
-              <span>{stats.words} mots</span>
+              <span>{stats.words} {t.wordsCount}</span>
               <span>·</span>
               <span>{stats.chars} caractères</span>
               <span>·</span>
-              <span>~{stats.readingTimeMins} min de lecture</span>
+              <span>~{stats.readingTimeMins} min</span>
               {usedWords.length === promptWords.length && promptWords.length > 0 && (
                 <span className="all-words-badge">
-                  <Check size={13} /> Tous les mots placés !
+                  <Check size={13} /> {t.wordGoalReached}
                 </span>
               )}
             </div>
@@ -540,20 +545,20 @@ export function WritingEditor({
                     onDeleteEntry(initialEntry.id)
                     handleResetText()
                   }}
-                  title="Supprimer cette session d'écriture"
+                  title={t.deleteText}
                 >
                   <Trash2 size={13} />
-                  <span>Supprimer</span>
+                  <span>{t.deleteText}</span>
                 </button>
               )}
               <button
                 type="button"
                 className="text-btn"
                 onClick={handleCopy}
-                title="Copier le texte"
+                title={t.copyText}
               >
                 <Copy size={13} />
-                <span>Copier</span>
+                <span>{savedBadge ? t.copiedText : t.copyText}</span>
               </button>
 
               <button
@@ -561,24 +566,24 @@ export function WritingEditor({
                 className={`text-btn ai-correct-btn ${isCorrecting ? 'is-loading' : ''} ${isCorrectionOpen && correctionResult ? 'active' : ''}`}
                 onClick={handleAiCorrection}
                 disabled={isCorrecting}
-                title="Analyser le texte et afficher les corrections et annotations manuscrites"
+                title={t.aiCorrection}
               >
                 {isCorrecting ? (
                   <Loader2 size={13} className="spin text-brand" />
                 ) : (
                   <Languages size={13} />
                 )}
-                <span>{isCorrecting ? 'Analyse…' : 'Correction IA'}</span>
+                <span>{isCorrecting ? t.correcting : t.aiCorrection}</span>
               </button>
 
               <button
                 type="button"
                 className="text-btn"
                 onClick={handleSave}
-                title="Enregistrer et créer un nouveau texte"
+                title={t.saveBtn}
               >
                 {savedBadge ? <Check size={13} className="text-green" /> : <Save size={13} />}
-                <span>{savedBadge ? 'Enregistré !' : 'Sauvegarder'}</span>
+                <span>{savedBadge ? t.savedBtn : t.saveBtn}</span>
               </button>
             </div>
           </footer>
@@ -742,7 +747,7 @@ export function WritingEditor({
           >
             <div style={{ padding: '24px 20px 16px 20px' }}>
               <p style={{ margin: 0, fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>
-                Tu as un texte en cours, veux-tu sauvegarder avant de quitter la page ?
+                {t.draftWarning}
               </p>
             </div>
             <div
@@ -759,7 +764,7 @@ export function WritingEditor({
                 className="outline"
                 onClick={() => setShowNewConfirmModal(false)}
               >
-                Annuler
+                {t.stayOnPage}
               </button>
               <button
                 type="button"
@@ -769,7 +774,7 @@ export function WritingEditor({
                   handleResetText()
                 }}
               >
-                Quitter sans sauvegarder
+                {t.leaveWithoutSaving}
               </button>
             </div>
           </div>

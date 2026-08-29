@@ -15,7 +15,8 @@ import {
   Sparkles,
   Layers,
 } from 'lucide-react'
-import type { Resource } from '../../domain'
+import type { Resource, UiLanguage } from '../../domain'
+import { teacherCopy } from '../../i18n'
 import type { PageAnnotations, Point, Stroke, TextNote, TextRun, Liaison } from '../LearningFocus'
 import { modifiedCharIndices } from '../LearningFocus'
 import type {
@@ -41,6 +42,7 @@ type ExportPreviewFrameProps = {
   existingLesson?: ExportedLesson | null
   onCancel: () => void
   onExport: (exportedLesson: ExportedLesson) => void
+  ui?: UiLanguage
 }
 
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -55,7 +57,9 @@ export function ExportPreviewFrame({
   existingLesson,
   onCancel,
   onExport,
+  ui = 'fr',
 }: ExportPreviewFrameProps) {
+  const t = teacherCopy[ui] || teacherCopy.fr
   const [currentPageIndex, setCurrentPageIndex] = useState(initialPageIndex)
   const [activeAction, setActiveAction] = useState<ActiveAction>('none')
 
@@ -590,7 +594,7 @@ export function ExportPreviewFrame({
                                                 onClick={() =>
                                                   setWordComments((prev) => prev.filter((c) => c.id !== commentObj.id))
                                                 }
-                                                title="Supprimer ce commentaire"
+                                                title={t.deleteComment}
                                               >
                                                 <Trash2 size={12} />
                                               </button>
@@ -598,7 +602,7 @@ export function ExportPreviewFrame({
                                                 type="button"
                                                 className="export-popup-close"
                                                 onClick={() => setActiveCommentId(null)}
-                                                title="Fermer"
+                                                title={t.close}
                                               >
                                                 <X size={12} />
                                               </button>
@@ -817,7 +821,7 @@ export function ExportPreviewFrame({
                           <input
                             autoFocus
                             type="text"
-                            placeholder="Explication pour l'infobulle…"
+                            placeholder={t.tooltipPlaceholder}
                             value={draftTooltip.text}
                             onChange={(e) => setDraftTooltip({ ...draftTooltip, text: e.target.value })}
                             onKeyDown={(e) => {
@@ -832,7 +836,7 @@ export function ExportPreviewFrame({
                             className="export-inline-action-btn primary"
                             disabled={!draftTooltip.text.trim()}
                             onClick={handleSaveTooltip}
-                            title="Valider"
+                            title={t.confirm}
                           >
                             <Check size={13} />
                           </button>
@@ -840,7 +844,7 @@ export function ExportPreviewFrame({
                             type="button"
                             className="export-inline-action-btn"
                             onClick={() => setDraftTooltip(null)}
-                            title="Annuler"
+                            title={t.cancel}
                           >
                             <X size={13} />
                           </button>
@@ -858,7 +862,7 @@ export function ExportPreviewFrame({
                         <input
                           autoFocus
                           type="text"
-                          placeholder={`Commentaire sur « ${draftComment.wordText} »…`}
+                          placeholder={`${t.wordCommentPlaceholder}`}
                           value={draftComment.text}
                           onChange={(e) => setDraftComment({ ...draftComment, text: e.target.value })}
                           onKeyDown={(e) => {
@@ -873,7 +877,7 @@ export function ExportPreviewFrame({
                           className="export-inline-action-btn primary"
                           disabled={!draftComment.text.trim()}
                           onClick={handleSaveComment}
-                          title="Valider"
+                          title={t.confirm}
                         >
                           <Check size={13} />
                         </button>
@@ -881,7 +885,7 @@ export function ExportPreviewFrame({
                           type="button"
                           className="export-inline-action-btn"
                           onClick={() => setDraftComment(null)}
-                          title="Annuler"
+                          title={t.cancel}
                         >
                           <X size={13} />
                         </button>
@@ -903,7 +907,7 @@ export function ExportPreviewFrame({
               onClick={() => setActiveAction(activeAction === 'tooltip' ? 'none' : 'tooltip')}
             >
               <HelpCircle size={15} />
-              <span>Ajouter une infobulle</span>
+              <span>{t.addTooltip}</span>
               {tooltips.length > 0 && <span className="export-btn-count">{tooltips.length}</span>}
             </button>
 
@@ -913,7 +917,7 @@ export function ExportPreviewFrame({
               onClick={() => setActiveAction(activeAction === 'text' ? 'none' : 'text')}
             >
               <Type size={15} />
-              <span>Ajouter un texte</span>
+              <span>{t.addTextNote}</span>
             </button>
 
             <button
@@ -922,7 +926,7 @@ export function ExportPreviewFrame({
               onClick={() => setActiveAction(activeAction === 'comment' ? 'none' : 'comment')}
             >
               <MessageSquare size={15} />
-              <span>Ajouter un commentaire</span>
+              <span>{t.addComment}</span>
               {wordComments.length > 0 && <span className="export-btn-count">{wordComments.length}</span>}
             </button>
 
@@ -932,20 +936,20 @@ export function ExportPreviewFrame({
               onClick={() => setHomeworkModalOpen(true)}
             >
               <GraduationCap size={15} />
-              <span>{homework ? 'Devoir configuré ✓' : 'Ajouter un devoir'}</span>
+              <span>{homework ? t.homeworkConfigured : t.addHomework}</span>
             </button>
           </div>
 
           <div className="export-bar-right">
             <button type="button" className="outline" onClick={onCancel}>
-              Annuler
+              {t.cancel}
             </button>
             <button
               type="button"
               className="primary"
               onClick={() => setFinalizeModalOpen(true)}
             >
-              <span>{existingLesson ? 'Mettre à jour' : 'Exporter'}</span>
+              <span>{existingLesson ? t.updateLesson : t.exportBtn}</span>
               <ArrowRight size={15} />
             </button>
           </div>
@@ -957,18 +961,18 @@ export function ExportPreviewFrame({
         <div className="teacher-export-overlay" onClick={() => setHomeworkModalOpen(false)}>
           <div className="teacher-export-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <header className="teacher-export-card-head" style={{ paddingBottom: 6 }}>
-              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Ajouter un devoir</h3>
-              <button className="teacher-export-close-btn" onClick={() => setHomeworkModalOpen(false)}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>{t.homeworkModalTitle}</h3>
+              <button className="teacher-export-close-btn" onClick={() => setHomeworkModalOpen(false)} title={t.close}>
                 <X size={16} />
               </button>
             </header>
 
             <div className="teacher-export-card-body">
               <div className="teacher-export-field">
-                <label>Devoir / Énoncé *</label>
+                <label>{t.homeworkPromptLabel}</label>
                 <textarea
                   autoFocus
-                  placeholder="Ex : Faire les exercices 1 et 2 page 42, réviser les verbes irréguliers…"
+                  placeholder={t.homeworkPromptPlaceholder}
                   value={hwTitle}
                   onChange={(e) => setHwTitle(e.target.value)}
                 />
@@ -976,11 +980,11 @@ export function ExportPreviewFrame({
 
               <div className="teacher-export-grid-2">
                 <div className="teacher-export-field">
-                  <label>Date d'échéance (optionnel)</label>
+                  <label>{t.homeworkDueDateLabel}</label>
                   <input type="date" value={hwDueDate} onChange={(e) => setHwDueDate(e.target.value)} />
                 </div>
                 <div className="teacher-export-field">
-                  <label>Pièce-jointe (optionnel)</label>
+                  <label>{t.homeworkAttachmentLabel}</label>
                   <div
                     className={`hw-upload-dropzone ${hwAttachmentName ? 'has-file' : ''}`}
                     onClick={() => fileInputRef.current?.click()}
@@ -1022,7 +1026,7 @@ export function ExportPreviewFrame({
                             setHwAttachmentName('')
                             setHwAttachmentData('')
                           }}
-                          title="Retirer la pièce-jointe"
+                          title={t.homeworkRemoveAttachment}
                         >
                           <X size={13} />
                         </button>
@@ -1030,7 +1034,7 @@ export function ExportPreviewFrame({
                     ) : (
                       <div className="hw-dropzone-empty">
                         <Paperclip size={16} />
-                        <span>Glissez un fichier ou <strong>parcourir</strong></span>
+                        <span>{t.homeworkDropzoneEmpty}</span>
                       </div>
                     )}
                   </div>
@@ -1038,9 +1042,9 @@ export function ExportPreviewFrame({
               </div>
 
               <div className="teacher-export-field">
-                <label>Instructions pour le rendre (optionnel)</label>
+                <label>{t.homeworkInstructionsLabel}</label>
                 <textarea
-                  placeholder="Ex : Déposer le PDF sur l'ENT ou envoyer par email…"
+                  placeholder={t.homeworkInstructionsPlaceholder}
                   value={hwInstructions}
                   onChange={(e) => setHwInstructions(e.target.value)}
                 />
@@ -1058,11 +1062,11 @@ export function ExportPreviewFrame({
                     setHomeworkModalOpen(false)
                   }}
                 >
-                  Supprimer le devoir
+                  {t.homeworkDeleteBtn}
                 </button>
               )}
               <button type="button" className="outline" onClick={() => setHomeworkModalOpen(false)}>
-                Annuler
+                {t.cancel}
               </button>
               <button
                 type="button"
@@ -1079,7 +1083,7 @@ export function ExportPreviewFrame({
                   setHomeworkModalOpen(false)
                 }}
               >
-                <span>Enregistrer</span>
+                <span>{t.save}</span>
               </button>
             </footer>
           </div>
@@ -1091,7 +1095,7 @@ export function ExportPreviewFrame({
         <div className="teacher-export-overlay" onClick={() => setFinalizeModalOpen(false)}>
           <div className="teacher-export-card" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '14px 18px 0 18px' }}>
-              <button className="teacher-export-close-btn" onClick={() => setFinalizeModalOpen(false)} title="Fermer">
+              <button className="teacher-export-close-btn" onClick={() => setFinalizeModalOpen(false)} title={t.close}>
                 <X size={16} />
               </button>
             </div>
@@ -1101,9 +1105,9 @@ export function ExportPreviewFrame({
                 <div className="teacher-toggle-item">
                   <div className="teacher-toggle-info">
                     <span className="teacher-toggle-title">
-                      <strong>1. Souhaitez-vous accepter les réactions ?</strong>
+                      <strong>{t.finalizeReactionsTitle}</strong>
                     </span>
-                    <p>Les élèves pourront déposer des stickers d'emojis (👍, ❤️, 💡, 👏, 🎯) sur la page.</p>
+                    <p>{t.finalizeReactionsDesc}</p>
                   </div>
                   <label className="toggle-switch">
                     <input
@@ -1118,9 +1122,9 @@ export function ExportPreviewFrame({
                 <div className="teacher-toggle-item">
                   <div className="teacher-toggle-info">
                     <span className="teacher-toggle-title">
-                      <strong>2. Souhaitez-vous accepter les commentaires ?</strong>
+                      <strong>{t.finalizeCommentsTitle}</strong>
                     </span>
-                    <p>Les élèves pourront placer des commentaires Figma n'importe où sur la page.</p>
+                    <p>{t.finalizeCommentsDesc}</p>
                   </div>
                   <label className="toggle-switch">
                     <input
@@ -1136,10 +1140,10 @@ export function ExportPreviewFrame({
 
             <footer className="teacher-export-card-foot">
               <button type="button" className="outline" onClick={() => setFinalizeModalOpen(false)}>
-                Retour
+                {t.back}
               </button>
               <button type="button" className="primary" onClick={handleFinalize}>
-                <span>{existingLesson ? 'Mettre à jour la leçon' : 'Générer le lien unique'}</span>
+                <span>{existingLesson ? t.updateLessonBtn : t.generateUniqueLink}</span>
                 <ArrowRight size={15} />
               </button>
             </footer>

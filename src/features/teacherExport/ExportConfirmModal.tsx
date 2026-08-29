@@ -1,21 +1,25 @@
 import React from 'react'
 import { ArrowRight, X } from 'lucide-react'
+import type { UiLanguage } from '../../domain'
+import { teacherCopy } from '../../i18n'
 
 type NoModificationsModalProps = {
   onClose: () => void
+  ui?: UiLanguage
 }
 
-export function NoModificationsModal({ onClose }: NoModificationsModalProps) {
+export function NoModificationsModal({ onClose, ui = 'fr' }: NoModificationsModalProps) {
+  const t = teacherCopy[ui] || teacherCopy.fr
   return (
     <div className="teacher-export-overlay" onClick={onClose}>
       <div className="app-minimal-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close-icon" onClick={onClose} aria-label="Fermer">
+        <button className="modal-close-icon" onClick={onClose} aria-label={t.close}>
           <X size={16} />
         </button>
-        <h3 className="modal-minimal-title">Aucune modification n'a été faite sur cette ressource, vous ne pouvez pas l'exporter</h3>
+        <h3 className="modal-minimal-title">{t.noModifTitle}</h3>
         <div className="modal-minimal-actions">
           <button type="button" className="primary" onClick={onClose} autoFocus>
-            <span>Compris</span>
+            <span>{t.gotIt}</span>
           </button>
         </div>
       </div>
@@ -28,22 +32,24 @@ type ConfirmExportModalProps = {
   totalPages?: number
   onConfirm: () => void
   onCancel: () => void
+  ui?: UiLanguage
 }
 
-export function ConfirmExportModal({ onConfirm, onCancel }: ConfirmExportModalProps) {
+export function ConfirmExportModal({ onConfirm, onCancel, ui = 'fr' }: ConfirmExportModalProps) {
+  const t = teacherCopy[ui] || teacherCopy.fr
   return (
     <div className="teacher-export-overlay" onClick={onCancel}>
       <div className="app-minimal-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close-icon" onClick={onCancel} aria-label="Fermer">
+        <button className="modal-close-icon" onClick={onCancel} aria-label={t.close}>
           <X size={16} />
         </button>
-        <h3 className="modal-minimal-title">Souhaitez-vous exporter cette ressource ?</h3>
+        <h3 className="modal-minimal-title">{t.confirmExportTitle}</h3>
         <div className="modal-minimal-actions">
           <button type="button" className="outline" onClick={onCancel}>
-            Annuler
+            {t.cancel}
           </button>
           <button type="button" className="primary" onClick={onConfirm} autoFocus>
-            <span>Oui, exporter</span>
+            <span>{t.yesExport}</span>
             <ArrowRight size={15} />
           </button>
         </div>

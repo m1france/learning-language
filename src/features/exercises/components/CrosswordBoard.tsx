@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+import type { UiLanguage } from '../../../domain'
+import { exercisesCopy } from '../../../i18n'
 import type { CrosswordData, CrosswordClue } from '../exercisesDomain'
 import { Check, RotateCcw, Award, Sparkles, HelpCircle, ArrowRight, ArrowDown } from 'lucide-react'
 
@@ -6,9 +8,11 @@ type CrosswordBoardProps = {
   data: CrosswordData
   onCheckFinished: (score: number, maxScore: number) => void
   isSubmitted: boolean
+  ui?: UiLanguage
 }
 
-export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: CrosswordBoardProps) {
+export function CrosswordBoard({ data, onCheckFinished, isSubmitted, ui = 'fr' }: CrosswordBoardProps) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const { gridRows, gridCols, clues } = data
 
   // Build grid matrix
@@ -226,11 +230,11 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
             <span className="active-clue-badge">
               {activeClue.direction === 'across' ? (
                 <>
-                  <ArrowRight size={13} /> #{activeClue.number} Horizontal
+                  <ArrowRight size={13} /> #{activeClue.number} {t.across}
                 </>
               ) : (
                 <>
-                  <ArrowDown size={13} /> #{activeClue.number} Vertical
+                  <ArrowDown size={13} /> #{activeClue.number} {t.down}
                 </>
               )}
             </span>
@@ -244,7 +248,7 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
           </div>
         ) : (
           <p className="clue-placeholder-text">
-            Clique sur une case numérotée pour voir sa définition et commencer à écrire…
+            {t.showHints}…
           </p>
         )}
       </div>
@@ -364,23 +368,23 @@ export function CrosswordBoard({ data, onCheckFinished, isSubmitted }: Crossword
           onClick={() => setShowHints(!showHints)}
         >
           <Sparkles size={13} />
-          <span>{showHints ? 'Masquer indices' : 'Indices'}</span>
+          <span>{showHints ? t.hideHints : t.showHints}</span>
         </button>
 
         {!isSubmitted ? (
           <div className="crossword-actions-row">
             <button type="button" className="action-btn secondary" onClick={handleReset}>
-              <RotateCcw size={13} /> Recommencer
+              <RotateCcw size={13} /> {t.resetBtn}
             </button>
             <button type="button" className="action-btn primary" onClick={handleVerify}>
-              <Check size={14} /> Vérifier la grille
+              <Check size={14} /> {t.checkBtn}
             </button>
           </div>
         ) : (
           <div className="crossword-score-banner">
             <Award size={16} />
             <span>
-              Résultat : {correctLettersCount} / {totalActiveLetters} lettres correctes (
+              {t.scoreLabel} : {correctLettersCount} / {totalActiveLetters} (
               {Math.round((correctLettersCount / (totalActiveLetters || 1)) * 100)}%)
             </span>
           </div>

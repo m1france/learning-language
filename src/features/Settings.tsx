@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { BUILTIN_CATEGORIES, id } from '../domain'
-import { copy, UI_LANGUAGES } from '../i18n'
+import { copy, UI_LANGUAGES, settingsCopy, teacherCopy } from '../i18n'
 import { TOP_LEARNING_LANGUAGES } from '../languages'
 import { listVoices, speak, testOpenRouterTts } from '../ai'
 import { testAgentConnection } from './speaking/wordAiService'
@@ -390,6 +390,10 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
   const updateApi = <K extends keyof UserSettings['api']>(key: K, value: UserSettings['api'][K]) => setDraft((current) => ({ ...current, api: { ...current.api, [key]: value } }))
   const save = () => { onSave(draft); setSaved(true); window.setTimeout(() => setSaved(false), 2200) }
 
+  const currentUi: UiLanguage = draft.uiLanguage || 'fr'
+  const t = settingsCopy[currentUi] || settingsCopy.fr
+  const teacherT = teacherCopy[currentUi] || teacherCopy.fr
+
   useEffect(() => {
     const load = () => setVoices(listVoices(draft.learningLanguage))
     load()
@@ -398,20 +402,20 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
   }, [draft.learningLanguage])
 
   const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
-    { id: 'profile', icon: <User size={16} />, label: 'Profil' },
-    { id: 'reading', icon: <BookOpen size={16} />, label: 'Lecture' },
-    { id: 'markings', icon: <Palette size={16} />, label: 'Marquages' },
-    { id: 'shortcuts', icon: <Keyboard size={16} />, label: 'Raccourcis' },
-    { id: 'tags-categories', icon: <Tag size={16} />, label: 'Tags & Catégories' },
-    { id: 'lessons', icon: <Share2 size={16} />, label: 'Mes leçons' },
-    { id: 'connections', icon: <KeyRound size={16} />, label: 'Connexions' },
-    { id: 'data', icon: <Database size={16} />, label: 'Données' },
+    { id: 'profile', icon: <User size={16} />, label: t.tabs.profile },
+    { id: 'reading', icon: <BookOpen size={16} />, label: t.tabs.reading },
+    { id: 'markings', icon: <Palette size={16} />, label: t.tabs.markings },
+    { id: 'shortcuts', icon: <Keyboard size={16} />, label: t.tabs.shortcuts },
+    { id: 'tags-categories', icon: <Tag size={16} />, label: t.tabs.tagsCategories },
+    { id: 'lessons', icon: <Share2 size={16} />, label: t.tabs.lessons },
+    { id: 'connections', icon: <KeyRound size={16} />, label: t.tabs.connections },
+    { id: 'data', icon: <Database size={16} />, label: t.tabs.data },
   ]
 
   return <div className="page settings-page">
     <header className="page-header settings-header">
-      <div><p className="eyebrow">TON ESPACE</p><h1>Paramètres</h1><p className="subhead">Tout ce qui est privé reste sur cet appareil tant que tu ne connectes pas de service.</p></div>
-      <button className="primary" onClick={save}>{saved ? <><Check size={15} /> Enregistré</> : 'Enregistrer'} <ArrowRight size={15} /></button>
+      <div><p className="eyebrow">{t.eyebrow}</p><h1>{t.title}</h1><p className="subhead">{t.subhead}</p></div>
+      <button className="primary" onClick={save}>{saved ? <><Check size={15} /> {t.saved}</> : t.save} <ArrowRight size={15} /></button>
     </header>
     <div className="settings-layout">
       <nav className="settings-tabs" aria-label="Sections">
@@ -419,11 +423,11 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
       </nav>
       <section className="settings-panel">
         {tab === 'profile' && <>
-          <SettingHeading title="Ton espace d’apprentissage" detail="La langue d’interface est un choix libre, indépendant de la langue apprise." />
+          <SettingHeading title={t.profileTitle} detail={t.profileDetail} />
           <div className="settings-fields">
-            <label>Ton prénom<input value={draft.name} onChange={(event) => update('name', event.target.value)} /></label>
-            <label>Langue de l’interface<select value={draft.uiLanguage} onChange={(event) => update('uiLanguage', event.target.value as UiLanguage)}>{UI_LANGUAGES.map((language) => <option value={language.id} key={language.id}>{language.flag} {language.name}</option>)}</select></label>
-            <label>Langue apprise
+            <label>{t.name}<input value={draft.name} onChange={(event) => update('name', event.target.value)} /></label>
+            <label>{t.uiLanguage}<select value={draft.uiLanguage} onChange={(event) => update('uiLanguage', event.target.value as UiLanguage)}>{UI_LANGUAGES.map((language) => <option value={language.id} key={language.id}>{language.flag} {language.name}</option>)}</select></label>
+            <label>{t.learningLanguage}
               <select value={draft.learningLanguage} onChange={(event) => update('learningLanguage', event.target.value as Language)}>
                 {TOP_LEARNING_LANGUAGES.map((language) => (
                   <option value={language.id} key={language.id}>
@@ -432,36 +436,36 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                 ))}
               </select>
             </label>
-            <label>Apparence<select value={draft.theme} onChange={(event) => update('theme', event.target.value as UserSettings['theme'])}><option value="light">Clair chaleureux</option><option value="dark">Sombre calme</option></select></label>
+            <label>{t.theme}<select value={draft.theme} onChange={(event) => update('theme', event.target.value as UserSettings['theme'])}><option value="light">{t.themeLight}</option><option value="dark">{t.themeDark}</option></select></label>
           </div>
-          <aside className="settings-tip"><span><Sparkles size={16} /></span><p>La langue de l’interface traduit les menus, boutons et instructions — jamais le contenu de tes ressources importées.</p></aside>
+          <aside className="settings-tip"><span><Sparkles size={16} /></span><p>{t.profileTip}</p></aside>
         </>}
 
         {tab === 'reading' && <>
-          <SettingHeading title="Confort de lecture" detail="Fais du lecteur ton endroit calme." />
+          <SettingHeading title={t.readingTitle} detail={t.readingDetail} />
           <div className="settings-fields">
-            <label>Taille du texte <div className="range-row"><input type="range" min="16" max="26" value={draft.readerFontSize} onChange={(event) => update('readerFontSize', Number(event.target.value))} /><output>{draft.readerFontSize}px</output></div></label>
-            <label>Longueur des pages <div className="range-row"><input type="range" min="120" max="500" step="10" value={draft.readerPageSize} onChange={(event) => update('readerPageSize', Number(event.target.value))} /><output>{draft.readerPageSize} mots</output></div></label>
-            <label>Largeur du texte<select value={draft.readerWidth} onChange={(event) => update('readerWidth', event.target.value as UserSettings['readerWidth'])}><option value="comfortable">Confortable</option><option value="wide">Large</option></select></label>
-            <label>Style de la barre d’outils
+            <label>{t.fontSize} <div className="range-row"><input type="range" min="16" max="26" value={draft.readerFontSize} onChange={(event) => update('readerFontSize', Number(event.target.value))} /><output>{draft.readerFontSize}px</output></div></label>
+            <label>{t.pageSize} <div className="range-row"><input type="range" min="120" max="500" step="10" value={draft.readerPageSize} onChange={(event) => update('readerPageSize', Number(event.target.value))} /><output>{draft.readerPageSize} {t.wordsUnit}</output></div></label>
+            <label>{t.textWidth}<select value={draft.readerWidth} onChange={(event) => update('readerWidth', event.target.value as UserSettings['readerWidth'])}><option value="comfortable">{t.comfortable}</option><option value="wide">{t.wide}</option></select></label>
+            <label>{t.toolbarStyle}
               <select value={draft.readerToolbarStyle ?? 'liquid'} onChange={(event) => update('readerToolbarStyle', event.target.value as UserSettings['readerToolbarStyle'])}>
-                <option value="liquid">Liquid Glass (iOS 27) — Flou profond et reflets</option>
-                <option value="opaque">Haute opacité — Arrière-plan presque opaque</option>
-                <option value="solid">Opaque classique — 100% plein</option>
+                <option value="liquid">{t.toolbarLiquid}</option>
+                <option value="opaque">{t.toolbarOpaque}</option>
+                <option value="solid">{t.toolbarSolid}</option>
               </select>
             </label>
-            <label className="toggle-field"><span><strong>Grammaire visuelle</strong><small>Surligne doucement les verbes dans le lecteur.</small></span><input type="checkbox" checked={draft.showGrammar} onChange={(event) => update('showGrammar', event.target.checked)} /></label>
+            <label className="toggle-field"><span><strong>{t.visualGrammar}</strong><small>{t.visualGrammarHint}</small></span><input type="checkbox" checked={draft.showGrammar} onChange={(event) => update('showGrammar', event.target.checked)} /></label>
           </div>
         </>}
 
         {tab === 'markings' && <>
-          <SettingHeading title="Gestion et ordre des marquages" detail="Personnalise tes marquages, modifie leurs couleurs, renomme-les et change leur ordre d’affichage dans le lecteur." />
+          <SettingHeading title={t.markingsTitle} detail={t.markingsDetail} />
           <div className="settings-markings-section">
             <div className="markings-add-bar">
               <div className="marking-add-input-wrap">
                 <input
                   type="text"
-                  placeholder="Nouveau marquage (ex. Proposition, Connecteur, Idiome...)"
+                  placeholder={t.newMarkingPlaceholder}
                   value={newMarkingLabel}
                   onChange={(event) => setNewMarkingLabel(event.target.value)}
                   onKeyDown={(event) => { if (event.key === 'Enter') handleAddMarking() }}
@@ -582,12 +586,12 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
         </>}
 
         {tab === 'shortcuts' && <>
-          <SettingHeading title="Raccourcis clavier" detail="Personnalise les raccourcis des outils du Teacher Mode pour annoter vos textes encore plus rapidement." />
+          <SettingHeading title={t.shortcutsTitle} detail={t.shortcutsDetail} />
           <div className="shortcuts-mgmt-section">
             <div className="shortcuts-top-bar">
-              <p className="shortcuts-hint">Clique sur la touche d’un outil pour lui attribuer une nouvelle lettre de raccourci.</p>
+              <p className="shortcuts-hint">{t.shortcutsHint}</p>
               <button type="button" className="outline" onClick={handleResetShortcuts} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <RotateCcw size={13} /> Réinitialiser par défaut
+                <RotateCcw size={13} /> {t.resetDefault}
               </button>
             </div>
 
@@ -595,50 +599,41 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
               {TEACHER_TOOLS_INFO.map((toolInfo) => {
                 const isRecording = recordingTool === toolInfo.id
                 const key = (currentShortcuts[toolInfo.id] ?? DEFAULT_TEACHER_SHORTCUTS[toolInfo.id] ?? '').toUpperCase()
+                const label = (teacherT.tools as Record<string, { label: string }>)[toolInfo.id]?.label || toolInfo.label
                 return (
                   <div key={toolInfo.id} className={`shortcut-card ${isRecording ? 'recording' : ''}`}>
                     <div className="shortcut-card-info">
-                      <strong>{toolInfo.label}</strong>
+                      <strong>{label}</strong>
                       <small>{toolInfo.desc}</small>
                     </div>
                     <button
                       type="button"
                       className={`shortcut-key-btn ${isRecording ? 'pulse' : ''}`}
                       onClick={() => setRecordingTool(isRecording ? null : toolInfo.id)}
-                      title={isRecording ? 'Appuie sur une touche du clavier (Échap pour annuler)' : 'Modifier le raccourci'}
+                      title={isRecording ? t.pressKeyPrompt : toolInfo.label}
                     >
-                      {isRecording ? <span className="recording-prompt">Touche...</span> : <kbd>{key || '—'}</kbd>}
+                      {isRecording ? <span className="recording-prompt">{t.recordingPrompt}</span> : <kbd>{key || '—'}</kbd>}
                     </button>
                   </div>
                 )
               })}
             </div>
-
-            <div className="shortcuts-docs-card">
-              <h3>Raccourcis globaux de lecture</h3>
-              <div className="docs-shortcuts-list">
-                <div className="docs-shortcut-row"><kbd>W</kbd><span>Activer / Désactiver le dictionnaire Wiktionary & Linguee</span></div>
-                <div className="docs-shortcut-row"><kbd>Suppr</kbd> / <kbd>Backspace</kbd><span>Supprimer l’annotation ou la note sélectionnée (Teacher Mode)</span></div>
-                <div className="docs-shortcut-row"><kbd>⌘ Z</kbd> / <kbd>Ctrl Z</kbd><span>Annuler la dernière annotation</span></div>
-                <div className="docs-shortcut-row"><kbd>Échap</kbd><span>Quitter le Teacher Mode / Fermer la saisie en cours</span></div>
-              </div>
-            </div>
           </div>
         </>}
 
         {tab === 'tags-categories' && <>
-          <SettingHeading title="Tags & Catégories" detail="Organise ta bibliothèque avec tes catégories et classe ton vocabulaire avec tes tags." />
+          <SettingHeading title={t.tabs.tagsCategories} detail={t.readingCategories} />
           
           {/* SECTION 1 : CATÉGORIES DE LECTURE */}
           <div className="settings-tags-section">
             <div className="settings-section-subtitle">
-              <span>Catégories de lecture</span>
+              <span>{t.readingCategories}</span>
             </div>
 
             <div className="tags-add-bar">
               <input
                 type="text"
-                placeholder="Nouvelle catégorie (ex. Poésie, Philosophie, Biographie...)"
+                placeholder={t.newCategoryPlaceholder}
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }}
@@ -870,17 +865,18 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
               onSave(s)
             }}
             onOpenLesson={(lesson) => onOpenLesson?.(lesson)}
+            ui={currentUi}
           />
         )}
 
         {tab === 'connections' && <>
-          <SettingHeading title="Connexions & Modèles IA" detail="Configure tes clés d’API et personnalise les modèles d’intelligence artificielle par tâche." />
+          <SettingHeading title={t.connectionsTitle} detail={t.connectionsDetail} />
           
           {/* SECTION 1 : CLÉS D'API */}
           <div className="connection-card">
             <div>
-              <h3>1. Clés d'API & Fournisseurs</h3>
-              <p>Renseigne tes clés d'accès. Elles restent strictement stockées dans ce navigateur.</p>
+              <h3>{t.section1ApiKeys}</h3>
+              <p>{t.section1ApiKeysDesc}</p>
             </div>
 
             <div className="preset-grid">
@@ -929,10 +925,10 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                           className="connection-test-btn-compact"
                           onClick={handleTestAgent}
                           disabled={testingAgent || !(draft.api[activeProvider.keyField] as string)?.trim()}
-                          title="Tester la clé et le modèle"
+                          title={t.testBtn}
                         >
                           {testingAgent ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
-                          <span>{testingAgent ? 'Test…' : 'Tester'}</span>
+                          <span>{testingAgent ? t.testingBtn : t.testBtn}</span>
                         </button>
                       </div>
                     </label>
@@ -948,7 +944,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
 
               <div className="conn-key-row">
                 <label>
-                  <span>Clé API DeepL (Traduction & Dictionnaire en direct)</span>
+                  <span>{t.deepLKeyLabel}</span>
                   <div className="conn-input-action-wrap">
                     <input
                       type="password"
@@ -965,10 +961,10 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                       className="connection-test-btn-compact"
                       onClick={handleTestDeepL}
                       disabled={testingDeepL || !draft.api.deepLKey?.trim()}
-                      title="Tester la clé DeepL"
+                      title={t.testBtn}
                     >
                       {testingDeepL ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
-                      <span>{testingDeepL ? 'Test…' : 'Tester'}</span>
+                      <span>{testingDeepL ? t.testingBtn : t.testBtn}</span>
                     </button>
                   </div>
                 </label>
@@ -979,30 +975,14 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                   </div>
                 )}
               </div>
-
-
-              {(draft.api.agentProvider || 'openrouter') !== 'google' && (
-                <div className="conn-key-row">
-                  <label>
-                    <span>Clé API Google AI Studio (Couvertures Nano Banana & Modèles Gemini)</span>
-                    <input
-                      type="password"
-                      value={draft.api.googleKey || ''}
-                      onChange={(e) => updateApi('googleKey', e.target.value)}
-                      placeholder="AIzaSy…"
-                      autoComplete="off"
-                    />
-                  </label>
-                </div>
-              )}
             </div>
           </div>
 
           {/* SECTION 2 : MODÈLES D'IA PAR TÂCHE */}
           <div className="connection-card">
             <div>
-              <h3>2. Modèles d'IA & Moteurs par tâche</h3>
-              <p>Le modèle principal est utilisé par défaut. Personnalise chaque tâche sur sa ligne dédiée.</p>
+              <h3>{t.section2Models}</h3>
+              <p>{t.section2ModelsDesc}</p>
             </div>
 
             <div className="conn-models-list">
@@ -1012,8 +992,8 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                 return (
                   <div className="conn-task-row is-main">
                     <div className="conn-task-info">
-                      <strong>Modèle Agent Principal (Recommandé)</strong>
-                      <small>Modèle général utilisé pour toutes les tâches par défaut</small>
+                      <strong>{t.mainAgentModel}</strong>
+                      <small>{t.mainAgentModelDesc}</small>
                     </div>
                     <div className="conn-task-input-wrap">
                       <input
@@ -1025,218 +1005,14 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                   </div>
                 )
               })()}
-
-              {/* Option 2 : Rédaction de ressources */}
-              <div className="conn-task-row">
-                <div className="conn-task-info">
-                  <strong>Rédaction de ressources (« Écrire avec l'IA »)</strong>
-                  <small>Génération d'histoires et d'articles adaptés au niveau</small>
-                </div>
-                <div className="conn-task-input-wrap">
-                  <input
-                    value={draft.api.taskModelResourceGeneration || ''}
-                    onChange={(e) => updateApi('taskModelResourceGeneration', e.target.value)}
-                    placeholder="Utilise le modèle principal par défaut"
-                  />
-                </div>
-              </div>
-
-              {/* Option 3 : Génération de couvertures (Gemini Image) */}
-              <div className="conn-task-row">
-                <div className="conn-task-info">
-                  <strong>Génération de couvertures (Nano Banana)</strong>
-                  <small>
-                    Génère les couvertures de ressources IA via Google AI Studio (nécessite une clé API Google).
-                    {!draft.api.googleKey?.trim() && <em style={{ color: '#d97706', display: 'block', marginTop: 2 }}>⚠ Aucune clé Google configurée — couvertures via Pollinations (gratuit, sans clé).</em>}
-                  </small>
-                </div>
-                <div className="conn-task-input-wrap">
-                  <input
-                    value={draft.api.googleImageModel || ''}
-                    onChange={(e) => updateApi('googleImageModel', e.target.value)}
-                    placeholder="gemini-2.5-flash-preview-image (par défaut)"
-                    disabled={!draft.api.googleKey?.trim()}
-                  />
-                </div>
-              </div>
-
-              {/* Option 3 : Analyse des mots enregistrés */}
-              <div className="conn-task-row">
-                <div className="conn-task-info">
-                  <strong>Analyse des mots enregistrés</strong>
-                  <small>Génération de phonétique IPA, lemmes, traductions et tags</small>
-                </div>
-                <div className="conn-task-input-wrap">
-                  <input
-                    value={draft.api.taskModelWordAnalysis || ''}
-                    onChange={(e) => updateApi('taskModelWordAnalysis', e.target.value)}
-                    placeholder="Utilise le modèle principal par défaut"
-                  />
-                </div>
-              </div>
-
-              {/* Option 4 : Extraction URL */}
-              <div className="conn-task-row">
-                <div className="conn-task-info">
-                  <strong>Extraction et nettoyage URL (Web Cleaner)</strong>
-                  <small>Nettoyage intelligent des pages web (retrait des pubs et menus)</small>
-                </div>
-                <div className="conn-task-input-wrap">
-                  <input
-                    value={draft.api.taskModelUrlExtraction || ''}
-                    onChange={(e) => updateApi('taskModelUrlExtraction', e.target.value)}
-                    placeholder="Utilise le modèle principal par défaut"
-                  />
-                </div>
-              </div>
-
-              {/* Option 5 : Correction et annotations d'écriture */}
-              <div className="conn-task-row">
-                <div className="conn-task-info">
-                  <strong>Correction et annotations d'écriture (« Correction IA »)</strong>
-                  <small>Analyse orthographique, syntaxique, restructuration et conseils de style en temps réel</small>
-                  <label className="toggle-field-inline" style={{ marginTop: 8, display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      style={{ marginTop: 2 }}
-                      checked={!!draft.api.writingCorrectionAdvancedFormatting}
-                      onChange={(e) => updateApi('writingCorrectionAdvancedFormatting', e.target.checked)}
-                    />
-                    <span style={{ fontSize: 12, color: 'var(--ink)' }}>
-                      <strong>Activer le formatage avancé</strong>
-                      <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)' }}>
-                        L'IA optimise automatiquement la taille, la disposition et l'espacement du texte manuscrit selon l'espace disponible
-                      </span>
-                    </span>
-                  </label>
-                </div>
-                <div className="conn-task-input-wrap">
-                  <input
-                    value={draft.api.taskModelWritingCorrection || ''}
-                    onChange={(e) => updateApi('taskModelWritingCorrection', e.target.value)}
-                    placeholder="Utilise le modèle principal par défaut"
-                  />
-                </div>
-              </div>
-
-              {/* Option 5 : Traduction Speaking */}
-              <div className="conn-task-row">
-                <div className="conn-task-info">
-                  <strong>Traduction dans Speaking</strong>
-                  <small>Traduction en direct lors des sessions orales</small>
-                </div>
-                <div className="conn-task-input-wrap dual">
-                  <select
-                    value={draft.api.speakingTranslationProvider || 'deepl'}
-                    onChange={(e) => updateApi('speakingTranslationProvider', e.target.value as 'deepl' | 'ai')}
-                  >
-                    <option value="deepl">DeepL (par défaut)</option>
-                    <option value="ai">Agent IA</option>
-                  </select>
-                  {draft.api.speakingTranslationProvider === 'ai' && (
-                    <input
-                      value={draft.api.taskModelSpeakingTranslation || ''}
-                      onChange={(e) => updateApi('taskModelSpeakingTranslation', e.target.value)}
-                      placeholder="Utilise le modèle principal par défaut"
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Option 6 : Analyse vidéo & élocution Speaking */}
-              <div className="conn-task-row">
-                <div className="conn-task-info">
-                  <strong>Analyse vidéo & élocution (« Parler avec l'IA »)</strong>
-                  <small>Analyse automatique en arrière-plan des vidéos (&lt; 3 min) : prononciation, rythme, syntaxe et conseils horodatés via OpenRouter</small>
-                </div>
-                <div className="conn-task-input-wrap">
-                  <input
-                    value={draft.api.taskModelSpeakingAnalysis || ''}
-                    onChange={(e) => updateApi('taskModelSpeakingAnalysis', e.target.value)}
-                    placeholder="google/gemini-2.0-flash-exp:free (par défaut)"
-                  />
-                </div>
-              </div>
-
-              {/* Option 7 : Exercices Builder */}
-              <div className="conn-task-row">
-                <div className="conn-task-info">
-                  <strong>Générateur d'exercices sur mesure (« Exercices Builder »)</strong>
-                  <small>Génération d'exercices interactifs selon tes difficultés (mots croisés, textes à trous, paires, leçons manuscrites…)</small>
-                </div>
-                <div className="conn-task-input-wrap">
-                  <input
-                    value={draft.api.taskModelExerciseBuilder || ''}
-                    onChange={(e) => updateApi('taskModelExerciseBuilder', e.target.value)}
-                    placeholder="Utilise le modèle principal par défaut"
-                  />
-                </div>
-              </div>
-
-              {/* Option 6 : Synthèse Vocale (TTS) */}
-              <div className="conn-task-row">
-                <div className="conn-task-info">
-                  <strong>Synthèse Vocale (TTS)</strong>
-                  <small>Lecture audio de la prononciation et des phrases</small>
-                </div>
-                <div className="conn-task-input-wrap dual">
-                  <select
-                    value={draft.api.ttsProvider || 'google'}
-                    onChange={(e) => {
-                      updateApi('ttsProvider', e.target.value as UserSettings['api']['ttsProvider'])
-                      setTtsTestStatus(null)
-                    }}
-                  >
-                    {TTS_PROVIDERS.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-
-                  {draft.api.ttsProvider === 'openrouter' && (
-                    <input
-                      value={draft.api.ttsModel || ''}
-                      onChange={(e) => updateApi('ttsModel', e.target.value)}
-                      placeholder="openai/gpt-4o-mini-tts-2025-12-15"
-                    />
-                  )}
-                  {draft.api.ttsProvider === 'elevenlabs' && (
-                    <input
-                      value={draft.api.elevenLabsVoice || ''}
-                      onChange={(e) => updateApi('elevenLabsVoice', e.target.value)}
-                      placeholder="ID de voix (ex. 21m00Tcm4TlvDq8ikWAM)"
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Test TTS row */}
-              <div className="connection-test-row" style={{ marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="connection-test-btn"
-                  onClick={handleTestTts}
-                  disabled={testingTts || (draft.api.ttsProvider === 'openrouter' && !draft.api.openRouterKey?.trim())}
-                  title="Génère et joue un court extrait audio en direct"
-                >
-                  {testingTts ? <Loader2 size={13} className="spin" /> : <Volume2 size={13} />}
-                  <span>{testingTts ? 'Génération audio…' : 'Tester la synthèse vocale (TTS)'}</span>
-                </button>
-
-                {ttsTestStatus && (
-                  <div className={`connection-status-badge ${ttsTestStatus.ok ? 'success' : 'error'}`}>
-                    {ttsTestStatus.ok ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
-                    <span>{ttsTestStatus.message}</span>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </>}
 
         {tab === 'data' && <>
-          <SettingHeading title="Tes données" detail="Ressources, deck, écrits et réglages sont stockés localement dans ce navigateur." />
-          <div className="data-card"><h3>Local par défaut</h3><p>Pas de compte, pas d’envoi caché. Caméra et micro ne sont demandés qu’au moment où tu démarres une session.</p></div>
-          <div className="danger-zone"><div><h3>Repartir de zéro</h3><p>Supprime les ressources, mots, écrits, réglages et l’historique de ce navigateur.</p></div>{confirmingReset ? <div className="confirm-row"><button className="outline" onClick={() => setConfirmingReset(false)}>Annuler</button><button className="danger" onClick={onResetData}>Supprimer les données</button></div> : <button className="outline" onClick={() => setConfirmingReset(true)}>Réinitialiser…</button>}</div>
+          <SettingHeading title={t.dataTitle} detail={t.dataDetail} />
+          <div className="data-card"><h3>{t.localDefault}</h3><p>{t.localDefaultDesc}</p></div>
+          <div className="danger-zone"><div><h3>{t.startFresh}</h3><p>{t.startFreshDesc}</p></div>{confirmingReset ? <div className="confirm-row"><button className="outline" onClick={() => setConfirmingReset(false)}>{t.cancel}</button><button className="danger" onClick={onResetData}>{t.deleteDataConfirm}</button></div> : <button className="outline" onClick={() => setConfirmingReset(true)}>{t.resetDataBtn}</button>}</div>
         </>}
       </section>
     </div>

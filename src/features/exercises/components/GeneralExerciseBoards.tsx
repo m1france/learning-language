@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import type { UiLanguage } from '../../../domain'
+import { exercisesCopy } from '../../../i18n'
 import type {
   FillInBlanksData,
   ErrorHunterData,
@@ -15,11 +17,14 @@ export function FillInBlanksBoard({
   data,
   onCheckFinished,
   isSubmitted,
+  ui = 'fr',
 }: {
   data: FillInBlanksData
   onCheckFinished: (score: number, maxScore: number) => void
   isSubmitted: boolean
+  ui?: UiLanguage
 }) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const { items, wordBank } = data
   const [userInputs, setUserInputs] = useState<Record<string, string>>({})
   const [showHints, setShowHints] = useState(false)
@@ -103,8 +108,8 @@ export function FillInBlanksBoard({
             className={`wordbank-accordion-toggle ${isBankOpen ? 'open' : ''}`}
             onClick={() => setIsBankOpen(!isBankOpen)}
           >
-            <span className="accordion-label">Banque de mots</span>
-            <span className="accordion-badge">{wordBank.length} mots</span>
+            <span className="accordion-label">{t.wordBank}</span>
+            <span className="accordion-badge">{wordBank.length} {t.words}</span>
             {isBankOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
 
@@ -176,13 +181,13 @@ export function FillInBlanksBoard({
 
                 <span className="after-text">{item.afterText}</span>
                 {isSubmitted && !isCorrect && userVal && (
-                  <span className="user-wrong-tag" title="Ta réponse">({userVal})</span>
+                  <span className="user-wrong-tag" title={t.yourAnswer}>({userVal})</span>
                 )}
               </div>
 
               {showHints && item.hint && !isSubmitted && (
                 <div className="blank-hint-pill">
-                  💡 Indice : {item.hint}
+                  💡 {t.hint} : {item.hint}
                 </div>
               )}
 
@@ -213,23 +218,23 @@ export function FillInBlanksBoard({
           onClick={() => setShowHints(!showHints)}
         >
           <Sparkles size={13} />
-          <span>{showHints ? 'Masquer indices' : 'Indices'}</span>
+          <span>{showHints ? t.hideHints : t.showHints}</span>
         </button>
 
         {!isSubmitted ? (
           <div className="blanks-actions">
             <button type="button" className="action-btn secondary" onClick={handleReset}>
-              <RotateCcw size={13} /> Recommencer
+              <RotateCcw size={13} /> {t.resetBtn}
             </button>
             <button type="button" className="action-btn primary" onClick={handleVerify}>
-              <Check size={14} /> Vérifier mes réponses
+              <Check size={14} /> {t.checkBtn}
             </button>
           </div>
         ) : (
           <div className="blanks-score-pill">
             <Award size={16} />
             <span>
-              Score : {correctCount} / {items.length} réponses exactes (
+              {t.scoreLabel} : {correctCount} / {items.length} (
               {Math.round((correctCount / (items.length || 1)) * 100)}%)
             </span>
           </div>
@@ -246,11 +251,14 @@ export function ErrorHunterBoard({
   data,
   onCheckFinished,
   isSubmitted,
+  ui = 'fr',
 }: {
   data: ErrorHunterData
   onCheckFinished: (score: number, maxScore: number) => void
   isSubmitted: boolean
+  ui?: UiLanguage
 }) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const { segments, totalErrorsCount } = data
   const [clickedSegmentIndices, setClickedSegmentIndices] = useState<number[]>([])
 
@@ -285,9 +293,9 @@ export function ErrorHunterBoard({
   return (
     <div className="error-hunter-container">
       <div className="hunter-instructions-banner">
-        <span>🔍 Clique sur les mots ou expressions qui comportent une faute :</span>
+        <span>🔍 {t.checkBtn}</span>
         <span className="hunter-counter-badge">
-          {clickedSegmentIndices.length} sélectionné(s) / {totalErrorsCount} pièges
+          {clickedSegmentIndices.length} / {totalErrorsCount}
         </span>
       </div>
 
@@ -324,7 +332,7 @@ export function ErrorHunterBoard({
 
       {isSubmitted && (
         <div className="hunter-explanations-pane">
-          <h5>Détail des erreurs à repérer :</h5>
+          <h5>{t.ruleTip} :</h5>
           <div className="hunter-expl-list">
             {segments
               .filter((s) => s.isError)
@@ -349,18 +357,17 @@ export function ErrorHunterBoard({
               className="action-btn secondary"
               onClick={() => setClickedSegmentIndices([])}
             >
-              <RotateCcw size={13} /> Réinitialiser
+              <RotateCcw size={13} /> {t.resetBtn}
             </button>
             <button type="button" className="action-btn primary" onClick={handleVerify}>
-              <Check size={14} /> Vérifier ma chasse aux erreurs
+              <Check size={14} /> {t.checkBtn}
             </button>
           </div>
         ) : (
           <div className="hunter-score-pill">
             <Award size={16} />
             <span>
-              Score : {caughtErrorsCount} / {totalErrorsCount} pièges trouvés (
-              {falseAlarmsCount > 0 ? `${falseAlarmsCount} faux signalement(s)` : 'Sans faute !'})
+              {t.scoreLabel} : {caughtErrorsCount} / {totalErrorsCount}
             </span>
           </div>
         )}
@@ -376,11 +383,14 @@ export function DialogueRoleplayBoard({
   data,
   onCheckFinished,
   isSubmitted,
+  ui = 'fr',
 }: {
   data: DialogueRoleplayData
   onCheckFinished: (score: number, maxScore: number) => void
   isSubmitted: boolean
+  ui?: UiLanguage
 }) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const { scenarioTitle, contextSetting, turns } = data
   const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({})
 
@@ -430,7 +440,7 @@ export function DialogueRoleplayBoard({
 
               {/* User choices */}
               <div className="user-reply-choices">
-                <span className="reply-prompt-lbl">Ta réponse :</span>
+                <span className="reply-prompt-lbl">{t.yourAnswer} :</span>
                 <div className="choices-buttons-stack">
                   {turn.userChoices.map((choice) => {
                     const isSelected = chosenId === choice.id
@@ -477,13 +487,13 @@ export function DialogueRoleplayBoard({
       <div className="roleplay-footer">
         {!isSubmitted ? (
           <button type="button" className="action-btn primary large" onClick={handleVerify}>
-            <Check size={15} /> Valider le dialogue
+            <Check size={15} /> {t.checkBtn}
           </button>
         ) : (
           <div className="roleplay-score-pill">
             <Award size={16} />
             <span>
-              Score : {optimalCount} / {turns.length} répliques optimales (
+              {t.scoreLabel} : {optimalCount} / {turns.length} (
               {Math.round((optimalCount / (turns.length || 1)) * 100)}%)
             </span>
           </div>
@@ -500,11 +510,14 @@ export function GrammarDeepdiveBoard({
   data,
   onCheckFinished,
   isSubmitted,
+  ui = 'fr',
 }: {
   data: GrammarDeepdiveData
   onCheckFinished: (score: number, maxScore: number) => void
   isSubmitted: boolean
+  ui?: UiLanguage
 }) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const { ruleTitle, ruleExplanation, summaryTable, commonMistakes, questions } = data
   const [isQuizActive, setIsQuizActive] = useState(false)
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0)
@@ -580,7 +593,7 @@ export function GrammarDeepdiveBoard({
 
       {commonMistakes && commonMistakes.length > 0 && (
         <div className="common-mistakes-card">
-          <h5>⚠️ Pièges fréquents à éviter :</h5>
+          <h5>⚠️ {t.ruleTip} :</h5>
           <div className="mistakes-grid">
             {commonMistakes.map((m, idx) => (
               <div key={idx} className="mistake-item">
@@ -601,7 +614,7 @@ export function GrammarDeepdiveBoard({
             className="action-btn primary large"
             onClick={() => setIsQuizActive(true)}
           >
-            <Sparkles size={15} /> Faire le quiz ({questions.length} questions)
+            <Sparkles size={15} /> {t.startQuiz} ({questions.length})
           </button>
         </div>
       )}
@@ -611,7 +624,7 @@ export function GrammarDeepdiveBoard({
           {/* Progress bar */}
           <div className="quiz-progress-row">
             <span className="quiz-progress-label">
-              Question {currentQuestionIdx + 1} sur {questions.length}
+              Question {currentQuestionIdx + 1} / {questions.length}
             </span>
             <div className="quiz-progress-bar-bg">
               <div
@@ -661,7 +674,7 @@ export function GrammarDeepdiveBoard({
                     className="action-btn primary"
                     onClick={handleNextQuestion}
                   >
-                    {currentQuestionIdx < questions.length - 1 ? 'Question suivante →' : 'Voir mes résultats'}
+                    {currentQuestionIdx < questions.length - 1 ? t.nextQuestion : t.seeResults}
                   </button>
                 </div>
               )}
@@ -678,7 +691,7 @@ export function GrammarDeepdiveBoard({
             <div className="score-info">
               <span className="score-fraction">{score} / {questions.length}</span>
               <span className="score-percentage">
-                {Math.round((score / (questions.length || 1)) * 100)}% de bonnes réponses
+                {Math.round((score / (questions.length || 1)) * 100)}%
               </span>
             </div>
           </div>
@@ -687,7 +700,7 @@ export function GrammarDeepdiveBoard({
             className="action-btn secondary"
             onClick={handleRestartQuiz}
           >
-            <RotateCcw size={13} /> Rejouer le quiz
+            <RotateCcw size={13} /> {t.replayQuiz}
           </button>
         </div>
       )}
@@ -702,11 +715,14 @@ export function ImageAssociationBoard({
   data,
   onCheckFinished,
   isSubmitted,
+  ui = 'fr',
 }: {
   data: ImageAssociationData
   onCheckFinished: (score: number, maxScore: number) => void
   isSubmitted: boolean
+  ui?: UiLanguage
 }) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const { items } = data
   const [userSelections, setUserSelections] = useState<Record<string, string>>({})
 
@@ -803,13 +819,13 @@ export function ImageAssociationBoard({
       <div className="image-assoc-footer">
         {!isSubmitted ? (
           <button type="button" className="action-btn primary large" onClick={handleVerify}>
-            <Check size={15} /> Vérifier mes associations
+            <Check size={15} /> {t.checkBtn}
           </button>
         ) : (
           <div className="image-score-pill">
             <Award size={16} />
             <span>
-              Score : {score} / {items.length} associations exactes (
+              {t.scoreLabel} : {score} / {items.length} (
               {Math.round((score / (items.length || 1)) * 100)}%)
             </span>
           </div>

@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
+import type { UiLanguage } from '../../../domain'
+import { exercisesCopy } from '../../../i18n'
 import type { MatchPairsData } from '../exercisesDomain'
 import { Check, RotateCcw, HelpCircle, Award, Sparkles } from 'lucide-react'
 
@@ -6,9 +8,11 @@ type MatchPairsBoardProps = {
   data: MatchPairsData
   onCheckFinished: (score: number, maxScore: number) => void
   isSubmitted: boolean
+  ui?: UiLanguage
 }
 
-export function MatchPairsBoard({ data, onCheckFinished, isSubmitted }: MatchPairsBoardProps) {
+export function MatchPairsBoard({ data, onCheckFinished, isSubmitted, ui = 'fr' }: MatchPairsBoardProps) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const { pairs, leftCategoryLabel, rightCategoryLabel } = data
 
   const shuffledRightItems = useMemo(() => {
@@ -230,7 +234,7 @@ export function MatchPairsBoard({ data, onCheckFinished, isSubmitted }: MatchPai
       {/* Explanations List when submitted */}
       {isSubmitted && (
         <div className="match-explanations-list">
-          <h5 className="expl-heading">Corrigé & Explications :</h5>
+          <h5 className="expl-heading">{t.ruleTip} :</h5>
           {pairs.map((p) => {
             const isCorrect = userMatches[p.id] === p.id
             return (
@@ -253,23 +257,23 @@ export function MatchPairsBoard({ data, onCheckFinished, isSubmitted }: MatchPai
           onClick={() => setShowHints(!showHints)}
         >
           <Sparkles size={13} />
-          <span>{showHints ? 'Masquer astuces' : 'Astuces'}</span>
+          <span>{showHints ? t.hideHints : t.showHints}</span>
         </button>
 
         {!isSubmitted ? (
           <div className="match-actions">
             <button type="button" className="action-btn secondary" onClick={handleReset}>
-              <RotateCcw size={13} /> Recommencer
+              <RotateCcw size={13} /> {t.resetBtn}
             </button>
             <button type="button" className="action-btn primary" onClick={handleVerify}>
-              <Check size={14} /> Vérifier mes paires
+              <Check size={14} /> {t.checkBtn}
             </button>
           </div>
         ) : (
           <div className="match-score-pill">
             <Award size={16} />
             <span>
-              Score : {correctCount} / {pairs.length} paires correctes (
+              {t.scoreLabel} : {correctCount} / {pairs.length} (
               {Math.round((correctCount / (pairs.length || 1)) * 100)}%)
             </span>
           </div>

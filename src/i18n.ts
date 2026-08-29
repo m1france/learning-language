@@ -754,3 +754,8 @@ const ptReader: ReaderCopy = {
 export const readerCopy: Record<UiLanguage, ReaderCopy> = {
   fr: frReader, en: enReader, es: esReader, zh: zhReader, ru: ruReader, pt: ptReader,
 }
+
+export * from './i18n/teacherCopy'
+export * from './i18n/writeCopy'
+export * from './i18n/exercisesCopy'
+export * from './i18n/settingsCopy'

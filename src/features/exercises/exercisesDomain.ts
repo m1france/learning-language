@@ -1,4 +1,5 @@
-import type { Difficulty, Language } from '../../domain'
+import type { Difficulty, Language, UiLanguage } from '../../domain'
+import { exercisesCopy } from '../../i18n/exercisesCopy'
 
 export type ExerciseMode =
   | 'auto'
@@ -20,6 +21,18 @@ export type ExerciseModeInfo = {
   descEn: string
   icon: string
   badgeColor: string
+}
+
+export function getExerciseModeInfo(mode: ExerciseMode, ui: UiLanguage = 'fr') {
+  const fallback = EXERCISE_MODES_INFO.find((m) => m.id === mode) || EXERCISE_MODES_INFO[0]
+  const copy = exercisesCopy[ui]?.modes?.[mode]
+  return {
+    id: mode,
+    label: copy?.label || fallback.labelFr,
+    desc: copy?.desc || fallback.descFr,
+    icon: fallback.icon,
+    badgeColor: fallback.badgeColor,
+  }
 }
 
 export const EXERCISE_MODES_INFO: ExerciseModeInfo[] = [

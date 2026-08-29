@@ -17,6 +17,7 @@ import {
   Layers,
 } from 'lucide-react'
 import type { UserSettings } from '../../domain'
+import { teacherCopy } from '../../i18n'
 import type { ExportedLesson } from './teacherExportDomain'
 import {
   getAllExportedLessons,
@@ -31,49 +32,44 @@ type MyLessonsSettingsTabProps = {
   settings: UserSettings
   onUpdateSettings: (settings: UserSettings) => void
   onOpenLesson: (lesson: ExportedLesson) => void
+  ui?: import('../../domain').UiLanguage
 }
 
 export function MyLessonsSettingsTab({
   settings,
   onUpdateSettings,
   onOpenLesson,
+  ui,
 }: MyLessonsSettingsTabProps) {
   const [lessons, setLessons] = useState<ExportedLesson[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [deleteConfirmLesson, setDeleteConfirmLesson] = useState<ExportedLesson | null>(null)
   const [usernameModalOpen, setUsernameModalOpen] = useState(false)
 
+  const activeUi = ui || settings.uiLanguage || 'fr'
+  const t = teacherCopy[activeUi] || teacherCopy.fr
   const currentUsername = getTeacherUsername(settings)
 
-  const reload = () => {
-    setLessons(getAllExportedLessons())
-  }
-
   useEffect(() => {
-    reload()
+    setLessons(getAllExportedLessons())
   }, [])
 
-  const handleCopy = async (lesson: ExportedLesson) => {
+  const handleCopy = (lesson: ExportedLesson) => {
     const url = buildExportUrl(lesson.username, lesson.id)
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopiedId(lesson.id)
-      setTimeout(() => setCopiedId(null), 2500)
-    } catch {
-      setCopiedId(lesson.id)
-      setTimeout(() => setCopiedId(null), 2500)
-    }
+    navigator.clipboard.writeText(url)
+    setCopiedId(lesson.id)
+    setTimeout(() => setCopiedId(null), 2000)
   }
 
   const handleDelete = (lessonId: string) => {
     deleteExportedLesson(lessonId)
+    setLessons(getAllExportedLessons())
     setDeleteConfirmLesson(null)
-    reload()
   }
 
   const handleSaveUsername = (newUsername: string) => {
-    const clean = normalizeTeacherUsername(newUsername)
-    onUpdateSettings({ ...settings, teacherUsername: clean })
+    const normalized = normalizeTeacherUsername(newUsername)
+    onUpdateSettings({ ...settings, teacherUsername: normalized })
     setUsernameModalOpen(false)
   }
 
@@ -86,11 +82,11 @@ export function MyLessonsSettingsTab({
             <User size={20} />
           </div>
           <div>
-            <h4>Nom d'utilisateur pour vos liens</h4>
+            <h4>{t.usernameForLinks}</h4>
             <p>
-              Sous-domaine :{' '}
+              {t.subdomain}{' '}
               <code>
-                share.mathisbnl.info/<strong>{currentUsername || 'non-defini'}</strong>/…
+                share.mathisbnl.info/<strong>{currentUsername || 'prof'}</strong>/…
               </code>
             </p>
           </div>
@@ -98,20 +94,20 @@ export function MyLessonsSettingsTab({
         <button
           className="btn-secondary small"
           onClick={() => setUsernameModalOpen(true)}
-          title="Modifier le nom d'utilisateur"
+          title={t.changeUsername}
         >
-          <span>{currentUsername ? 'Modifier le nom' : 'Définir un nom'}</span>
+          <span>{currentUsername ? t.changeUsername : t.setUsername}</span>
         </button>
       </div>
 
       {/* Titre de section */}
       <div className="my-lessons-title-row">
         <div>
-          <h3>Mes leçons exportées</h3>
-          <p>Retrouvez tous les liens générés pour vos élèves et gérez leur visibilité.</p>
+          <h3>{t.myLessonsTitle}</h3>
+          <p>{t.myLessonsDesc}</p>
         </div>
         <span className="my-lessons-count-badge">
-          {lessons.length} leçon{lessons.length > 1 ? 's' : ''}
+          {lessons.length} {lessons.length > 1 ? t.lessonPlural : t.lessonSingular}
         </span>
       </div>
 
@@ -119,11 +115,8 @@ export function MyLessonsSettingsTab({
       {lessons.length === 0 ? (
         <div className="my-lessons-empty-state">
           <Share2 size={36} className="empty-icon" />
-          <h4>Aucune leçon partagée pour le moment</h4>
-          <p>
-            Lorsque vous êtes en <strong>Teacher Mode</strong>, effectuez des modifications sur votre texte puis cliquez sur{' '}
-            <strong>« Exporter »</strong> en bas à droite pour créer votre premier lien de cours interactif.
-          </p>
+          <h4>{t.noSharedLessons}</h4>
+          <p>{t.noSharedLessonsDesc}</p>
         </div>
       ) : (
         <div className="my-lessons-grid">
@@ -139,7 +132,7 @@ export function MyLessonsSettingsTab({
                   <div className="my-lesson-card-title-group">
                     <h4>{lesson.resourceTitle}</h4>
                   </div>
-                  <span className="my-lesson-online-pill">En ligne</span>
+                  <span className="my-lesson-online-pill">{t.lessonOnline}</span>
                 </div>
 
                 {/* Lien partageable avec bouton de copie */}
@@ -149,19 +142,19 @@ export function MyLessonsSettingsTab({
                   <button
                     className={`my-lesson-copy-btn ${isCopied ? 'copied' : ''}`}
                     onClick={() => handleCopy(lesson)}
-                    data-tooltip="Copier le lien"
+                    data-tooltip={t.copyLink}
                   >
                     {isCopied ? <Check size={13} /> : <Copy size={13} />}
-                    <span>{isCopied ? 'Copié' : 'Copier'}</span>
+                    <span>{isCopied ? t.copied : t.copyLink}</span>
                   </button>
                 </div>
 
-                {/* Métriques / Pilules épurées (icône + nombre uniquement, sans background ni bordure) */}
+                {/* Métriques / Pilules épurées */}
                 <div className="my-lesson-minimal-stats">
                   {lesson.tooltips.length > 0 && (
                     <span
                       className="lesson-stat-pill"
-                      data-tooltip={`${lesson.tooltips.length} infobulle${lesson.tooltips.length > 1 ? 's' : ''} créée${lesson.tooltips.length > 1 ? 's' : ''}`}
+                      data-tooltip={`${lesson.tooltips.length} ${t.statTooltips}`}
                     >
                       <HelpCircle size={14} />
                       <span className="stat-num">{lesson.tooltips.length}</span>
@@ -170,7 +163,7 @@ export function MyLessonsSettingsTab({
                   {lesson.wordComments.length > 0 && (
                     <span
                       className="lesson-stat-pill"
-                      data-tooltip={`${lesson.wordComments.length} commentaire${lesson.wordComments.length > 1 ? 's' : ''} sur mots`}
+                      data-tooltip={`${lesson.wordComments.length} ${t.statComments}`}
                     >
                       <MessageSquare size={14} />
                       <span className="stat-num">{lesson.wordComments.length}</span>
@@ -179,7 +172,7 @@ export function MyLessonsSettingsTab({
                   {lesson.homework && (
                     <span
                       className="lesson-stat-pill hw"
-                      data-tooltip="Devoir inclus"
+                      data-tooltip={t.statHomework}
                     >
                       <GraduationCap size={14} />
                     </span>
@@ -187,7 +180,7 @@ export function MyLessonsSettingsTab({
                   {lesson.allowReactions && (
                     <span
                       className="lesson-stat-pill"
-                      data-tooltip={`${reactionsTotal} réaction${reactionsTotal > 1 ? 's' : ''} reçue${reactionsTotal > 1 ? 's' : ''}`}
+                      data-tooltip={`${reactionsTotal} ${t.statReactions}`}
                     >
                       <Smile size={14} />
                       <span className="stat-num">{reactionsTotal}</span>
@@ -196,7 +189,7 @@ export function MyLessonsSettingsTab({
                   {lesson.allowComments && (
                     <span
                       className="lesson-stat-pill"
-                      data-tooltip={`${commentsCount} question${commentsCount > 1 ? 's' : ''} / message${commentsCount > 1 ? 's' : ''}`}
+                      data-tooltip={`${commentsCount} ${t.statComments}`}
                     >
                       <MessageCircle size={14} />
                       <span className="stat-num">{commentsCount}</span>
@@ -207,24 +200,29 @@ export function MyLessonsSettingsTab({
                 {/* Pied de carte avec date et actions */}
                 <div className="my-lesson-card-foot">
                   <span className="my-lesson-date">
-                    Exporté le {new Date(lesson.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {t.exportedOn}{' '}
+                    {new Date(lesson.createdAt).toLocaleDateString(activeUi === 'fr' ? 'fr-FR' : (activeUi === 'en' ? 'en-US' : (activeUi === 'es' ? 'es-ES' : (activeUi === 'zh' ? 'zh-CN' : (activeUi === 'ru' ? 'ru-RU' : 'pt-PT')))), {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
                   </span>
                   <div className="my-lesson-actions">
                     <button
                       className="btn-secondary small"
                       onClick={() => window.open(url, '_blank')}
-                      title="Ouvrir directement la leçon dans un nouvel onglet"
+                      title={t.viewPage}
                     >
                       <ExternalLink size={13} />
-                      <span>Voir la page</span>
+                      <span>{t.viewPage}</span>
                     </button>
                     <button
                       className="btn-danger-ghost small"
                       onClick={() => setDeleteConfirmLesson(lesson)}
-                      title="Dépublier cette leçon"
+                      title={t.unpublish}
                     >
                       <Trash2 size={13} />
-                      <span>Dépublier</span>
+                      <span>{t.unpublish}</span>
                     </button>
                   </div>
                 </div>
@@ -243,25 +241,25 @@ export function MyLessonsSettingsTab({
                 <AlertCircle size={20} />
               </div>
               <div>
-                <h3>Dépublier cette leçon ?</h3>
+                <h3>{t.unpublishConfirmTitle}</h3>
                 <p>{deleteConfirmLesson.resourceTitle} &bull; Page {deleteConfirmLesson.pageIndex + 1}</p>
               </div>
             </header>
             <div className="teacher-export-card-body">
               <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55 }}>
-                Cette action supprimera définitivement le lien de partage. Vos élèves ne pourront plus accéder à cette page corrigée.
+                {t.unpublishConfirmDesc}
               </p>
             </div>
             <footer className="teacher-export-card-foot">
               <button type="button" className="outline" onClick={() => setDeleteConfirmLesson(null)}>
-                Annuler
+                {t.cancel}
               </button>
               <button
                 type="button"
                 className="btn-danger"
                 onClick={() => handleDelete(deleteConfirmLesson.id)}
               >
-                <span>Dépublier définitivement</span>
+                <span>{t.unpublishPermanent}</span>
               </button>
             </footer>
           </div>
@@ -274,6 +272,7 @@ export function MyLessonsSettingsTab({
           initialValue={currentUsername}
           onSave={handleSaveUsername}
           onCancel={() => setUsernameModalOpen(false)}
+          ui={activeUi}
         />
       )}
     </div>

@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react'
-import type { AppState, LearnedWord, WritingMode } from '../../domain'
+import React, { useState, useMemo } from 'react'
+import type { AppState, LearnedWord, WritingMode, UiLanguage } from '../../domain'
+import { writeCopy } from '../../i18n'
 import { DEFAULT_PROMPTS_DATA, prompts as defaultPrompts } from '../../data'
 import { renderStyledMarkdown } from '../vocabulary/phoneticUtils'
 import {
@@ -24,6 +25,7 @@ type WritingSetupModalProps = {
   onUpdateTitle: (title: string) => void
   onStart: () => void
   onCancel: () => void
+  ui?: UiLanguage
 }
 
 export function WritingSetupModal({
@@ -37,7 +39,9 @@ export function WritingSetupModal({
   onUpdateTitle,
   onStart,
   onCancel,
+  ui = 'fr',
 }: WritingSetupModalProps) {
+  const t = writeCopy[ui] || writeCopy.fr
   const learningLang = state.settings.learningLanguage
 
   // Saved words pool (or fallback to default prompts)
@@ -129,7 +133,7 @@ export function WritingSetupModal({
                 <div className="mode-icon-badge coral compact">
                   <Target size={18} />
                 </div>
-                <span>Personnaliser le défi de vocabulaire</span>
+                <span>{t.customizeVocab}</span>
               </>
             )}
             {mode === 'sprint' && (
@@ -137,7 +141,7 @@ export function WritingSetupModal({
                 <div className="mode-icon-badge blue compact">
                   <Zap size={18} />
                 </div>
-                <span>Durée du sprint contre la montre</span>
+                <span>{t.sprintDuration}</span>
               </>
             )}
             {mode === 'free' && (
@@ -145,7 +149,7 @@ export function WritingSetupModal({
                 <div className="mode-icon-badge green compact">
                   <PenTool size={18} />
                 </div>
-                <span>Écriture libre</span>
+                <span>{t.freeWriting}</span>
               </>
             )}
           </div>
@@ -153,8 +157,8 @@ export function WritingSetupModal({
             type="button"
             className="popover-close"
             onClick={onCancel}
-            title="Fermer"
-            aria-label="Fermer"
+            title={t.dismiss}
+            aria-label={t.dismiss}
           >
             <X size={18} />
           </button>
@@ -169,25 +173,25 @@ export function WritingSetupModal({
                 <div>
                   <p>
                     {allSavedWords.length > 0
-                      ? `${allSavedWords.length} mots disponibles dans ton coffre de vocabulaire.`
-                      : 'Mots recommandés sélectionnés pour démarrer ton entraînement.'}
+                      ? `${allSavedWords.length} ${t.wordsAvailable}`
+                      : t.recommendedWords}
                   </p>
                 </div>
                 <button
                   type="button"
                   className="outline shuffle-btn"
                   onClick={handleShuffle}
-                  title="Tirer de nouveaux mots au sort"
+                  title={t.shuffleTitle}
                 >
                   <Shuffle size={14} />
-                  <span>Mélanger</span>
+                  <span>{t.shuffle}</span>
                 </button>
               </div>
 
               {/* Filter Selectors */}
               <div className="filters-bar">
                 <div className="filter-group">
-                  <span className="filter-label">Nombre de mots :</span>
+                  <span className="filter-label">{t.wordCountLabel}</span>
                   <div className="segmented-sm">
                     {[3, 5, 8, 10].map((n) => (
                       <button
@@ -203,22 +207,22 @@ export function WritingSetupModal({
                 </div>
 
                 <div className="filter-group">
-                  <span className="filter-label">Source des mots :</span>
+                  <span className="filter-label">{t.sourceLabel}</span>
                   <div className="segmented-sm">
                     <button
                       type="button"
                       className={sourceFilter === 'all' ? 'active' : ''}
                       onClick={() => handleFilterChange('all')}
                     >
-                      Tous
+                      {t.allWords}
                     </button>
                     <button
                       type="button"
                       className={sourceFilter === 'due' ? 'active' : ''}
                       onClick={() => handleFilterChange('due')}
-                      title="Mots récemment découverts ou à réviser"
+                      title={t.dueWordsTitle}
                     >
-                      À réviser
+                      {t.dueWords}
                     </button>
                     {state.resources.length > 0 && (
                       <button
@@ -226,7 +230,7 @@ export function WritingSetupModal({
                         className={sourceFilter === 'resource' ? 'active' : ''}
                         onClick={() => handleFilterChange('resource')}
                       >
-                        Par Livre / Texte
+                        {t.byResource}
                       </button>
                     )}
                     {tagsList.length > 0 && (
@@ -235,7 +239,7 @@ export function WritingSetupModal({
                         className={sourceFilter === 'tag' ? 'active' : ''}
                         onClick={() => handleFilterChange('tag')}
                       >
-                        Par Tag
+                        {t.byTag}
                       </button>
                     )}
                   </div>
@@ -245,7 +249,7 @@ export function WritingSetupModal({
               {/* Sub-filters if resource or tag chosen */}
               {sourceFilter === 'resource' && (
                 <div className="subfilter-row">
-                  <label>Sélectionner le texte source :</label>
+                  <label>{t.selectSourceText}</label>
                   <select
                     value={selectedResourceId}
                     onChange={(e) => {
@@ -269,7 +273,7 @@ export function WritingSetupModal({
 
               {sourceFilter === 'tag' && (
                 <div className="subfilter-row">
-                  <label>Sélectionner le tag :</label>
+                  <label>{t.selectTag}</label>
                   <select
                     value={selectedTag}
                     onChange={(e) => {
@@ -279,7 +283,7 @@ export function WritingSetupModal({
                       onUpdatePromptWords(next)
                     }}
                   >
-                    <option value="">-- Choisir un tag --</option>
+                    <option value="">-- {t.selectTag} --</option>
                     {tagsList.map((t) => (
                       <option key={t} value={t}>
                         #{t}
@@ -291,7 +295,7 @@ export function WritingSetupModal({
 
               {/* Words Preview Tray */}
               <div className="words-preview-tray">
-                <span className="tray-title">Mots sélectionnés pour cette session :</span>
+                <span className="tray-title">{t.startPromptWords}</span>
                 <div className="tray-chips">
                   {promptWords.map((word, i) => {
                     const translation = getWordTranslation(word)
@@ -313,10 +317,6 @@ export function WritingSetupModal({
           {/* MODE 2: SPRINT */}
           {mode === 'sprint' && (
             <div className="config-sprint">
-              <p>
-                Pendant le sprint, un chronomètre tourne. L'objectif est d'écrire en continu sans
-                t'autocensurer ni hésiter.
-              </p>
               <div className="sprint-duration-buttons">
                 {[3, 5, 10].map((mins) => (
                   <button
@@ -326,14 +326,7 @@ export function WritingSetupModal({
                     onClick={() => onUpdateSprintMinutes(mins)}
                   >
                     <Clock size={20} />
-                    <strong>{mins} minutes</strong>
-                    <span>
-                      {mins === 3
-                        ? 'Échauffement'
-                        : mins === 5
-                        ? 'Rythme standard'
-                        : 'Immersion profonde'}
-                    </span>
+                    <strong>{mins} min</strong>
                   </button>
                 ))}
               </div>
@@ -343,18 +336,14 @@ export function WritingSetupModal({
           {/* MODE 3: LIBRE */}
           {mode === 'free' && (
             <div className="config-free">
-              <p>
-                Page blanche avec statistiques et connecteurs logiques à disposition. Tu pourras
-                renommer ton texte à tout moment dans l'en-tête de l'éditeur.
-              </p>
               <label style={{ display: 'block', marginTop: 16 }}>
                 <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>
-                  Titre du texte :
+                  {t.myText} :
                 </span>
                 <input
                   type="text"
                   className="free-title-input"
-                  placeholder="Ex: Mon texte, Réflexions..."
+                  placeholder={t.myText}
                   value={title}
                   onChange={(e) => onUpdateTitle(e.target.value)}
                   autoFocus
@@ -370,18 +359,18 @@ export function WritingSetupModal({
             type="button"
             className="outline icon-btn modal-back-btn"
             onClick={onCancel}
-            title="Changer de mode"
-            aria-label="Changer de mode"
+            title={t.dismiss}
+            aria-label={t.dismiss}
           >
             <ArrowLeft size={18} />
           </button>
           <button type="button" className="primary large launch-btn" onClick={onStart}>
             <span>
               {mode === 'reactivation'
-                ? 'Commencer la session'
+                ? t.startChallenge
                 : mode === 'sprint'
-                ? 'Lancer le sprint'
-                : 'Commencer à écrire'}
+                ? t.startSprint
+                : t.startFree}
             </span>
             <ArrowRight size={18} />
           </button>

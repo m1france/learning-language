@@ -1,4 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
+import type { UiLanguage } from '../../domain'
+import { writeCopy } from '../../i18n'
 import type { CorrectionItem, WritingCorrectionResult } from './writingCorrectionAiService'
 import {
   Check,
@@ -22,6 +24,7 @@ type WritingCorrectionOverlayProps = {
   onClose: () => void
   isEditorView: boolean
   onToggleEditorView: () => void
+  ui?: UiLanguage
 }
 
 type TextSegment =
@@ -36,7 +39,9 @@ export function WritingCorrectionOverlay({
   onClose,
   isEditorView,
   onToggleEditorView,
+  ui = 'fr',
 }: WritingCorrectionOverlayProps) {
+  const t = writeCopy[ui] || writeCopy.fr
   const [activePopoverId, setActivePopoverId] = useState<string | null>(null)
   const [hoveredCorrectionId, setHoveredCorrectionId] = useState<string | null>(null)
   // Two separate refs to track whether mouse is over anchor or popover, independently
@@ -162,17 +167,17 @@ export function WritingCorrectionOverlay({
   const getCategoryLabel = (type: CorrectionItem['type']) => {
     switch (type) {
       case 'letter_error':
-        return 'Orthographe'
+        return t.spelling
       case 'word_error':
-        return 'Grammaire'
+        return t.grammar
       case 'syntax_structure':
-        return 'Structure'
+        return t.grammar
       case 'unnatural_phrasing':
-        return 'Tournure'
+        return t.style
       case 'punctuation':
-        return 'Ponctuation'
+        return t.style
       default:
-        return 'Correction'
+        return t.vocabulary
     }
   }
 
@@ -202,12 +207,12 @@ export function WritingCorrectionOverlay({
             <span className="correction-ai-icon-pill">
               <Sparkles size={13} />
             </span>
-            <span className="banner-title">Correction du Professeur IA</span>
+            <span className="banner-title">{t.correctionTitle}</span>
           </div>
 
           <div className="banner-badges">
             {score !== undefined && (
-              <span className="score-badge" title="Note globale estimée">
+              <span className="score-badge" title={t.score}>
                 <Award size={12} />
                 <span>{score}/100</span>
               </span>
@@ -215,19 +220,13 @@ export function WritingCorrectionOverlay({
             {errorCount > 0 && (
               <span className="badge-count error">
                 <AlertCircle size={11} />
-                <span>{errorCount} {errorCount === 1 ? 'faute' : 'fautes'}</span>
+                <span>{errorCount} {t.grammar}</span>
               </span>
             )}
             {styleCount > 0 && (
               <span className="badge-count style">
                 <Info size={11} />
-                <span>{styleCount} {styleCount === 1 ? 'conseil de style' : 'conseils de style'}</span>
-              </span>
-            )}
-            {corrections.length === 0 && (
-              <span className="badge-count success">
-                <Check size={11} />
-                <span>Texte impeccable !</span>
+                <span>{styleCount} {t.style}</span>
               </span>
             )}
           </div>
@@ -238,10 +237,10 @@ export function WritingCorrectionOverlay({
             type="button"
             className="banner-mode-toggle-btn"
             onClick={onToggleEditorView}
-            title={isEditorView ? 'Afficher les annotations manuscrites' : 'Masquer les annotations et modifier le texte'}
+            title={isEditorView ? t.formattedView : t.rawView}
           >
             {isEditorView ? <Eye size={13} /> : <EyeOff size={13} />}
-            <span>{isEditorView ? 'Voir annotations' : 'Mode texte brut'}</span>
+            <span>{isEditorView ? t.formattedView : t.rawView}</span>
           </button>
 
           {corrections.length > 0 && (
@@ -249,10 +248,10 @@ export function WritingCorrectionOverlay({
               type="button"
               className="banner-apply-all-btn"
               onClick={() => onApplyAll(correctedFullText)}
-              title="Remplacer le texte par la version entièrement corrigée"
+              title={t.applyAll}
             >
               <CheckCheck size={13} />
-              <span>Appliquer tout</span>
+              <span>{t.applyAll}</span>
             </button>
           )}
 
@@ -260,8 +259,8 @@ export function WritingCorrectionOverlay({
             type="button"
             className="banner-close-btn"
             onClick={onClose}
-            title="Quitter le mode correction"
-            aria-label="Quitter le mode correction"
+            title={t.exitCorrection}
+            aria-label={t.exitCorrection}
           >
             <X size={15} strokeWidth={2} />
           </button>
@@ -271,7 +270,7 @@ export function WritingCorrectionOverlay({
       {/* Teacher General Feedback Note */}
       {overallFeedback && (
         <div className="correction-overall-feedback">
-          <span className="feedback-badge-label">Conseil :</span>
+          <span className="feedback-badge-label">{t.overallFeedback} :</span>
           <p className="feedback-text">{overallFeedback}</p>
         </div>
       )}
@@ -435,7 +434,7 @@ export function WritingCorrectionOverlay({
                           }}
                         >
                           <Check size={13} />
-                          <span>Remplacer</span>
+                          <span>{t.replace}</span>
                         </button>
 
                         <button
@@ -447,7 +446,7 @@ export function WritingCorrectionOverlay({
                           }}
                         >
                           <X size={13} />
-                          <span>Ignorer</span>
+                          <span>{t.dismiss}</span>
                         </button>
                       </div>
                     </div>

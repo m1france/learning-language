@@ -17,6 +17,8 @@ import {
   User,
   Trash2,
 } from 'lucide-react'
+import type { UiLanguage } from '../../domain'
+import { teacherCopy } from '../../i18n'
 import type {
   ExportedLesson,
   ExportedLessonComment,
@@ -38,6 +40,7 @@ type SharedLessonViewerProps = {
   lesson: ExportedLesson
   onBack?: () => void
   isTeacherPreview?: boolean
+  ui?: UiLanguage
 }
 
 const AVAILABLE_STICKER_EMOJIS = ['👍', '❤️', '💡', '👏', '🎯', '🔥', '🤔', '✨']
@@ -46,7 +49,9 @@ export function SharedLessonViewer({
   lesson: initialLesson,
   onBack,
   isTeacherPreview,
+  ui = 'fr',
 }: SharedLessonViewerProps) {
+  const t = teacherCopy[ui] || teacherCopy.fr
   const [lesson, setLesson] = useState<ExportedLesson>(initialLesson)
   const [activeTooltipId, setActiveTooltipId] = useState<string | null>(null)
   const [activeWordCommentKey, setActiveWordCommentKey] = useState<string | null>(null)
@@ -169,7 +174,7 @@ export function SharedLessonViewer({
   // Envoi du commentaire Figma
   const handleSendFigmaComment = () => {
     if (!draftFigmaComment || !draftFigmaComment.text.trim()) return
-    const author = studentName.trim() || 'Élève'
+    const author = studentName.trim() || 'Student'
     localStorage.setItem('vivre_student_name', author)
 
     const newComment = addStudentFigmaComment(lesson.id, {
@@ -195,9 +200,9 @@ export function SharedLessonViewer({
       <header className="shared-viewer-header">
         <div className="shared-viewer-header-left">
           {onBack && isTeacherPreview && (
-            <button className="shared-back-btn" onClick={onBack} title="Quitter l'aperçu">
+            <button className="shared-back-btn" onClick={onBack} title={t.quitPreview}>
               <ChevronLeft size={18} />
-              <span>Quitter l'aperçu</span>
+              <span>{t.quitPreview}</span>
             </button>
           )}
           <div className="shared-teacher-badge">
@@ -206,7 +211,7 @@ export function SharedLessonViewer({
             </span>
             <div className="shared-teacher-info">
               <span className="shared-teacher-name">{lesson.teacherDisplayName || `@${lesson.username}`}</span>
-              <span className="shared-teacher-sub">Professeur</span>
+              <span className="shared-teacher-sub">{t.teacherLabel}</span>
             </div>
           </div>
         </div>
@@ -225,10 +230,10 @@ export function SharedLessonViewer({
                 setIsFigmaCommentMode(!isFigmaCommentMode)
                 setSelectedStickerEmoji(null)
               }}
-              title="Ajouter un commentaire sur la page"
+              title={t.commentOnPage}
             >
               <MessageSquare size={15} />
-              <span>{isFigmaCommentMode ? 'Cliquez sur la page' : 'Commenter'}</span>
+              <span>{isFigmaCommentMode ? t.clickOnPage : t.commentBtn}</span>
               {(lesson.figmaComments?.length || 0) > 0 && (
                 <span className="figma-count-pill">{lesson.figmaComments?.length}</span>
               )}
@@ -241,10 +246,10 @@ export function SharedLessonViewer({
               type="button"
               className="shared-header-hw-btn"
               onClick={() => setHomeworkModalOpen(true)}
-              title="Consulter le devoir à faire"
+              title={t.viewHomework}
             >
               <GraduationCap size={16} />
-              <span>Devoir à faire</span>
+              <span>{t.homeworkBtn}</span>
             </button>
           )}
         </div>
@@ -376,12 +381,13 @@ export function SharedLessonViewer({
                                         <div className="export-word-comment-head">
                                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <MessageSquare size={12} />
-                                            <strong>Commentaire du professeur</strong>
+                                            <strong>{t.teacherCommentTitle}</strong>
                                           </div>
                                           <button
                                             type="button"
                                             className="export-popup-close"
                                             onClick={() => setActiveWordCommentKey(null)}
+                                            title={t.close}
                                           >
                                             <X size={12} />
                                           </button>
@@ -428,20 +434,20 @@ export function SharedLessonViewer({
                   ))}
 
                   {/* Layer 5 : Infobulles du professeur (Icône orange minimaliste) (z-index: 15) */}
-                  {pageTooltips.map((t) => {
-                    const isOpen = activeTooltipId === t.id
+                  {pageTooltips.map((tip) => {
+                    const isOpen = activeTooltipId === tip.id
                     return (
                       <div
-                        key={t.id}
+                        key={tip.id}
                         className="export-tooltip-pin"
-                        style={{ left: `${t.xPercent}%`, top: `${t.yPercent}%` }}
+                        style={{ left: `${tip.xPercent}%`, top: `${tip.yPercent}%` }}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
                           type="button"
                           className="export-tooltip-minimal-btn student-tooltip-btn"
-                          onClick={() => setActiveTooltipId(isOpen ? null : t.id)}
-                          title="Cliquez pour afficher l'explication"
+                          onClick={() => setActiveTooltipId(isOpen ? null : tip.id)}
+                          title={t.tooltipExplanation}
                         >
                           <HelpCircle size={20} className="minimal-orange-icon" />
                         </button>
@@ -449,16 +455,17 @@ export function SharedLessonViewer({
                         {isOpen && (
                           <div className="export-tooltip-popover student-tooltip-popover">
                             <div className="export-tooltip-popover-head">
-                              <span>Explication</span>
+                              <span>{t.tooltipExplanation}</span>
                               <button
                                 type="button"
                                 className="export-popup-close"
                                 onClick={() => setActiveTooltipId(null)}
+                                title={t.close}
                               >
                                 <X size={12} />
                               </button>
                             </div>
-                            <p className="export-tooltip-popover-text">{t.text}</p>
+                            <p className="export-tooltip-popover-text">{tip.text}</p>
                           </div>
                         )}
                       </div>
@@ -528,13 +535,13 @@ export function SharedLessonViewer({
                         <div className="figma-comment-input-head">
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <MessageSquare size={13} style={{ color: '#0d99ff' }} />
-                            <span>Votre commentaire</span>
+                            <span>{t.yourCommentTitle}</span>
                           </div>
                           <button
                             type="button"
                             className="export-del-btn"
                             onClick={() => setDraftFigmaComment(null)}
-                            title="Fermer"
+                            title={t.close}
                           >
                             <X size={13} />
                           </button>
@@ -542,7 +549,7 @@ export function SharedLessonViewer({
                         <div className="figma-comment-input-body">
                           <input
                             type="text"
-                            placeholder="Votre prénom (optionnel)…"
+                            placeholder={t.studentNamePlaceholder}
                             value={studentName}
                             onChange={(e) => setStudentName(e.target.value)}
                             className="figma-name-input"
@@ -550,7 +557,7 @@ export function SharedLessonViewer({
                           <div className="figma-textarea-wrap">
                             <textarea
                               autoFocus
-                              placeholder="Écrivez votre remarque ou question…"
+                              placeholder={t.studentCommentPlaceholder}
                               value={draftFigmaComment.text}
                               onChange={(e) =>
                                 setDraftFigmaComment({ ...draftFigmaComment, text: e.target.value })
@@ -567,7 +574,7 @@ export function SharedLessonViewer({
                               className="figma-send-icon-btn"
                               disabled={!draftFigmaComment.text.trim()}
                               onClick={handleSendFigmaComment}
-                              title="Envoyer le commentaire"
+                              title={t.sendComment}
                             >
                               <Send size={13} />
                             </button>
@@ -613,10 +620,10 @@ export function SharedLessonViewer({
         <button
           className="shared-floating-homework-btn"
           onClick={() => setHomeworkModalOpen(true)}
-          title="Consulter le devoir"
+          title={t.viewHomework}
         >
           <GraduationCap size={18} />
-          <span>Devoir à faire</span>
+          <span>{t.homeworkBtn}</span>
         </button>
       )}
 
@@ -629,29 +636,29 @@ export function SharedLessonViewer({
                 <GraduationCap size={22} />
               </div>
               <div>
-                <h3>Devoir à réaliser</h3>
-                <p>Consignes données par votre professeur.</p>
+                <h3>{t.homeworkDetailsTitle}</h3>
+                <p>{t.homeworkTeacherInstructions}</p>
               </div>
-              <button className="teacher-export-close-btn" onClick={() => setHomeworkModalOpen(false)}>
+              <button className="teacher-export-close-btn" onClick={() => setHomeworkModalOpen(false)} title={t.close}>
                 <X size={16} />
               </button>
             </header>
 
             <div className="teacher-export-card-body">
               <div className="homework-detail-block">
-                <label>Énoncé / Consigne</label>
+                <label>{t.homeworkPromptLabel}</label>
                 <div className="homework-detail-text">{lesson.homework.title}</div>
               </div>
 
               {lesson.homework.dueDate && (
                 <div className="homework-detail-block">
-                  <label>Date limite</label>
+                  <label>{t.homeworkDueDateLabel}</label>
                   <div className="homework-detail-row">
                     <Calendar size={15} />
                     <span>
-                      À rendre pour le{' '}
+                      {t.homeworkDueFor}{' '}
                       <strong>
-                        {new Date(lesson.homework.dueDate).toLocaleDateString('fr-FR', {
+                        {new Date(lesson.homework.dueDate).toLocaleDateString(ui === 'fr' ? 'fr-FR' : (ui === 'en' ? 'en-US' : (ui === 'es' ? 'es-ES' : (ui === 'zh' ? 'zh-CN' : (ui === 'ru' ? 'ru-RU' : 'pt-PT')))), {
                           weekday: 'long',
                           day: 'numeric',
                           month: 'long',
@@ -665,14 +672,14 @@ export function SharedLessonViewer({
 
               {lesson.homework.instructions && (
                 <div className="homework-detail-block">
-                  <label>Comment rendre le devoir</label>
+                  <label>{t.homeworkInstructionsLabel}</label>
                   <div className="homework-detail-subtext">{lesson.homework.instructions}</div>
                 </div>
               )}
 
               {lesson.homework.attachmentName && lesson.homework.attachmentData && (
                 <div className="homework-detail-block">
-                  <label>Pièce-jointe</label>
+                  <label>{t.homeworkAttachmentLabel}</label>
                   <div className="homework-attachment-card">
                     <Paperclip size={16} />
                     <span className="homework-attachment-name">{lesson.homework.attachmentName}</span>
@@ -681,7 +688,7 @@ export function SharedLessonViewer({
                       download={lesson.homework.attachmentName}
                       className="btn-download"
                     >
-                      Télécharger
+                      {t.homeworkDownload}
                     </a>
                   </div>
                 </div>
@@ -690,7 +697,7 @@ export function SharedLessonViewer({
 
             <footer className="teacher-export-card-foot">
               <button type="button" className="primary" onClick={() => setHomeworkModalOpen(false)}>
-                <span>J'ai compris</span>
+                <span>{t.gotIt}</span>
               </button>
             </footer>
           </div>

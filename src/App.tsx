@@ -15,7 +15,7 @@ import { Settings } from './features/Settings'
 import { VocabularyVaultModal } from './features/vocabulary/VocabularyVaultModal'
 import { AddResourceModal } from './components/AddResourceModal'
 import { prompts } from './data'
-import { baseUi, copy, detectUiLanguage, UI_LANGUAGES } from './i18n'
+import { baseUi, copy, detectUiLanguage, UI_LANGUAGES, writeCopy } from './i18n'
 import { TOP_LEARNING_LANGUAGES } from './languages'
 import { doveWhite } from './assets/doveWhite'
 import { SharedLessonViewer } from './features/teacherExport/SharedLessonViewer'
@@ -198,6 +198,7 @@ export default function App() {
           }
         }}
         isTeacherPreview={state !== null && !isShareSubdomain()}
+        ui={state?.settings.uiLanguage || 'fr'}
       />
     )
   }
@@ -367,6 +368,7 @@ export default function App() {
             onOpenSharedLesson={(lesson) => setViewingSharedLesson(lesson)}
             onUpdateResource={(updated) => change(upsertResource(state, updated))}
             onClose={() => setFocusId(null)}
+            ui={state.settings.uiLanguage}
           />
         )}
         
@@ -385,7 +387,7 @@ export default function App() {
             >
               <div style={{ padding: '24px 20px 16px 20px' }}>
                 <p style={{ margin: 0, fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>
-                  Tu as un texte en cours, veux-tu sauvegarder avant de quitter la page ?
+                  {writeCopy[ui]?.draftWarning || 'Tu as un texte en cours, veux-tu sauvegarder avant de quitter la page ?'}
                 </p>
               </div>
               <div
@@ -402,14 +404,14 @@ export default function App() {
                   className="outline"
                   onClick={() => setPendingNavPage(null)}
                 >
-                  Annuler
+                  {writeCopy[ui]?.stayOnPage || 'Annuler'}
                 </button>
                 <button
                   type="button"
                   className="primary"
                   onClick={() => performPendingNav(pendingNavPage)}
                 >
-                  Ne pas sauvegarder
+                  {writeCopy[ui]?.leaveWithoutSaving || 'Ne pas sauvegarder'}
                 </button>
               </div>
             </div>

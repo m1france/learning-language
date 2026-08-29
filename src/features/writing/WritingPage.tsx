@@ -77,6 +77,7 @@ export function WritingPage({
         onNewSession={handleNewSession}
         onNavigateToSpeaking={onNavigateToSpeaking}
         onDraftStateChange={onDraftStateChange}
+        ui={ui}
       />
     </div>
   )

@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react'
+import type { UiLanguage } from '../../../domain'
+import { exercisesCopy } from '../../../i18n'
 import type { SentenceScrambleData } from '../exercisesDomain'
 import { Check, RotateCcw, Award, Lightbulb, Eraser } from 'lucide-react'
 
@@ -6,6 +8,7 @@ type SentenceScrambleBoardProps = {
   data: SentenceScrambleData
   onCheckFinished: (score: number, maxScore: number) => void
   isSubmitted: boolean
+  ui?: UiLanguage
 }
 
 // Fisher-Yates shuffle with a seeded approach
@@ -24,7 +27,9 @@ export function SentenceScrambleBoard({
   data,
   onCheckFinished,
   isSubmitted,
+  ui = 'fr',
 }: SentenceScrambleBoardProps) {
+  const t = exercisesCopy[ui] || exercisesCopy.fr
   const { items } = data
 
   // Build shuffled display orders for each item (deterministic per item)
@@ -119,7 +124,7 @@ export function SentenceScrambleBoard({
               {/* Assembled Sentence Drop Zone */}
               <div className="scramble-drop-zone">
                 {selectedIndices.length === 0 ? (
-                  <span className="placeholder-text">Clique sur les briques de mots pour ordonner la phrase…</span>
+                  <span className="placeholder-text">{t.wordBank}…</span>
                 ) : (
                   <div className="assembled-tiles-wrap">
                     {selectedIndices.map((tokenIdx, orderIdx) => (
@@ -128,7 +133,6 @@ export function SentenceScrambleBoard({
                         type="button"
                         className="tile-btn assembled"
                         onClick={() => handleTileClick(itemIdx, tokenIdx)}
-                        title="Cliquer pour retirer"
                       >
                         <span>{item.scrambledTokens[tokenIdx]}</span>
                       </button>
@@ -141,10 +145,9 @@ export function SentenceScrambleBoard({
                     type="button"
                     className="clear-sentence-btn"
                     onClick={() => handleClearSentence(itemIdx)}
-                    title="Effacer la phrase"
                   >
                     <Eraser size={13} />
-                    <span>Effacer</span>
+                    <span>{t.resetBtn}</span>
                   </button>
                 )}
               </div>
@@ -174,7 +177,7 @@ export function SentenceScrambleBoard({
                 <div className="scramble-feedback-area">
                   {!isCorrect && (
                     <div className="expected-sentence-row">
-                      <span className="lbl">Ordre attendu :</span>
+                      <span className="lbl">{t.correctAnswer} :</span>
                       <strong className="val">{item.correctSentence}</strong>
                     </div>
                   )}
@@ -199,17 +202,17 @@ export function SentenceScrambleBoard({
         {!isSubmitted ? (
           <div className="scramble-actions">
             <button type="button" className="action-btn secondary" onClick={handleResetAll}>
-              <RotateCcw size={13} /> Recommencer tout
+              <RotateCcw size={13} /> {t.resetBtn}
             </button>
             <button type="button" className="action-btn primary" onClick={handleVerify}>
-              <Check size={14} /> Vérifier mes phrases
+              <Check size={14} /> {t.checkBtn}
             </button>
           </div>
         ) : (
           <div className="scramble-score-pill">
             <Award size={16} />
             <span>
-              Score : {correctCount} / {items.length} phrases correctes (
+              {t.scoreLabel} : {correctCount} / {items.length} (
               {Math.round((correctCount / (items.length || 1)) * 100)}%)
             </span>
           </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Resource } from '../domain'
+import type { Resource, UiLanguage } from '../domain'
+import { teacherCopy } from '../i18n'
 import {
   MousePointer2,
   Pen,
@@ -40,20 +41,6 @@ import {
 } from './teacherExport/teacherExportService'
 import type { ExportedLesson, ExportedLessonPage, ExportedLessonParagraph } from './teacherExport/teacherExportDomain'
 
-/**
- * Teacher Mode — plein écran pour projeter un texte en classe.
- * Pas de barre supérieure : navigation pages en pillule haut-centre,
- * A+/A−/zoom/Quitter en pillule haut-droite, annuler/gomme/effacer à gauche.
- * Couleurs + épaisseur repliées derrière une flèche discrète à droite.
- * Dessin possible sur toute la surface de l'écran.
- * Surligneur : clic sur un mot (Shift+clic = plage de mots) → surlignage droit.
- * Texte : clic = nouvelle note, clic ailleurs = terminer la saisie (sans en
- * ouvrir une autre), double-clic = modifier, texte multicouleur en direct,
- * coins pour redimensionner (idem rectangles/ellipses après sélection).
- * Liaisons lettre à lettre, grisage de lettres muettes, sans survol jaune.
- * Cmd/Ctrl+Z = annuler la dernière annotation. Échap = quitter.
- */
-
 export type Tool = 'select' | 'pen' | 'highlighter' | 'text' | 'edit' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'liaison' | 'gray' | 'eraser'
 
 export type Point = { x: number; y: number }
@@ -85,18 +72,18 @@ const normalizePage = (raw: Partial<PageAnnotations> | undefined): PageAnnotatio
   order: raw?.order ?? [],
 })
 
-const TOOLS: { id: Tool; icon: React.ReactNode; label: string; color?: boolean; width?: boolean }[] = [
-  { id: 'select', icon: <MousePointer2 size={16} />, label: 'Sélection' },
-  { id: 'pen', icon: <Pen size={16} />, label: 'Stylo', color: true, width: true },
-  { id: 'highlighter', icon: <Highlighter size={16} />, label: 'Surligneur (clique sur un mot)', color: true },
-  { id: 'text', icon: <Type size={16} />, label: 'Texte', color: true },
-  { id: 'edit', icon: <Pencil size={16} />, label: 'Édition' },
-  { id: 'rect', icon: <Square size={16} />, label: 'Rectangle', color: true, width: true },
-  { id: 'ellipse', icon: <Circle size={16} />, label: 'Ellipse', color: true, width: true },
-  { id: 'line', icon: <Slash size={16} />, label: 'Ligne', color: true, width: true },
-  { id: 'arrow', icon: <ArrowRight size={16} />, label: 'Flèche', color: true, width: true },
-  { id: 'liaison', icon: <Spline size={16} />, label: 'Liaison (lettre à lettre)', color: true },
-  { id: 'gray', icon: <span style={{ fontSize: 13, fontWeight: 700 }}>Aa</span>, label: 'Griser une lettre' },
+const TOOL_ITEMS: { id: Tool; icon: React.ReactNode; color?: boolean; width?: boolean }[] = [
+  { id: 'select', icon: <MousePointer2 size={16} /> },
+  { id: 'pen', icon: <Pen size={16} />, color: true, width: true },
+  { id: 'highlighter', icon: <Highlighter size={16} />, color: true },
+  { id: 'text', icon: <Type size={16} />, color: true },
+  { id: 'edit', icon: <Pencil size={16} /> },
+  { id: 'rect', icon: <Square size={16} />, color: true, width: true },
+  { id: 'ellipse', icon: <Circle size={16} />, color: true, width: true },
+  { id: 'line', icon: <Slash size={16} />, color: true, width: true },
+  { id: 'arrow', icon: <ArrowRight size={16} />, color: true, width: true },
+  { id: 'liaison', icon: <Spline size={16} />, color: true },
+  { id: 'gray', icon: <span style={{ fontSize: 13, fontWeight: 700 }}>Aa</span> },
 ]
 
 const COLORS = ['#d64545', '#2563eb', '#16a34a', '#f59e0b', '#20201e', '#7c3aed']
@@ -334,6 +321,7 @@ export function LearningFocus({
   teacherName,
   onSaveTeacherUsername,
   onOpenSharedLesson,
+  ui = 'fr',
 }: {
   resources: Resource[]
   initialResourceId: string
@@ -344,7 +332,9 @@ export function LearningFocus({
   teacherName?: string
   onSaveTeacherUsername?: (username: string) => void
   onOpenSharedLesson?: (lesson: ExportedLesson) => void
+  ui?: UiLanguage
 }) {
+  const t = teacherCopy[ui] || teacherCopy.fr
   const resource = resources.find((item) => item.id === initialResourceId) ?? resources[0]
   const [pageIndex, setPageIndex] = useState(0)
   const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('vivre-focus-zoom')) || BASE_FONT)
@@ -1099,7 +1089,7 @@ export function LearningFocus({
     onUpdateResource({ ...resource, chapters })
   }
 
-  const activeTool = TOOLS.find((item) => item.id === tool) ?? TOOLS[0]
+  const activeTool = TOOL_ITEMS.find((item) => item.id === tool) ?? TOOL_ITEMS[0]
   const draft = drawingRef.current
   const showPanel = activeTool.color || activeTool.width || tool === 'text'
 
@@ -1129,7 +1119,7 @@ export function LearningFocus({
   })()
 
   const eraserShortcut = (effectiveShortcuts.eraser || '').toUpperCase()
-  const eraserTitle = eraserShortcut ? `Gomme (${eraserShortcut})` : 'Gomme'
+  const eraserTitle = eraserShortcut ? `${t.tools.eraser.label} (${eraserShortcut})` : t.tools.eraser.label
 
   return <div className="focus-overlay">
     <div className={`focus-stage ${tool !== 'edit' ? 'no-text-select' : ''}`} ref={stageRef}>
@@ -1143,10 +1133,11 @@ export function LearningFocus({
                 const original = originals[paragraph.key] ?? paragraph.text
                 const green = modifiedCharIndices(original, value)
                 return <div className="focus-paragraph editing focus-edit-wrap" style={{ fontSize }}
-                  onClick={(event) => event.stopPropagation()}>
-                  <span className="focus-edit-mirror" aria-hidden>
+                  onDoubleClick={() => setTool('select')}>
+                  {/* Miroir de rendu : vert = caractère ajouté, grisé = lettre muette */}
+                  <div className="focus-edit-mirror" aria-hidden="true">
                     {renderMirrorChars(value, green, current.grayed, paragraph.key)}
-                  </span>
+                  </div>
                   <textarea className="focus-edit-area" value={value} spellCheck={false}
                     onChange={(event) => setEditValues((values) => ({ ...values, [paragraph.key]: event.target.value }))}
                     onBlur={(event) => commitParagraph(paragraph.key, paragraph.chapterIndex, paragraph.paragraphIndex, event.target.value)} />
@@ -1216,25 +1207,25 @@ export function LearningFocus({
 
     {/* navigation pages — haut centre */}
     <div className="focus-nav-pill glass">
-      <button title="Page précédente" disabled={safePage === 0} onClick={() => goto(safePage - 1)} aria-label="Page précédente"><ChevronLeft size={16} /></button>
+      <button title={t.prevPage} disabled={safePage === 0} onClick={() => goto(safePage - 1)} aria-label={t.prevPage}><ChevronLeft size={16} /></button>
       <span>{safePage + 1} / {pages.length}</span>
-      <button title="Page suivante" disabled={safePage >= pages.length - 1} onClick={() => goto(safePage + 1)} aria-label="Page suivante"><ChevronRight size={16} /></button>
+      <button title={t.nextPage} disabled={safePage >= pages.length - 1} onClick={() => goto(safePage + 1)} aria-label={t.nextPage}><ChevronRight size={16} /></button>
     </div>
 
     {/* zoom + quitter — haut droite */}
     <div className="focus-actions-pill glass">
-      <button title="Agrandir le texte" onClick={() => setFontSize(Math.min(46, fontSize + 2))}>A+</button>
-      <button title="Réduire le texte" onClick={() => setFontSize(Math.max(20, fontSize - 2))}>A−</button>
-      <button className="focus-zoom" title="Revenir à 100 %" onClick={() => setFontSize(BASE_FONT)}>{zoom} %</button>
-      <button className="focus-quit-btn" onClick={quitAll}><X size={14} /><span>Quitter</span></button>
+      <button title={t.zoomIn} onClick={() => setFontSize(Math.min(46, fontSize + 2))}>A+</button>
+      <button title={t.zoomOut} onClick={() => setFontSize(Math.max(20, fontSize - 2))}>A−</button>
+      <button className="focus-zoom" title={t.resetZoom} onClick={() => setFontSize(BASE_FONT)}>{zoom} %</button>
+      <button className="focus-quit-btn" onClick={quitAll}><X size={14} /><span>{t.quit}</span></button>
     </div>
 
     {/* annuler / gomme / effacer — bord gauche, centré verticalement */}
     <div className="focus-side-pill left glass">
-      <button title="Annuler (⌘Z)" onClick={undo} aria-label="Annuler"><Undo2 size={16} /></button>
+      <button title={t.undo} onClick={undo} aria-label={t.undo}><Undo2 size={16} /></button>
       <button title={eraserTitle} className={tool === 'eraser' ? 'active' : ''}
-        onClick={() => { commitNote(); setTool(tool === 'eraser' ? 'select' : 'eraser'); setPendingLiaison(null); setSelectedNote(null); setSelectedStroke(null) }} aria-label="Gomme"><Eraser size={16} /></button>
-      <button title="Nettoyer la page" onClick={clearPage} aria-label="Nettoyer la page"><Trash2 size={16} /></button>
+        onClick={() => { commitNote(); setTool(tool === 'eraser' ? 'select' : 'eraser'); setPendingLiaison(null); setSelectedNote(null); setSelectedStroke(null) }} aria-label={t.eraser}><Eraser size={16} /></button>
+      <button title={t.clearPage} onClick={clearPage} aria-label={t.clearPage}><Trash2 size={16} /></button>
     </div>
 
     {/* couleurs + épaisseur : repliées derrière une flèche discrète à droite */}
@@ -1248,20 +1239,21 @@ export function LearningFocus({
         {activeTool.color && (activeTool.width || tool === 'text') && <span className="panel-sep" />}
         {activeTool.width && WIDTHS.map((value) => <button key={value}
           className={width === value ? 'panel-width active' : 'panel-width'}
-          title={`Épaisseur ${value}`} onClick={() => setWidth(value)}><i style={{ height: value }} /></button>)}
+          title={`${t.thickness} ${value}`} onClick={() => setWidth(value)}><i style={{ height: value }} /></button>)}
         {tool === 'text' && <>
-          <button className="panel-size" title="Réduire le texte" onMouseDown={(event) => event.preventDefault()} onClick={() => bumpTextSize(-2)}>A−</button>
-          <button className="panel-size" title="Agrandir le texte" onMouseDown={(event) => event.preventDefault()} onClick={() => bumpTextSize(2)}>A+</button>
+          <button className="panel-size" title={t.textSmaller} onMouseDown={(event) => event.preventDefault()} onClick={() => bumpTextSize(-2)}>A−</button>
+          <button className="panel-size" title={t.textBigger} onMouseDown={(event) => event.preventDefault()} onClick={() => bumpTextSize(2)}>A+</button>
         </>}
-        <button className="panel-collapse" title="Replier" onClick={() => setToolsOpen(false)} aria-label="Replier"><ChevronDown size={14} /></button>
+        <button className="panel-collapse" title={t.collapse} onClick={() => setToolsOpen(false)} aria-label={t.collapse}><ChevronDown size={14} /></button>
       </div>
-      : <button className="focus-tools-toggle glass" title="Couleurs et épaisseur" onClick={() => setToolsOpen(true)} aria-label="Ouvrir les outils"><ChevronUp size={14} /></button>)}
+      : <button className="focus-tools-toggle glass" title={t.openTools} onClick={() => setToolsOpen(true)} aria-label={t.openTools}><ChevronUp size={14} /></button>)}
 
     {/* barre d'outils — icônes seules avec raccourcis dans les infobulles */}
     <footer className="focus-toolbar glass">
-      {TOOLS.map((item) => {
+      {TOOL_ITEMS.map((item) => {
+        const toolInfo = t.tools[item.id]
         const shortcutKey = (effectiveShortcuts[item.id] || '').toUpperCase()
-        const titleWithShortcut = shortcutKey ? `${item.label} (${shortcutKey})` : item.label
+        const titleWithShortcut = shortcutKey ? `${toolInfo.label} (${shortcutKey})` : toolInfo.label
         return (
           <button key={item.id} title={titleWithShortcut}
             className={tool === item.id ? 'ftool active' : 'ftool'}
@@ -1278,11 +1270,11 @@ export function LearningFocus({
         <>
           <button
             className="focus-export-btn glass published"
-            title="Cette ressource est publiée en ligne. Cliquez pour gérer le lien."
+            title={t.lessonPublishedTooltip}
             onClick={() => setPublishedPopupOpen(!publishedPopupOpen)}
           >
             <Check size={14} className="published-check-icon" />
-            <span>Leçon publiée</span>
+            <span>{t.lessonPublished}</span>
           </button>
 
           {publishedPopupOpen && (
@@ -1290,12 +1282,12 @@ export function LearningFocus({
               <div className="published-popup-head">
                 <div className="published-popup-status">
                   <span className="online-green-dot" />
-                  <strong>Leçon en ligne</strong>
+                  <strong>{t.lessonOnline}</strong>
                 </div>
                 <button
                   className="export-popup-close"
                   onClick={() => setPublishedPopupOpen(false)}
-                  title="Fermer"
+                  title={t.close}
                 >
                   <X size={14} />
                 </button>
@@ -1316,16 +1308,16 @@ export function LearningFocus({
                       setIsPublishedCopied(true)
                       setTimeout(() => setIsPublishedCopied(false), 2000)
                     }}
-                    title="Copier le lien"
+                    title={t.copyLink}
                   >
                     {isPublishedCopied ? <Check size={12} /> : <Copy size={12} />}
-                    <span>{isPublishedCopied ? 'Copié' : 'Copier'}</span>
+                    <span>{isPublishedCopied ? t.copied : t.copyLink}</span>
                   </button>
                 </div>
 
                 <div className="published-meta-date">
-                  Publiée le{' '}
-                  {new Date(publishedLesson.createdAt).toLocaleDateString('fr-FR', {
+                  {t.publishedOn}{' '}
+                  {new Date(publishedLesson.createdAt).toLocaleDateString(ui === 'fr' ? 'fr-FR' : (ui === 'en' ? 'en-US' : (ui === 'es' ? 'es-ES' : (ui === 'zh' ? 'zh-CN' : (ui === 'ru' ? 'ru-RU' : 'pt-PT')))), {
                     day: 'numeric',
                     month: 'long',
                     year: 'numeric',
@@ -1346,7 +1338,7 @@ export function LearningFocus({
                   }}
                 >
                   <ExternalLink size={14} />
-                  <span>Ouvrir la leçon</span>
+                  <span>{t.openLesson}</span>
                 </button>
 
                 <div className="published-popup-subactions">
@@ -1358,7 +1350,7 @@ export function LearningFocus({
                       setPreviewFrameOpen(true)
                     }}
                   >
-                    <span>Mettre à jour</span>
+                    <span>{t.updateLesson}</span>
                   </button>
 
                   <button
@@ -1371,7 +1363,7 @@ export function LearningFocus({
                     }}
                   >
                     <Trash2 size={12} />
-                    <span>Dépublier</span>
+                    <span>{t.unpublish}</span>
                   </button>
                 </div>
               </div>
@@ -1381,11 +1373,11 @@ export function LearningFocus({
       ) : (
         <button
           className="focus-export-btn glass"
-          title="Exporter cette ressource corrigée pour vos élèves"
+          title={t.exportTooltip}
           onClick={handleExportClick}
         >
           <Share2 size={15} />
-          <span>Exporter</span>
+          <span>{t.exportBtn}</span>
         </button>
       )}
     </div>
@@ -1396,12 +1388,13 @@ export function LearningFocus({
         initialValue={teacherUsername || teacherName || ''}
         onSave={handleSaveUsername}
         onCancel={() => setUsernameModalOpen(false)}
+        ui={ui}
       />
     )}
 
     {/* Modal Avertissement aucune modification */}
     {noModifModalOpen && (
-      <NoModificationsModal onClose={() => setNoModifModalOpen(false)} />
+      <NoModificationsModal onClose={() => setNoModifModalOpen(false)} ui={ui} />
     )}
 
     {/* Modal Confirmation d'export */}
@@ -1411,6 +1404,7 @@ export function LearningFocus({
         totalPages={pages.length}
         onConfirm={handleConfirmExport}
         onCancel={() => setConfirmExportModalOpen(false)}
+        ui={ui}
       />
     )}
 
@@ -1426,6 +1420,7 @@ export function LearningFocus({
         existingLesson={publishedLesson}
         onCancel={() => setPreviewFrameOpen(false)}
         onExport={handleFinishExport}
+        ui={ui}
       />
     )}
 
@@ -1438,6 +1433,7 @@ export function LearningFocus({
           setSuccessExportModalLesson(null)
           onOpenSharedLesson?.(lesson)
         }}
+        ui={ui}
       />
     )}
   </div>
