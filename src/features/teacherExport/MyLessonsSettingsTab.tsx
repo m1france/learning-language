@@ -212,11 +212,11 @@ export function MyLessonsSettingsTab({
                   <div className="my-lesson-actions">
                     <button
                       className="btn-secondary small"
-                      onClick={() => onOpenLesson(lesson)}
-                      title="Prévisualiser la page élève"
+                      onClick={() => window.open(url, '_blank')}
+                      title="Ouvrir directement la leçon dans un nouvel onglet"
                     >
                       <ExternalLink size={13} />
-                      <span>Voir la leçon</span>
+                      <span>Voir la page</span>
                     </button>
                     <button
                       className="btn-danger-ghost small"

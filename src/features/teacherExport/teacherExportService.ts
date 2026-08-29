@@ -226,6 +226,80 @@ export function addLessonComment(lessonId: string, authorName: string, text: str
   return comment
 }
 
+export function getExportedLessonByResourceId(resourceId: string): ExportedLesson | null {
+  const all = getAllExportedLessons()
+  return all.find((item) => item.resourceId === resourceId) ?? null
+}
+
+export function addStudentFigmaComment(
+  lessonId: string,
+  data: { pageIndex: number; xPercent: number; yPercent: number; authorName: string; text: string }
+) {
+  const lesson = getExportedLesson(lessonId)
+  const comment = {
+    id: `figma-comm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    pageIndex: data.pageIndex,
+    xPercent: data.xPercent,
+    yPercent: data.yPercent,
+    authorName: data.authorName.trim() || 'Élève',
+    text: data.text.trim(),
+    createdAt: new Date().toISOString(),
+  }
+
+  if (lesson) {
+    const list = [...(lesson.figmaComments || []), comment]
+    const updated: ExportedLesson = {
+      ...lesson,
+      figmaComments: list,
+      updatedAt: new Date().toISOString(),
+    }
+    saveExportedLesson(updated)
+  }
+
+  const apiBase = getApiBaseUrl()
+  fetch(`${apiBase}/api/share/lessons/${encodeURIComponent(lessonId)}/figma-comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).catch(() => {})
+
+  return comment
+}
+
+export function addStudentSticker(
+  lessonId: string,
+  data: { pageIndex: number; xPercent: number; yPercent: number; emoji: string }
+) {
+  const lesson = getExportedLesson(lessonId)
+  const sticker = {
+    id: `sticker-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    pageIndex: data.pageIndex,
+    xPercent: data.xPercent,
+    yPercent: data.yPercent,
+    emoji: data.emoji,
+    createdAt: new Date().toISOString(),
+  }
+
+  if (lesson) {
+    const list = [...(lesson.stickers || []), sticker]
+    const updated: ExportedLesson = {
+      ...lesson,
+      stickers: list,
+      updatedAt: new Date().toISOString(),
+    }
+    saveExportedLesson(updated)
+  }
+
+  const apiBase = getApiBaseUrl()
+  fetch(`${apiBase}/api/share/lessons/${encodeURIComponent(lessonId)}/stickers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).catch(() => {})
+
+  return sticker
+}
+
 export function buildExportUrl(username: string, lessonId: string): string {
   const cleanUser = normalizeTeacherUsername(username) || 'prof'
   return `https://share.mathisbnl.info/${cleanUser}/${lessonId}`

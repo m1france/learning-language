@@ -276,6 +276,77 @@ app.post('/api/share/lessons/:id/comments', async (c) => {
   return c.json({ comment: newComment })
 })
 
+// 7. Ajouter un commentaire Figma positionné
+app.post('/api/share/lessons/:id/figma-comments', async (c) => {
+  const id = c.req.param('id')
+  const { pageIndex, xPercent, yPercent, authorName, text } = await c.req.json()
+  if (!id || !text?.trim()) return c.json({ error: 'Commentaire vide' }, 400)
+
+  const fileLessons = loadFileLessons()
+  const lesson = fileLessons[id]
+  if (!lesson) return c.json({ error: 'Leçon introuvable' }, 404)
+
+  const newFigmaComment = {
+    id: `figma-comm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    pageIndex: pageIndex || 0,
+    xPercent: Number(xPercent) || 0,
+    yPercent: Number(yPercent) || 0,
+    authorName: (authorName || 'Élève').trim(),
+    text: text.trim(),
+    createdAt: new Date().toISOString(),
+  }
+
+  lesson.figmaComments = [...(lesson.figmaComments || []), newFigmaComment]
+  lesson.updatedAt = new Date().toISOString()
+  fileLessons[id] = lesson
+  saveFileLessons(fileLessons)
+
+  if (dbPool) {
+    try {
+      await dbPool.query('UPDATE shared_lessons SET data = ? WHERE id = ?', [JSON.stringify(lesson), id])
+    } catch (err) {
+      console.error('Erreur DB update figma-comments:', err)
+    }
+  }
+
+  return c.json({ comment: newFigmaComment })
+})
+
+// 8. Ajouter un sticker de réaction positionné
+app.post('/api/share/lessons/:id/stickers', async (c) => {
+  const id = c.req.param('id')
+  const { pageIndex, xPercent, yPercent, emoji } = await c.req.json()
+  if (!id || !emoji) return c.json({ error: 'Sticker manquant' }, 400)
+
+  const fileLessons = loadFileLessons()
+  const lesson = fileLessons[id]
+  if (!lesson) return c.json({ error: 'Leçon introuvable' }, 404)
+
+  const newSticker = {
+    id: `sticker-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    pageIndex: pageIndex || 0,
+    xPercent: Number(xPercent) || 0,
+    yPercent: Number(yPercent) || 0,
+    emoji: emoji,
+    createdAt: new Date().toISOString(),
+  }
+
+  lesson.stickers = [...(lesson.stickers || []), newSticker]
+  lesson.updatedAt = new Date().toISOString()
+  fileLessons[id] = lesson
+  saveFileLessons(fileLessons)
+
+  if (dbPool) {
+    try {
+      await dbPool.query('UPDATE shared_lessons SET data = ? WHERE id = ?', [JSON.stringify(lesson), id])
+    } catch (err) {
+      console.error('Erreur DB update stickers:', err)
+    }
+  }
+
+  return c.json({ sticker: newSticker })
+})
+
 // ============================================================================
 // SERVING DES FICHIERS STATIQUES (SPA FRONTEND)
 // ============================================================================

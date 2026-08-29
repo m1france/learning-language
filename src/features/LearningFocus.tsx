@@ -21,6 +21,9 @@ import {
   ChevronDown,
   X,
   Share2,
+  Check,
+  ExternalLink,
+  Copy,
 } from 'lucide-react'
 import { TeacherUsernameModal } from './teacherExport/TeacherUsernameModal'
 import { NoModificationsModal, ConfirmExportModal } from './teacherExport/ExportConfirmModal'
@@ -29,10 +32,13 @@ import { ExportSuccessModal } from './teacherExport/ExportSuccessModal'
 import {
   hasPageModifications,
   saveExportedLesson,
+  deleteExportedLesson,
   getTeacherUsername,
   normalizeTeacherUsername,
+  getExportedLessonByResourceId,
+  buildExportUrl,
 } from './teacherExport/teacherExportService'
-import type { ExportedLesson, ExportedLessonParagraph } from './teacherExport/teacherExportDomain'
+import type { ExportedLesson, ExportedLessonPage, ExportedLessonParagraph } from './teacherExport/teacherExportDomain'
 
 /**
  * Teacher Mode — plein écran pour projeter un texte en classe.
@@ -363,6 +369,9 @@ export function LearningFocus({
   const [confirmExportModalOpen, setConfirmExportModalOpen] = useState(false)
   const [previewFrameOpen, setPreviewFrameOpen] = useState(false)
   const [successExportModalLesson, setSuccessExportModalLesson] = useState<ExportedLesson | null>(null)
+  const [publishedPopupOpen, setPublishedPopupOpen] = useState(false)
+  const [isPublishedCopied, setIsPublishedCopied] = useState(false)
+  const [reloadTrigger, setReloadTrigger] = useState(0)
 
   const boardRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef<Stroke | null>(null)
@@ -381,6 +390,33 @@ export function LearningFocus({
   const pageKey = `${resource.id}#${safePage}`
   const current = annotations[pageKey] ?? emptyPage()
   const zoom = Math.round((fontSize / BASE_FONT) * 100)
+
+  const publishedLesson = useMemo(() => {
+    return getExportedLessonByResourceId(resource.id)
+  }, [resource.id, previewFrameOpen, successExportModalLesson, reloadTrigger])
+
+  const allExportPages: ExportedLessonPage[] = useMemo(() => {
+    return pages.map((pageParagraphs, pIdx) => {
+      const pKey = `${resource.id}#${pIdx}`
+      const pAnn = annotations[pKey] ?? emptyPage()
+      const chapterTitle = pageParagraphs[0]?.chapterTitle || ''
+      return {
+        pageIndex: pIdx,
+        chapterTitle,
+        paragraphs: pageParagraphs.map((p) => ({
+          key: p.key,
+          chapterIndex: p.chapterIndex,
+          paragraphIndex: p.paragraphIndex,
+          chapterTitle: p.chapterTitle,
+          isChapterStart: p.isChapterStart,
+          text: p.text,
+          originalText: originals[p.key],
+          modifiedIndices: Array.from(modifiedCharIndices(originals[p.key] || '', p.text)),
+        })),
+        annotations: pAnn,
+      }
+    })
+  }, [pages, annotations, originals, resource.id])
 
   const effectiveShortcuts = useMemo<Record<Tool, string>>(() => {
     const res = { ...DEFAULT_SHORTCUTS }
@@ -403,7 +439,11 @@ export function LearningFocus({
   }, [effectiveShortcuts])
 
   const proceedWithExportCheck = () => {
-    const hasModif = hasPageModifications(page, current, originals, legacyEdited)
+    const hasModif = pages.some((pageParagraphs, pIdx) => {
+      const pKey = `${resource.id}#${pIdx}`
+      const pAnn = annotations[pKey] ?? emptyPage()
+      return hasPageModifications(pageParagraphs, pAnn, originals, legacyEdited)
+    })
     if (!hasModif) {
       setNoModifModalOpen(true)
     } else {
@@ -437,6 +477,7 @@ export function LearningFocus({
     saveExportedLesson(lesson)
     setPreviewFrameOpen(false)
     setSuccessExportModalLesson(lesson)
+    setReloadTrigger((n) => n + 1)
   }
 
   // caractères modifiés (vert) par paragraphe, calculés contre le texte d'origine
@@ -1221,15 +1262,123 @@ export function LearningFocus({
       })}
     </footer>
 
-    {/* bouton Exporter — bas droite */}
-    <button
-      className="focus-export-btn glass"
-      title="Exporter cette page corrigée pour vos élèves"
-      onClick={handleExportClick}
-    >
-      <Share2 size={15} />
-      <span>Exporter</span>
-    </button>
+    {/* bouton Exporter / Leçon publiée — bas droite */}
+    <div className="focus-export-btn-wrap">
+      {publishedLesson ? (
+        <>
+          <button
+            className="focus-export-btn glass published"
+            title="Cette ressource est publiée en ligne. Cliquez pour gérer le lien."
+            onClick={() => setPublishedPopupOpen(!publishedPopupOpen)}
+          >
+            <Check size={14} className="published-check-icon" />
+            <span>Leçon publiée</span>
+          </button>
+
+          {publishedPopupOpen && (
+            <div className="published-lesson-popup" onClick={(e) => e.stopPropagation()}>
+              <div className="published-popup-head">
+                <div className="published-popup-status">
+                  <span className="online-green-dot" />
+                  <strong>Leçon en ligne</strong>
+                </div>
+                <button
+                  className="export-popup-close"
+                  onClick={() => setPublishedPopupOpen(false)}
+                  title="Fermer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="published-popup-body">
+                <div className="published-url-row">
+                  <span className="published-url-text">
+                    {buildExportUrl(publishedLesson.username, publishedLesson.id)}
+                  </span>
+                  <button
+                    type="button"
+                    className={`published-copy-btn ${isPublishedCopied ? 'copied' : ''}`}
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(
+                        buildExportUrl(publishedLesson.username, publishedLesson.id)
+                      )
+                      setIsPublishedCopied(true)
+                      setTimeout(() => setIsPublishedCopied(false), 2000)
+                    }}
+                    title="Copier le lien"
+                  >
+                    {isPublishedCopied ? <Check size={12} /> : <Copy size={12} />}
+                    <span>{isPublishedCopied ? 'Copié' : 'Copier'}</span>
+                  </button>
+                </div>
+
+                <div className="published-meta-date">
+                  Publiée le{' '}
+                  {new Date(publishedLesson.createdAt).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </div>
+              </div>
+
+              <div className="published-popup-actions">
+                <button
+                  type="button"
+                  className="primary full"
+                  onClick={() => {
+                    window.open(
+                      buildExportUrl(publishedLesson.username, publishedLesson.id),
+                      '_blank'
+                    )
+                    setPublishedPopupOpen(false)
+                  }}
+                >
+                  <ExternalLink size={14} />
+                  <span>Ouvrir la leçon</span>
+                </button>
+
+                <div className="published-popup-subactions">
+                  <button
+                    type="button"
+                    className="outline full"
+                    onClick={() => {
+                      setPublishedPopupOpen(false)
+                      proceedWithExportCheck()
+                    }}
+                  >
+                    <span>Mettre à jour</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn-danger-ghost small full"
+                    onClick={() => {
+                      deleteExportedLesson(publishedLesson.id)
+                      setPublishedPopupOpen(false)
+                      setReloadTrigger((n) => n + 1)
+                    }}
+                  >
+                    <Trash2 size={12} />
+                    <span>Dépublier</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <button
+          className="focus-export-btn glass"
+          title="Exporter cette ressource corrigée pour vos élèves"
+          onClick={handleExportClick}
+        >
+          <Share2 size={15} />
+          <span>Exporter</span>
+        </button>
+      )}
+    </div>
 
     {/* Modal Nom d'utilisateur enseignant */}
     {usernameModalOpen && (
@@ -1259,10 +1408,8 @@ export function LearningFocus({
     {previewFrameOpen && (
       <ExportPreviewFrame
         resource={resource}
-        pageIndex={safePage}
-        totalPages={pages.length}
-        paragraphs={exportParagraphs}
-        annotations={current}
+        pages={allExportPages}
+        initialPageIndex={safePage}
         fontSize={fontSize}
         teacherUsername={getTeacherUsername({ teacherUsername, name: teacherName }) || 'prof'}
         teacherName={teacherName}

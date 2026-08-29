@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   GraduationCap,
   HelpCircle,
@@ -13,13 +13,26 @@ import {
   Check,
   ChevronLeft,
   Share2,
-  Info,
   Clock,
   User,
+  Trash2,
 } from 'lucide-react'
-import type { ExportedLesson, ExportedLessonComment, StudentComment } from './teacherExportDomain'
-import { addLessonReaction, addLessonComment, getExportedLesson } from './teacherExportService'
-import type { Stroke } from '../LearningFocus'
+import type {
+  ExportedLesson,
+  ExportedLessonComment,
+  ExportedLessonPage,
+  StudentComment,
+  StudentFigmaComment,
+  StudentSticker,
+} from './teacherExportDomain'
+import {
+  addLessonReaction,
+  addLessonComment,
+  addStudentFigmaComment,
+  addStudentSticker,
+  getExportedLesson,
+} from './teacherExportService'
+import type { Stroke, Liaison } from '../LearningFocus'
 
 type SharedLessonViewerProps = {
   lesson: ExportedLesson
@@ -27,62 +40,138 @@ type SharedLessonViewerProps = {
   isTeacherPreview?: boolean
 }
 
-const AVAILABLE_EMOJIS = ['👍', '❤️', '💡', '👏', '🎯', '🤔']
+const AVAILABLE_STICKER_EMOJIS = ['👍', '❤️', '💡', '👏', '🎯', '🔥', '🤔', '✨']
 
-export function SharedLessonViewer({ lesson: initialLesson, onBack, isTeacherPreview }: SharedLessonViewerProps) {
+export function SharedLessonViewer({
+  lesson: initialLesson,
+  onBack,
+  isTeacherPreview,
+}: SharedLessonViewerProps) {
   const [lesson, setLesson] = useState<ExportedLesson>(initialLesson)
   const [activeTooltipId, setActiveTooltipId] = useState<string | null>(null)
-  const [activeCommentKey, setActiveCommentKey] = useState<string | null>(null)
-  const [hoveredCommentKey, setHoveredCommentKey] = useState<string | null>(null)
+  const [activeWordCommentKey, setActiveWordCommentKey] = useState<string | null>(null)
   const [homeworkModalOpen, setHomeworkModalOpen] = useState(false)
-  const [commentsModalOpen, setCommentsModalOpen] = useState(false)
 
-  // Saisie commentaire élève
+  // Mode Figma Commentaire
+  const [isFigmaCommentMode, setIsFigmaCommentMode] = useState(false)
+  const [draftFigmaComment, setDraftFigmaComment] = useState<{
+    pageIndex: number
+    xPercent: number
+    yPercent: number
+    text: string
+  } | null>(null)
+  const [activeFigmaCommentId, setActiveFigmaCommentId] = useState<string | null>(null)
+
+  // Mode Sticker Réaction
+  const [selectedStickerEmoji, setSelectedStickerEmoji] = useState<string | null>(null)
+
+  // Identité élève
   const [studentName, setStudentName] = useState(() => localStorage.getItem('vivre_student_name') || '')
-  const [commentText, setCommentText] = useState('')
-  const [userReacted, setUserReacted] = useState<Record<string, boolean>>({})
 
-  const boardRef = useRef<HTMLDivElement>(null)
+  const pageRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
-  // Recharger les données si le stockage change
+  // Recharger les données si le stockage local change
   useEffect(() => {
     const refreshed = getExportedLesson(lesson.id)
     if (refreshed) setLesson(refreshed)
   }, [lesson.id])
 
-  const handleReact = (emoji: string) => {
-    const updated = addLessonReaction(lesson.id, emoji)
-    setLesson((prev) => ({ ...prev, reactions: updated }))
-    setUserReacted((prev) => ({ ...prev, [emoji]: true }))
-  }
+  // Normalisation des pages : toutes les pages si disponibles
+  const allPages: ExportedLessonPage[] = useMemo(() => {
+    if (lesson.pages && lesson.pages.length > 0) {
+      return lesson.pages
+    }
+    return [
+      {
+        pageIndex: lesson.pageIndex || 0,
+        chapterTitle: lesson.chapterTitle,
+        paragraphs: lesson.paragraphs || [],
+        annotations: lesson.annotations || { strokes: [], liaisons: [], texts: [], grayed: [], order: [] },
+      },
+    ]
+  }, [lesson])
 
-  const handlePostComment = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!commentText.trim()) return
-    const author = studentName.trim() || 'Élève'
-    localStorage.setItem('vivre_student_name', author)
-    const newComment = addLessonComment(lesson.id, author, commentText)
-    if (newComment) {
-      setLesson((prev) => ({
-        ...prev,
-        studentComments: [...(prev.studentComments || []), newComment],
-      }))
-      setCommentText('')
+  // Map des commentaires de mots du professeur
+  const wordCommentMap = useMemo(() => {
+    const map = new Map<string, ExportedLessonComment>()
+    ;(lesson.wordComments || []).forEach((c) => map.set(c.wordKey, c))
+    return map
+  }, [lesson.wordComments])
+
+  // Clic sur une page pour déposer un sticker ou un commentaire Figma
+  const handlePageClick = (pIdx: number, e: React.MouseEvent<HTMLDivElement>) => {
+    const pageEl = pageRefs.current[pIdx]
+    if (!pageEl) return
+
+    const rect = pageEl.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const xPercent = Math.max(2, Math.min(98, (x / rect.width) * 100))
+    const yPercent = Math.max(2, Math.min(98, (y / rect.height) * 100))
+
+    // 1. Dépose de Sticker
+    if (selectedStickerEmoji && lesson.allowReactions) {
+      const newSticker = addStudentSticker(lesson.id, {
+        pageIndex: pIdx,
+        xPercent,
+        yPercent,
+        emoji: selectedStickerEmoji,
+      })
+      if (newSticker) {
+        setLesson((prev) => ({
+          ...prev,
+          stickers: [...(prev.stickers || []), newSticker],
+        }))
+      }
+      setSelectedStickerEmoji(null)
+      return
+    }
+
+    // 2. Dépose de Commentaire Figma
+    if (isFigmaCommentMode && lesson.allowComments) {
+      setDraftFigmaComment({
+        pageIndex: pIdx,
+        xPercent,
+        yPercent,
+        text: '',
+      })
+      setIsFigmaCommentMode(false)
+      return
     }
   }
 
-  const wordCommentMap = new Map<string, ExportedLessonComment>()
-  lesson.wordComments.forEach((c) => wordCommentMap.set(c.wordKey, c))
+  // Envoi du commentaire Figma
+  const handleSendFigmaComment = () => {
+    if (!draftFigmaComment || !draftFigmaComment.text.trim()) return
+    const author = studentName.trim() || 'Élève'
+    localStorage.setItem('vivre_student_name', author)
+
+    const newComment = addStudentFigmaComment(lesson.id, {
+      pageIndex: draftFigmaComment.pageIndex,
+      xPercent: draftFigmaComment.xPercent,
+      yPercent: draftFigmaComment.yPercent,
+      authorName: author,
+      text: draftFigmaComment.text.trim(),
+    })
+
+    if (newComment) {
+      setLesson((prev) => ({
+        ...prev,
+        figmaComments: [...(prev.figmaComments || []), newComment],
+      }))
+    }
+    setDraftFigmaComment(null)
+  }
 
   return (
-    <div className="shared-viewer-shell">
+    <div className={`shared-viewer-shell ${selectedStickerEmoji ? 'is-stamping-sticker' : ''} ${isFigmaCommentMode ? 'is-figma-commenting' : ''}`}>
       {/* Barre supérieure étudiante */}
       <header className="shared-viewer-header">
         <div className="shared-viewer-header-left">
           {onBack && (
             <button className="shared-back-btn" onClick={onBack} title="Retour">
               <ChevronLeft size={18} />
-              <span>{isTeacherPreview ? 'Quitter l\'aperçu' : 'Retour'}</span>
+              <span>{isTeacherPreview ? "Quitter l'aperçu" : 'Retour'}</span>
             </button>
           )}
           <div className="shared-teacher-badge">
@@ -98,218 +187,387 @@ export function SharedLessonViewer({ lesson: initialLesson, onBack, isTeacherPre
 
         <div className="shared-viewer-header-center">
           <h1 className="shared-resource-title">{lesson.resourceTitle}</h1>
-          <span className="shared-page-pill">
-            Page {lesson.pageIndex + 1} / {lesson.totalPages}
-          </span>
         </div>
 
         <div className="shared-viewer-header-right">
-          {lesson.homework && (
-            <button
-              className="shared-header-hw-btn"
-              onClick={() => setHomeworkModalOpen(true)}
-              title="Consulter le devoir associé"
-            >
-              <GraduationCap size={16} />
-              <span>Devoir</span>
-            </button>
-          )}
+          {/* Bouton Commentaire Figma pour les élèves */}
           {lesson.allowComments && (
             <button
-              className="shared-header-comm-btn"
-              onClick={() => setCommentsModalOpen(true)}
-              title="Commentaires et questions"
+              type="button"
+              className={`figma-comment-trigger-btn ${isFigmaCommentMode ? 'active' : ''}`}
+              onClick={() => {
+                setIsFigmaCommentMode(!isFigmaCommentMode)
+                setSelectedStickerEmoji(null)
+              }}
+              title="Ajouter un commentaire sur la page"
             >
-              <MessageCircle size={16} />
-              <span>Questions ({lesson.studentComments?.length || 0})</span>
+              <MessageSquare size={15} />
+              <span>{isFigmaCommentMode ? 'Cliquez sur la page' : 'Commenter'}</span>
+              {(lesson.figmaComments?.length || 0) > 0 && (
+                <span className="figma-count-pill">{lesson.figmaComments?.length}</span>
+              )}
+            </button>
+          )}
+
+          {/* Bouton Devoir en haut s'il existe */}
+          {lesson.homework && (
+            <button
+              type="button"
+              className="shared-header-hw-btn"
+              onClick={() => setHomeworkModalOpen(true)}
+              title="Consulter le devoir à faire"
+            >
+              <GraduationCap size={16} />
+              <span>Devoir à faire</span>
             </button>
           )}
         </div>
       </header>
 
-      {/* Corps du document annoté */}
-      <main className="shared-viewer-body" onClick={() => { setActiveTooltipId(null); setActiveCommentKey(null); }}>
-        <div className="focus-board shared-board" ref={boardRef}>
-          <div className="focus-text-col">
-            {lesson.paragraphs.map((paragraph) => {
-              const green = new Set(paragraph.modifiedIndices ?? [])
-              let offset = 0
-              return (
-                <div key={paragraph.key}>
-                  {paragraph.isChapterStart && <h3 className="focus-chapter">{paragraph.chapterTitle}</h3>}
-                  <p className="focus-paragraph" style={{ fontSize: lesson.fontSize }}>
-                    {paragraph.text.split(/(\s+)/).map((part, index) => {
-                      const start = offset
-                      offset += part.length
-                      if (/\s+/.test(part)) return <span key={index}>{part}</span>
-                      const wordKey = `${paragraph.key}:${index}`
-                      const comment = wordCommentMap.get(wordKey)
-                      const isCommentActive = activeCommentKey === wordKey || hoveredCommentKey === wordKey
+      {/* Corps défilable contenant TOUTES les pages de la ressource */}
+      <main className="shared-viewer-body">
+        <div className="shared-multi-pages-container">
+          {allPages.map((p, pIdx) => {
+            const pageTooltips = (lesson.tooltips || []).filter((t) => (t.pageIndex ?? 0) === p.pageIndex)
+            const pageWordComments = (lesson.wordComments || []).filter((c) => (c.pageIndex ?? 0) === p.pageIndex)
+            const pageStickers = (lesson.stickers || []).filter((s) => (s.pageIndex ?? 0) === p.pageIndex)
+            const pageFigmaComments = (lesson.figmaComments || []).filter((fc) => (fc.pageIndex ?? 0) === p.pageIndex)
+            const commentKeys = new Set(pageWordComments.map((c) => c.wordKey))
+
+            return (
+              <div
+                key={p.pageIndex}
+                ref={(el) => {
+                  pageRefs.current[p.pageIndex] = el
+                }}
+                className="shared-page-block"
+                onClick={(e) => handlePageClick(p.pageIndex, e)}
+              >
+                {/* Séparateur entre les pages */}
+                <div className="shared-page-divider">
+                  <span className="shared-page-divider-line" />
+                  <span className="shared-page-divider-badge">PAGE {p.pageIndex + 1}</span>
+                  <span className="shared-page-divider-line" />
+                </div>
+
+                {/* Tableau relatif de la page */}
+                <div className="shared-page-canvas-wrap" style={{ fontSize: lesson.fontSize || 32 }}>
+                  {/* Layer 1 : Stickers d'élèves en arrière-plan sous le texte (z-index: 2) */}
+                  {pageStickers.map((sticker) => (
+                    <div
+                      key={sticker.id}
+                      className="student-placed-sticker"
+                      style={{
+                        left: `${sticker.xPercent}%`,
+                        top: `${sticker.yPercent}%`,
+                      }}
+                      title={`Sticker déposé par un élève le ${new Date(sticker.createdAt).toLocaleDateString()}`}
+                    >
+                      <span>{sticker.emoji}</span>
+                    </div>
+                  ))}
+
+                  {/* Layer 2 : Paragraphes de texte (z-index: 5) */}
+                  <div className="shared-paragraphs-layer">
+                    {p.paragraphs.map((par) => {
+                      const words = par.text.split(/(\s+)/)
+                      const greenSet = new Set(par.modifiedIndices || [])
+                      let letterOffset = 0
 
                       return (
-                        <span
-                          key={wordKey}
-                          className={`focus-word shared-word ${comment ? 'has-comment' : ''}`}
-                          data-word={wordKey}
-                          onClick={(e) => {
-                            if (comment) {
-                              e.stopPropagation()
-                              setActiveCommentKey(activeCommentKey === wordKey ? null : wordKey)
+                        <p key={par.key} className="focus-paragraph">
+                          {words.map((word, wIdx) => {
+                            if (/\s+/.test(word)) {
+                              letterOffset += word.length
+                              return <span key={wIdx}>{word}</span>
                             }
-                          }}
-                          onMouseEnter={() => comment && setHoveredCommentKey(wordKey)}
-                          onMouseLeave={() => setHoveredCommentKey(null)}
-                        >
-                          {part.split('').map((letter, letterIdx) => {
-                            const letterKey = `${wordKey}.${letterIdx}`
-                            const userGray = lesson.annotations.grayed.includes(letterKey)
-                            const isGreen = green.has(start + letterIdx)
-                            return (
+
+                            const wordKey = `${par.key}:${wIdx}`
+                            const hasComment = commentKeys.has(wordKey)
+                            const commentObj = pageWordComments.find((c) => c.wordKey === wordKey)
+
+                            const wordEl = (
                               <span
-                                key={letterIdx}
-                                data-letter={letterKey}
-                                className={`focus-letter ${isGreen ? 'edited-char' : ''} ${userGray ? 'user-gray' : ''}`}
+                                key={wIdx}
+                                className={`export-word ${hasComment ? 'has-comment' : ''}`}
+                                onClick={(e) => {
+                                  if (hasComment && commentObj) {
+                                    e.stopPropagation()
+                                    setActiveWordCommentKey(
+                                      activeWordCommentKey === commentObj.id ? null : commentObj.id
+                                    )
+                                  }
+                                }}
                               >
-                                {letter}
+                                {word.split('').map((letter, lIdx) => {
+                                  const letterKey = `${par.key}:${wIdx}.${lIdx}`
+                                  const isGrayed = p.annotations.grayed.includes(letterKey)
+                                  const isGreen = greenSet.has(letterOffset + lIdx)
+
+                                  return (
+                                    <span
+                                      key={lIdx}
+                                      className={`focus-letter ${isGreen ? 'edited-char' : ''} ${
+                                        isGrayed ? 'user-gray' : ''
+                                      }`}
+                                    >
+                                      {letter}
+                                    </span>
+                                  )
+                                })}
                               </span>
                             )
+
+                            letterOffset += word.length
+
+                            if (hasComment && commentObj) {
+                              return (
+                                <span key={wIdx} className="export-commented-word-wrap">
+                                  {wordEl}
+                                  {activeWordCommentKey === commentObj.id && (
+                                    <div
+                                      className="export-word-comment-card student-comment-popover"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div className="export-word-comment-head">
+                                        <MessageSquare size={12} />
+                                        <strong>Commentaire du professeur</strong>
+                                        <button
+                                          className="export-popup-close"
+                                          onClick={() => setActiveWordCommentKey(null)}
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      </div>
+                                      <span className="export-word-comment-body">{commentObj.comment}</span>
+                                    </div>
+                                  )}
+                                </span>
+                              )
+                            }
+
+                            return wordEl
                           })}
-                          {/* Popup commentaire du professeur sur mot */}
-                          {comment && isCommentActive && (
-                            <span className="export-word-comment-card student-view" onClick={(e) => e.stopPropagation()}>
-                              <span className="export-word-comment-head">
-                                <MessageSquare size={12} />
-                                <strong>Remarque du professeur</strong>
-                              </span>
-                              <span className="export-word-comment-body">{comment.comment}</span>
-                            </span>
-                          )}
-                        </span>
+                        </p>
                       )
                     })}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Notes textuelles */}
-          {lesson.annotations.texts.map((note) => (
-            <div
-              key={note.id}
-              className="focus-text-note shared-text-note"
-              style={{ left: note.x, top: note.y, fontSize: note.size }}
-            >
-              {note.runs.map((run, idx) => (
-                <span key={idx} style={{ color: run.c }}>
-                  {run.t}
-                </span>
-              ))}
-            </div>
-          ))}
-
-          {/* Calque de dessins et liaisons */}
-          <svg className="focus-ink shared-ink-layer">
-            {lesson.annotations.strokes.map((stroke) => (
-              <StrokeShape stroke={stroke} key={stroke.id} />
-            ))}
-            {lesson.annotations.liaisons.map((liaison) => {
-              const midX = (liaison.x1 + liaison.x2) / 2
-              return (
-                <path
-                  key={liaison.id}
-                  d={`M ${liaison.x1} ${liaison.y} Q ${midX} ${liaison.y + 22}, ${liaison.x2} ${liaison.y}`}
-                  fill="none"
-                  stroke={liaison.color}
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                />
-              )
-            })}
-          </svg>
-
-          {/* Infobulles interactives créées par le professeur */}
-          {lesson.tooltips.map((tooltip) => (
-            <div
-              key={tooltip.id}
-              className={`export-tooltip-pin ${activeTooltipId === tooltip.id ? 'active' : ''}`}
-              style={{ left: `${tooltip.xPercent}%`, top: `${tooltip.yPercent}%` }}
-              onClick={(e) => {
-                e.stopPropagation()
-                setActiveTooltipId(activeTooltipId === tooltip.id ? null : tooltip.id)
-              }}
-            >
-              <button className="export-tooltip-badge student-badge" title="Cliquer pour lire l'infobulle">
-                <HelpCircle size={16} />
-              </button>
-              {activeTooltipId === tooltip.id && (
-                <div className="export-tooltip-popover student-popover" onClick={(e) => e.stopPropagation()}>
-                  <div className="export-tooltip-popover-head">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Info size={14} />
-                      <strong>Explication du professeur</strong>
-                    </div>
-                    <button className="export-popup-close" onClick={() => setActiveTooltipId(null)}>
-                      <X size={13} />
-                    </button>
                   </div>
-                  <p className="export-tooltip-popover-text">{tooltip.text}</p>
+
+                  {/* Layer 3 : Dessins SVG du professeur au-dessus du texte (z-index: 10) */}
+                  <svg className="export-drawing-svg" aria-hidden="true">
+                    {p.annotations.strokes.map((stroke, sIdx) => (
+                      <StrokeRender key={sIdx} stroke={stroke} />
+                    ))}
+                    {p.annotations.liaisons.map((liaison, lIdx) => (
+                      <LiaisonRender key={lIdx} liaison={liaison} />
+                    ))}
+                  </svg>
+
+                  {/* Layer 4 : Notes textuelles du professeur (z-index: 12) */}
+                  {p.annotations.texts.map((note) => (
+                    <div
+                      key={note.id}
+                      className="export-text-note-pin read-only"
+                      style={{
+                        left: note.x,
+                        top: note.y,
+                        fontSize: note.size || 22,
+                        color: note.color || '#20201e',
+                      }}
+                    >
+                      <span>{note.runs.map((r) => r.t).join('')}</span>
+                    </div>
+                  ))}
+
+                  {/* Layer 5 : Infobulles du professeur (Icône orange minimaliste sans cercles) (z-index: 15) */}
+                  {pageTooltips.map((t) => {
+                    const isOpen = activeTooltipId === t.id
+                    return (
+                      <div
+                        key={t.id}
+                        className="export-tooltip-pin"
+                        style={{ left: `${t.xPercent}%`, top: `${t.yPercent}%` }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="export-tooltip-minimal-btn student-tooltip-btn"
+                          onClick={() => setActiveTooltipId(isOpen ? null : t.id)}
+                          title="Cliquez pour afficher l'explication"
+                        >
+                          <HelpCircle size={19} className="minimal-orange-icon" />
+                        </button>
+
+                        {isOpen && (
+                          <div className="export-tooltip-popover student-tooltip-popover">
+                            <div className="export-tooltip-popover-head">
+                              <span>Explication</span>
+                              <button
+                                className="export-popup-close"
+                                onClick={() => setActiveTooltipId(null)}
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                            <p className="export-tooltip-popover-text">{t.text}</p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* Layer 6 : Commentaires Figma d'élèves (z-index: 20) */}
+                  {pageFigmaComments.map((fc) => {
+                    const isOpen = activeFigmaCommentId === fc.id
+                    return (
+                      <div
+                        key={fc.id}
+                        className="figma-comment-pin"
+                        style={{ left: `${fc.xPercent}%`, top: `${fc.yPercent}%` }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="figma-comment-pin-badge"
+                          onClick={() => setActiveFigmaCommentId(isOpen ? null : fc.id)}
+                          title={`Commentaire de ${fc.authorName}`}
+                        >
+                          <MessageSquare size={13} />
+                        </button>
+
+                        {isOpen && (
+                          <div className="figma-comment-popover">
+                            <div className="figma-comment-popover-head">
+                              <strong>{fc.authorName}</strong>
+                              <span className="figma-comment-date">
+                                {new Date(fc.createdAt).toLocaleDateString('fr-FR', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                })}
+                              </span>
+                              <button
+                                className="export-popup-close"
+                                onClick={() => setActiveFigmaCommentId(null)}
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                            <p className="figma-comment-popover-text">{fc.text}</p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* Saisie d'un nouveau commentaire Figma */}
+                  {draftFigmaComment && draftFigmaComment.pageIndex === p.pageIndex && (
+                    <div
+                      className="figma-comment-input-card"
+                      style={{
+                        left: `${draftFigmaComment.xPercent}%`,
+                        top: `${draftFigmaComment.yPercent}%`,
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="figma-comment-input-head">
+                        <MessageSquare size={13} />
+                        <span>Nouveau commentaire</span>
+                        <button
+                          className="export-popup-close"
+                          onClick={() => setDraftFigmaComment(null)}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                      <div className="figma-comment-input-body">
+                        <input
+                          type="text"
+                          placeholder="Votre prénom..."
+                          value={studentName}
+                          onChange={(e) => setStudentName(e.target.value)}
+                          className="figma-name-input"
+                        />
+                        <textarea
+                          autoFocus
+                          placeholder="Écrivez votre remarque ou question…"
+                          value={draftFigmaComment.text}
+                          onChange={(e) =>
+                            setDraftFigmaComment({ ...draftFigmaComment, text: e.target.value })
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault()
+                              handleSendFigmaComment()
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="export-send-btn"
+                          disabled={!draftFigmaComment.text.trim()}
+                          onClick={handleSendFigmaComment}
+                        >
+                          <Send size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
       </main>
 
-      {/* Barre de Réactions (si autorisée par le professeur) */}
+      {/* Barre de Stickers de réaction flottante en bas (si autorisé) */}
       {lesson.allowReactions && (
-        <div className="shared-reactions-bar">
-          <div className="shared-reactions-title">
+        <div className="shared-sticker-bar">
+          <div className="shared-sticker-bar-title">
             <Smile size={15} />
-            <span>Réagir à la leçon</span>
+            <span>Déposer un sticker :</span>
           </div>
-          <div className="shared-reactions-list">
-            {AVAILABLE_EMOJIS.map((emoji) => {
-              const count = lesson.reactions?.[emoji] || 0
-              const hasReacted = userReacted[emoji]
-              return (
-                <button
-                  key={emoji}
-                  className={`shared-reaction-btn ${hasReacted ? 'reacted' : ''}`}
-                  onClick={() => handleReact(emoji)}
-                >
-                  <span className="shared-reaction-emoji">{emoji}</span>
-                  {count > 0 && <span className="shared-reaction-count">{count}</span>}
-                </button>
-              )
-            })}
+          <div className="shared-sticker-list">
+            {AVAILABLE_STICKER_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className={`shared-sticker-btn ${selectedStickerEmoji === emoji ? 'selected' : ''}`}
+                onClick={() => {
+                  setSelectedStickerEmoji(selectedStickerEmoji === emoji ? null : emoji)
+                  setIsFigmaCommentMode(false)
+                }}
+                title={`Cliquer pour coller ${emoji} sur la page`}
+              >
+                <span>{emoji}</span>
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Bouton Devoir Flottant en bas à droite */}
+      {/* Bouton Devoir Flottant (bas droite) */}
       {lesson.homework && (
         <button
           className="shared-floating-homework-btn"
           onClick={() => setHomeworkModalOpen(true)}
-          title="Consulter le devoir à faire"
+          title="Consulter le devoir"
         >
-          <GraduationCap size={22} />
+          <GraduationCap size={18} />
           <span>Devoir à faire</span>
         </button>
       )}
 
-      {/* Modal Devoir complet */}
+      {/* Modal Détails du Devoir */}
       {homeworkModalOpen && lesson.homework && (
         <div className="teacher-export-overlay" onClick={() => setHomeworkModalOpen(false)}>
-          <div className="teacher-export-card homework-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="teacher-export-card" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
             <header className="teacher-export-card-head">
               <div className="teacher-export-icon-badge primary">
                 <GraduationCap size={22} />
               </div>
               <div>
-                <h3>Devoir à faire</h3>
-                <p>Consignes laissées par votre professeur pour ce cours.</p>
+                <h3>Devoir à réaliser</h3>
+                <p>Consignes données par votre professeur.</p>
               </div>
               <button className="teacher-export-close-btn" onClick={() => setHomeworkModalOpen(false)}>
                 <X size={16} />
@@ -318,126 +576,58 @@ export function SharedLessonViewer({ lesson: initialLesson, onBack, isTeacherPre
 
             <div className="teacher-export-card-body">
               <div className="homework-detail-block">
-                <label>Énoncé / Consignes :</label>
+                <label>Énoncé / Consigne</label>
                 <div className="homework-detail-text">{lesson.homework.title}</div>
               </div>
 
               {lesson.homework.dueDate && (
-                <div className="homework-detail-row">
-                  <Calendar size={16} />
-                  <span>
-                    À rendre pour le : <strong>{new Date(lesson.homework.dueDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
-                  </span>
+                <div className="homework-detail-block">
+                  <label>Date limite</label>
+                  <div className="homework-detail-row">
+                    <Calendar size={15} />
+                    <span>
+                      À rendre pour le{' '}
+                      <strong>
+                        {new Date(lesson.homework.dueDate).toLocaleDateString('fr-FR', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })}
+                      </strong>
+                    </span>
+                  </div>
                 </div>
               )}
 
               {lesson.homework.instructions && (
                 <div className="homework-detail-block">
-                  <label>Modalités de rendu :</label>
+                  <label>Comment rendre le devoir</label>
                   <div className="homework-detail-subtext">{lesson.homework.instructions}</div>
                 </div>
               )}
 
-              {lesson.homework.attachmentName && (
+              {lesson.homework.attachmentName && lesson.homework.attachmentData && (
                 <div className="homework-detail-block">
-                  <label>Pièce jointe :</label>
+                  <label>Pièce-jointe</label>
                   <div className="homework-attachment-card">
                     <Paperclip size={16} />
                     <span className="homework-attachment-name">{lesson.homework.attachmentName}</span>
-                    {lesson.homework.attachmentData && (
-                      <a
-                        href={lesson.homework.attachmentData}
-                        download={lesson.homework.attachmentName}
-                        className="btn-download"
-                      >
-                        Télécharger
-                      </a>
-                    )}
+                    <a
+                      href={lesson.homework.attachmentData}
+                      download={lesson.homework.attachmentName}
+                      className="btn-download"
+                    >
+                      Télécharger
+                    </a>
                   </div>
                 </div>
               )}
             </div>
 
             <footer className="teacher-export-card-foot">
-              <button type="button" className="btn-primary" onClick={() => setHomeworkModalOpen(false)} autoFocus>
-                <span>Fermer</span>
-              </button>
-            </footer>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Commentaires & Questions élèves */}
-      {commentsModalOpen && lesson.allowComments && (
-        <div className="teacher-export-overlay" onClick={() => setCommentsModalOpen(false)}>
-          <div className="teacher-export-card comments-modal" onClick={(e) => e.stopPropagation()}>
-            <header className="teacher-export-card-head">
-              <div className="teacher-export-icon-badge primary">
-                <MessageCircle size={20} />
-              </div>
-              <div>
-                <h3>Questions &amp; Commentaires</h3>
-                <p>Échangez avec le professeur et les autres élèves.</p>
-              </div>
-              <button className="teacher-export-close-btn" onClick={() => setCommentsModalOpen(false)}>
-                <X size={16} />
-              </button>
-            </header>
-
-            <div className="teacher-export-card-body student-comments-container">
-              {/* Liste des commentaires */}
-              <div className="student-comments-list">
-                {(!lesson.studentComments || lesson.studentComments.length === 0) ? (
-                  <p className="no-comments-msg">Aucune question pour le moment. Soyez le premier à poser une question !</p>
-                ) : (
-                  lesson.studentComments.map((comm) => (
-                    <div key={comm.id} className="student-comment-bubble">
-                      <div className="student-comment-bubble-head">
-                        <span className="student-comment-author">{comm.authorName}</span>
-                        <span className="student-comment-date">
-                          {new Date(comm.createdAt).toLocaleDateString('fr-FR', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      </div>
-                      <p className="student-comment-bubble-text">{comm.text}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Formulaire de saisie d'un nouveau commentaire */}
-              <form onSubmit={handlePostComment} className="student-comment-form">
-                <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                  <input
-                    type="text"
-                    placeholder="Votre prénom / nom"
-                    value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    style={{ flex: '0 0 160px' }}
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="Posez votre question sur cette leçon..."
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    style={{ flex: 1 }}
-                    required
-                  />
-                  <button type="submit" className="btn-primary" disabled={!commentText.trim()}>
-                    <Send size={15} />
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <footer className="teacher-export-card-foot">
-              <button type="button" className="btn-secondary" onClick={() => setCommentsModalOpen(false)}>
-                Fermer
+              <button type="button" className="primary" onClick={() => setHomeworkModalOpen(false)}>
+                <span>J'ai compris</span>
               </button>
             </footer>
           </div>
@@ -447,7 +637,7 @@ export function SharedLessonViewer({ lesson: initialLesson, onBack, isTeacherPre
   )
 }
 
-function StrokeShape({ stroke }: { stroke: Stroke }) {
+function StrokeRender({ stroke }: { stroke: Stroke }) {
   const opacity = stroke.kind === 'highlighter' ? 0.35 : 1
   const common = {
     stroke: stroke.color,
@@ -459,26 +649,31 @@ function StrokeShape({ stroke }: { stroke: Stroke }) {
   }
   const [first, ...rest] = stroke.points
   if (!first) return null
-  const span = stroke.points.reduce((max, point) => Math.max(max, Math.hypot(point.x - first.x, point.y - first.y)), 0)
-  if (span < 3 && (stroke.kind === 'pen' || stroke.kind === 'highlighter')) {
-    return <circle cx={first.x} cy={first.y} r={stroke.width / 2} fill={stroke.color} stroke="none" opacity={opacity} />
+
+  if (stroke.points.length <= 1) {
+    return <circle cx={first.x} cy={first.y} r={stroke.width / 2} fill={stroke.color} opacity={opacity} />
   }
+
   if (stroke.kind === 'pen' || stroke.kind === 'highlighter') {
-    const d = `M ${first.x} ${first.y} ` + rest.map((point) => `L ${point.x} ${point.y}`).join(' ')
+    const d = `M ${first.x} ${first.y} ` + rest.map((p) => `L ${p.x} ${p.y}`).join(' ')
     return <path d={d} {...common} />
   }
+
   const last = stroke.points[stroke.points.length - 1] ?? first
   const x = Math.min(first.x, last.x)
   const y = Math.min(first.y, last.y)
   const w = Math.abs(last.x - first.x)
   const h = Math.abs(last.y - first.y)
+
   if (stroke.kind === 'rect') return <rect x={x} y={y} width={w} height={h} rx={4} {...common} />
   if (stroke.kind === 'ellipse') return <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2} ry={h / 2} {...common} />
   if (stroke.kind === 'line') return <line x1={first.x} y1={first.y} x2={last.x} y2={last.y} {...common} />
+
   const angle = Math.atan2(last.y - first.y, last.x - first.x)
   const head = 10 + stroke.width
   const a1 = angle + Math.PI * 0.82
   const a2 = angle - Math.PI * 0.82
+
   return (
     <g {...common}>
       <line x1={first.x} y1={first.y} x2={last.x} y2={last.y} stroke={stroke.color} strokeWidth={stroke.width} strokeLinecap="round" />
@@ -490,5 +685,18 @@ function StrokeShape({ stroke }: { stroke: Stroke }) {
         fill="none"
       />
     </g>
+  )
+}
+
+function LiaisonRender({ liaison }: { liaison: Liaison }) {
+  const midX = (liaison.x1 + liaison.x2) / 2
+  return (
+    <path
+      d={`M ${liaison.x1} ${liaison.y} Q ${midX} ${liaison.y + 22}, ${liaison.x2} ${liaison.y}`}
+      fill="none"
+      stroke={liaison.color || '#d64545'}
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    />
   )
 }
