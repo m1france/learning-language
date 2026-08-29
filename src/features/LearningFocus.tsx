@@ -1349,7 +1349,7 @@ export function LearningFocus({
                     className="outline full"
                     onClick={() => {
                       setPublishedPopupOpen(false)
-                      proceedWithExportCheck()
+                      setPreviewFrameOpen(true)
                     }}
                   >
                     <span>Mettre à jour</span>

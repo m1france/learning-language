@@ -102,6 +102,7 @@ export function ExportPreviewFrame({
   const dragNoteRef = useRef<{ pageIndex: number; id: string; startX: number; startY: number; origX: number; origY: number; moved: boolean } | null>(null)
 
   // Devoir
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [homeworkModalOpen, setHomeworkModalOpen] = useState(false)
   const [homework, setHomework] = useState<ExportedLessonHomework | null>(null)
   const [hwTitle, setHwTitle] = useState('')
@@ -439,24 +440,6 @@ export function ExportPreviewFrame({
             <h3>{resource.title}</h3>
           </div>
 
-          {activeAction !== 'none' && (
-            <div className="export-action-hint">
-              <span>
-                {activeAction === 'tooltip' && "Cliquez sur le texte pour placer une infobulle"}
-                {activeAction === 'text' && "Cliquez pour placer une note de texte"}
-                {activeAction === 'comment' && "Cliquez sur un mot pour lui ajouter un commentaire"}
-              </span>
-              <button
-                type="button"
-                className="export-action-hint-cancel"
-                onClick={() => setActiveAction('none')}
-                title="Annuler l'action (Échap)"
-              >
-                <X size={13} />
-              </button>
-            </div>
-          )}
-
           {/* Pilule Page X / Y calée à droite */}
           <div className="export-preview-topbar-right">
             <span className="export-preview-page-badge">
@@ -647,45 +630,41 @@ export function ExportPreviewFrame({
                       )
                     })}
 
-                    {/* Édition d'une note texte */}
+                    {/* Édition d'une note texte en direct temps réel */}
                     {draftNote && draftNote.pageIndex === p.pageIndex && (
                       <div
-                        className="export-popup export-textnote-popup"
+                        className="export-live-text-editor"
                         style={{ left: draftNote.x, top: draftNote.y }}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="export-popup-body">
-                          <textarea
-                            autoFocus
-                            value={draftNote.text}
-                            onChange={(e) => setDraftNote({ ...draftNote, text: e.target.value })}
-                            placeholder="Écrire une note…"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault()
-                                commitDraftNote()
-                              }
-                            }}
-                          />
-                          <div className="export-color-swatches">
-                            {COLORS.map((c) => (
-                              <button
-                                key={c}
-                                type="button"
-                                className={`export-color-swatch ${draftNote.color === c ? 'active' : ''}`}
-                                style={{ background: c }}
-                                onClick={() => setDraftNote({ ...draftNote, color: c })}
-                              />
-                            ))}
-                          </div>
-                          <button
-                            type="button"
-                            className="export-send-btn"
-                            disabled={!draftNote.text.trim()}
-                            onClick={commitDraftNote}
-                          >
-                            <Send size={13} />
-                          </button>
+                        <input
+                          autoFocus
+                          type="text"
+                          className="export-live-text-input"
+                          style={{
+                            color: draftNote.color || COLORS[0],
+                            fontSize: draftNote.size || 22,
+                          }}
+                          value={draftNote.text}
+                          placeholder="Écrire un texte…"
+                          onChange={(e) => setDraftNote({ ...draftNote, text: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              commitDraftNote()
+                            }
+                          }}
+                        />
+                        <div className="export-live-text-colors">
+                          {COLORS.map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              className={`live-color-dot ${draftNote.color === c ? 'active' : ''}`}
+                              style={{ background: c }}
+                              onClick={() => setDraftNote({ ...draftNote, color: c })}
+                            />
+                          ))}
                         </div>
                       </div>
                     )}
@@ -706,7 +685,7 @@ export function ExportPreviewFrame({
                             onClick={() => setActiveTooltipId(isOpen ? null : t.id)}
                             title="Voir l'infobulle"
                           >
-                            <HelpCircle size={20} className="minimal-orange-icon" />
+                            <HelpCircle size={16} className="minimal-orange-icon" />
                           </button>
 
                           {isOpen && (
@@ -729,30 +708,26 @@ export function ExportPreviewFrame({
                       )
                     })}
 
-                    {/* Popups de saisie interactive */}
+                    {/* Saisie d'une nouvelle infobulle — Minimaliste et sans header */}
                     {draftTooltip && draftTooltip.pageIndex === p.pageIndex && (
                       <div
-                        className="export-popup"
+                        className={`export-inline-input-pin ${draftTooltip.yPercent > 70 ? 'pos-above' : 'pos-below'}`}
                         style={{
                           left: `${draftTooltip.xPercent}%`,
                           top: `${draftTooltip.yPercent}%`,
                         }}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="export-popup-head">
-                          <span>Nouvelle infobulle</span>
-                          <button className="export-popup-close" onClick={() => setDraftTooltip(null)}>
-                            <X size={13} />
-                          </button>
-                        </div>
-                        <div className="export-popup-body">
-                          <textarea
+                        <HelpCircle size={16} className="minimal-orange-icon inline-pin-icon" />
+                        <div className="export-inline-input-bubble">
+                          <input
                             autoFocus
-                            placeholder="Saisissez l'explication de l'infobulle…"
+                            type="text"
+                            placeholder="Explication pour l'infobulle…"
                             value={draftTooltip.text}
                             onChange={(e) => setDraftTooltip({ ...draftTooltip, text: e.target.value })}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
+                              if (e.key === 'Enter') {
                                 e.preventDefault()
                                 handleSaveTooltip()
                               }
@@ -760,52 +735,62 @@ export function ExportPreviewFrame({
                           />
                           <button
                             type="button"
-                            className="export-send-btn"
+                            className="export-inline-action-btn primary"
                             disabled={!draftTooltip.text.trim()}
                             onClick={handleSaveTooltip}
-                            title="Valider l'infobulle"
+                            title="Valider"
                           >
-                            <Send size={13} />
+                            <Check size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="export-inline-action-btn"
+                            onClick={() => setDraftTooltip(null)}
+                            title="Annuler"
+                          >
+                            <X size={13} />
                           </button>
                         </div>
                       </div>
                     )}
 
+                    {/* Saisie d'un nouveau commentaire sur un mot — Minimaliste */}
                     {draftComment && draftComment.pageIndex === p.pageIndex && (
                       <div
-                        className="export-popup export-word-comment-popup"
+                        className="export-inline-comment-bubble"
                         style={{ left: draftComment.x, top: draftComment.y }}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="export-popup-head">
-                          <span>Commentaire sur : « {draftComment.wordText} »</span>
-                          <button className="export-popup-close" onClick={() => setDraftComment(null)}>
-                            <X size={13} />
-                          </button>
-                        </div>
-                        <div className="export-popup-body">
-                          <textarea
-                            autoFocus
-                            placeholder="Votre commentaire pour les élèves…"
-                            value={draftComment.text}
-                            onChange={(e) => setDraftComment({ ...draftComment, text: e.target.value })}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault()
-                                handleSaveComment()
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="export-send-btn"
-                            disabled={!draftComment.text.trim()}
-                            onClick={handleSaveComment}
-                            title="Valider le commentaire"
-                          >
-                            <Send size={13} />
-                          </button>
-                        </div>
+                        <input
+                          autoFocus
+                          type="text"
+                          placeholder={`Commentaire sur « ${draftComment.wordText} »…`}
+                          value={draftComment.text}
+                          onChange={(e) => setDraftComment({ ...draftComment, text: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              handleSaveComment()
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="export-inline-action-btn primary"
+                          disabled={!draftComment.text.trim()}
+                          onClick={handleSaveComment}
+                          title="Valider"
+                        >
+                          <Check size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          className="export-inline-action-btn"
+                          onClick={() => setDraftComment(null)}
+                          title="Annuler"
+                        >
+                          <X size={13} />
+                        </button>
                       </div>
                     )}
                   </div>
@@ -877,14 +862,8 @@ export function ExportPreviewFrame({
       {homeworkModalOpen && (
         <div className="teacher-export-overlay" onClick={() => setHomeworkModalOpen(false)}>
           <div className="teacher-export-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-            <header className="teacher-export-card-head">
-              <div className="teacher-export-icon-badge primary">
-                <GraduationCap size={22} />
-              </div>
-              <div>
-                <h3>Ajouter un devoir</h3>
-                <p>Donnez des exercices ou des consignes complémentaires à vos élèves.</p>
-              </div>
+            <header className="teacher-export-card-head" style={{ paddingBottom: 6 }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Ajouter un devoir</h3>
               <button className="teacher-export-close-btn" onClick={() => setHomeworkModalOpen(false)}>
                 <X size={16} />
               </button>
@@ -908,29 +887,58 @@ export function ExportPreviewFrame({
                 </div>
                 <div className="teacher-export-field">
                   <label>Pièce-jointe (optionnel)</label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div
+                    className={`hw-upload-dropzone ${hwAttachmentName ? 'has-file' : ''}`}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      const file = e.dataTransfer.files?.[0]
+                      if (file) {
+                        setHwAttachmentName(file.name)
+                        const reader = new FileReader()
+                        reader.onload = () => setHwAttachmentData(String(reader.result))
+                        reader.readAsDataURL(file)
+                      }
+                    }}
+                  >
                     <input
-                      type="text"
-                      placeholder="Nom du fichier..."
-                      value={hwAttachmentName}
-                      onChange={(e) => setHwAttachmentName(e.target.value)}
+                      ref={fileInputRef}
+                      type="file"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setHwAttachmentName(file.name)
+                          const reader = new FileReader()
+                          reader.onload = () => setHwAttachmentData(String(reader.result))
+                          reader.readAsDataURL(file)
+                        }
+                      }}
                     />
-                    <label className="export-file-upload-btn" title="Joindre un fichier">
-                      <Paperclip size={16} />
-                      <input
-                        type="file"
-                        style={{ display: 'none' }}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            setHwAttachmentName(file.name)
-                            const reader = new FileReader()
-                            reader.onload = () => setHwAttachmentData(String(reader.result))
-                            reader.readAsDataURL(file)
-                          }
-                        }}
-                      />
-                    </label>
+                    {hwAttachmentName ? (
+                      <div className="hw-dropzone-file-row">
+                        <Paperclip size={15} className="hw-dropzone-file-icon" />
+                        <span className="hw-dropzone-file-name">{hwAttachmentName}</span>
+                        <button
+                          type="button"
+                          className="export-del-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setHwAttachmentName('')
+                            setHwAttachmentData('')
+                          }}
+                          title="Retirer la pièce-jointe"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="hw-dropzone-empty">
+                        <Paperclip size={16} />
+                        <span>Glissez un fichier ou <strong>parcourir</strong></span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
