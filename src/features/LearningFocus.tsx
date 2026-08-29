@@ -1170,8 +1170,6 @@ export function LearningFocus({
               })()
             )}
           </div>)}
-          {/* Espace généreux sous le texte pour permettre de scroller la dernière ligne bien au-dessus de la barre d'outils et annoter */}
-          <div className="focus-bottom-space" aria-hidden="true" />
         </div>
 
         {current.texts.filter((note) => note.id !== draftNote?.id).map((note) => <div key={note.id}
