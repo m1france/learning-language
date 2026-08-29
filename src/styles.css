@@ -6205,10 +6205,18 @@ h2 {
   max-width: 880px;
   width: 100%;
   min-height: 100%;
-  height: max-content;
+  height: auto;
+  flex-shrink: 0;
   margin: 0 auto;
-  padding: 70px 54px max(450px, 60vh) 54px;
+  padding: 70px 54px 40px 54px;
   box-sizing: border-box;
+}
+
+.focus-bottom-space {
+  width: 100%;
+  height: calc(100vh - 160px);
+  min-height: 520px;
+  pointer-events: none;
 }
 
 .focus-text-col {
@@ -10499,7 +10507,7 @@ h2 {
   }
 
   .focus-board {
-    padding: 60px 20px max(360px, 50vh) 20px;
+    padding: 60px 20px 30px 20px;
   }
 
   .focus-text-col {
