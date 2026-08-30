@@ -342,7 +342,7 @@ export function SharedLessonViewer({
                       return (
                         <div key={par.key}>
                           {par.isChapterStart && <h3 className="focus-chapter">{par.chapterTitle}</h3>}
-                          <p className="focus-paragraph">
+                          <p className="focus-paragraph" style={{ fontSize: lesson.fontSize || 32 }}>
                             {words.map((word, wIdx) => {
                               if (/\s+/.test(word)) {
                                 letterOffset += word.length

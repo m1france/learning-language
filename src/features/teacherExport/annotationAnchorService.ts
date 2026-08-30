@@ -213,115 +213,22 @@ export function resolveLiaisonGeometry(
 }
 
 /**
- * Résout la position exacte d'une note textuelle par rapport à son mot d'ancrage.
+ * Résout la position exacte d'une note textuelle (position absolue libre).
  */
 export function resolveTextNoteGeometry(
   note: TextNote,
-  boardEl: HTMLElement | null,
+  _boardEl?: HTMLElement | null,
 ): { left: number; top: number } {
-  if (boardEl && note.anchorWordKey) {
-    const wordEl = boardEl.querySelector<HTMLElement>(`[data-word="${note.anchorWordKey}"]`)
-    if (wordEl) {
-      const boardRect = boardEl.getBoundingClientRect()
-      const wordRect = wordEl.getBoundingClientRect()
-      const wLeft = wordRect.left - boardRect.left
-      const wRight = wordRect.right - boardRect.left
-      const wTop = wordRect.top - boardRect.top
-      const wBottom = wordRect.bottom - boardRect.top
-
-      const ox = note.offsetX ?? 0
-      const oy = note.offsetY ?? 0
-
-      switch (note.dockPosition) {
-        case 'below':
-          return { left: wLeft + ox, top: wBottom + oy }
-        case 'above':
-          return { left: wLeft + ox, top: wTop + oy }
-        case 'right':
-          return { left: wRight + ox, top: wTop + oy }
-        case 'left':
-          return { left: wLeft + ox, top: wTop + oy }
-        case 'relative':
-        default:
-          return { left: wLeft + ox, top: wTop + oy }
-      }
-    }
-  }
-
-  // Fallback direct sur coordonnées enregistrées
   return { left: note.x, top: note.y }
 }
 
 /**
- * Résout la géométrie d'une flèche, d'une ligne ou d'un tracé anchored.
+ * Résout la géométrie d'une flèche, d'une ligne ou d'un tracé (position absolue libre).
  */
 export function resolveStrokeGeometry(
   stroke: Stroke,
-  boardEl: HTMLElement | null,
+  _boardEl?: HTMLElement | null,
 ): Stroke {
-  if (!boardEl || stroke.points.length < 2) return stroke
-
-  // Si c'est une flèche ou une ligne avec ancres de départ/fin
-  if (stroke.kind === 'arrow' || stroke.kind === 'line') {
-    const sAnchor = stroke.startAnchor
-    const eAnchor = stroke.endAnchor
-
-    if (!sAnchor && !eAnchor) return stroke
-
-    const boardRect = boardEl.getBoundingClientRect()
-    let p0 = { ...stroke.points[0] }
-    let p1 = { ...stroke.points[stroke.points.length - 1] }
-
-    if (sAnchor?.kind === 'word' && sAnchor.key) {
-      const el = boardEl.querySelector<HTMLElement>(`[data-word="${sAnchor.key}"]`)
-      if (el) {
-        const r = el.getBoundingClientRect()
-        p0 = {
-          x: (sAnchor.subPosition === 'right' ? r.right : sAnchor.subPosition === 'left' ? r.left : r.left + r.width / 2) - boardRect.left + (sAnchor.offsetX ?? 0),
-          y: (sAnchor.subPosition === 'bottom' ? r.bottom : sAnchor.subPosition === 'top' ? r.top : r.top + r.height / 2) - boardRect.top + (sAnchor.offsetY ?? 0),
-        }
-      }
-    }
-
-    if (eAnchor?.kind === 'word' && eAnchor.key) {
-      const el = boardEl.querySelector<HTMLElement>(`[data-word="${eAnchor.key}"]`)
-      if (el) {
-        const r = el.getBoundingClientRect()
-        p1 = {
-          x: (eAnchor.subPosition === 'right' ? r.right : eAnchor.subPosition === 'left' ? r.left : r.left + r.width / 2) - boardRect.left + (eAnchor.offsetX ?? 0),
-          y: (eAnchor.subPosition === 'bottom' ? r.bottom : eAnchor.subPosition === 'top' ? r.top : r.top + r.height / 2) - boardRect.top + (eAnchor.offsetY ?? 0),
-        }
-      }
-    }
-
-    return {
-      ...stroke,
-      points: [p0, p1],
-    }
-  }
-
-  // Si c'est un surlignage attaché à des mots
-  if (stroke.kind === 'highlighter' && stroke.anchorWordKeys && stroke.anchorWordKeys.length > 0) {
-    const firstWordKey = stroke.anchorWordKeys[0]
-    const lastWordKey = stroke.anchorWordKeys[stroke.anchorWordKeys.length - 1]
-    const firstEl = boardEl.querySelector<HTMLElement>(`[data-word="${firstWordKey}"]`)
-    const lastEl = boardEl.querySelector<HTMLElement>(`[data-word="${lastWordKey}"]`)
-
-    if (firstEl && lastEl) {
-      const boardRect = boardEl.getBoundingClientRect()
-      const r1 = firstEl.getBoundingClientRect()
-      const r2 = lastEl.getBoundingClientRect()
-      const y = r1.top - boardRect.top + r1.height * 0.58
-      return {
-        ...stroke,
-        width: r1.height * 0.88,
-        points: [
-          { x: r1.left - boardRect.left + 1, y },
-          { x: r2.right - boardRect.left - 1, y },
-        ],
-      }
-    }
-  }
-
   return stroke
 }
+

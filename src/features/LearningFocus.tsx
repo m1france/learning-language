@@ -25,8 +25,6 @@ import {
   Check,
   ExternalLink,
   Copy,
-  Sparkles,
-  Loader2,
 } from 'lucide-react'
 import { TeacherUsernameModal } from './teacherExport/TeacherUsernameModal'
 import { NoModificationsModal, ConfirmExportModal } from './teacherExport/ExportConfirmModal'
@@ -43,16 +41,12 @@ import {
 } from './teacherExport/teacherExportService'
 import type { ExportedLesson, ExportedLessonPage, ExportedLessonParagraph } from './teacherExport/teacherExportDomain'
 import {
-  findNearestWord,
-  findNearestLetter,
-  findNearestParagraph,
   resolveLiaisonGeometry,
   resolveTextNoteGeometry,
   resolveStrokeGeometry,
   type DockPosition,
   type StrokeAnchor,
 } from './teacherExport/annotationAnchorService'
-import { optimizeAnnotationsWithAi } from './teacherExport/teacherAlignmentAiService'
 
 export type Tool = 'select' | 'pen' | 'highlighter' | 'text' | 'edit' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'liaison' | 'gray' | 'eraser'
 
@@ -395,11 +389,8 @@ export function LearningFocus({
   const [toolsOpen, setToolsOpen] = useState(false)
   const [eraserPos, setEraserPos] = useState<Point | null>(null)
 
-  // Alignement & Fidélité IA
-  const [isAiAligning, setIsAiAligning] = useState(false)
-  const [aiAlignToast, setAiAlignToast] = useState<string | null>(null)
-
   // Modales et flux d'exportation
+
   const [usernameModalOpen, setUsernameModalOpen] = useState(false)
   const [noModifModalOpen, setNoModifModalOpen] = useState(false)
   const [confirmExportModalOpen, setConfirmExportModalOpen] = useState(false)
@@ -655,7 +646,6 @@ export function LearningFocus({
     const runs = el ? serializeEditor(el, noteDraft.baseColor) : []
     const total = runs.map((run) => run.t).join('').trim()
     if (runs.length && total) {
-      const nearest = findNearestWord({ x: noteDraft.x, y: noteDraft.y }, boardRef.current)
       updatePage((p) => {
         if (noteDraft.id) {
           return {
@@ -667,10 +657,6 @@ export function LearningFocus({
                     runs,
                     size: noteDraft.size,
                     color: runs[0]?.c ?? note.color,
-                    anchorWordKey: nearest?.wordKey ?? note.anchorWordKey,
-                    dockPosition: nearest?.dock ?? note.dockPosition,
-                    offsetX: nearest?.offsetX ?? note.offsetX,
-                    offsetY: nearest?.offsetY ?? note.offsetY,
                   }
                 : note
             ),
@@ -683,10 +669,6 @@ export function LearningFocus({
           runs,
           size: noteDraft.size,
           color: runs[0]?.c ?? noteDraft.baseColor,
-          anchorWordKey: nearest?.wordKey,
-          dockPosition: nearest?.dock || 'relative',
-          offsetX: nearest?.offsetX ?? 0,
-          offsetY: nearest?.offsetY ?? 0,
         }
         return { ...p, texts: [...p.texts, note], order: [...p.order, { kind: 'text', id: note.id }] }
       })
@@ -696,30 +678,6 @@ export function LearningFocus({
       updatePage((p) => ({ ...p, texts: p.texts.filter((note) => note.id !== removedId), order: p.order.filter((action) => action.id !== removedId) }))
     }
     setDraftNote(null)
-  }
-
-  // Alignement automatique sémantique des annotations par IA
-  const handleAiAlign = async () => {
-    if (isAiAligning) return
-    commitNote()
-    setIsAiAligning(true)
-    try {
-      const res = await optimizeAnnotationsWithAi({
-        paragraphs: exportParagraphs,
-        annotations: current,
-        api: api || ({} as ApiSettings),
-        uiLanguage: ui,
-      })
-      if (res.success) {
-        updatePage(() => res.updatedAnnotations)
-        setAiAlignToast(res.message)
-        setTimeout(() => setAiAlignToast(null), 4500)
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setIsAiAligning(false)
-    }
   }
 
   const quitAll = () => { commitNote(); onClose() }
@@ -899,37 +857,6 @@ export function LearningFocus({
     if (draft.points.length < 2 && span < 3 && draft.kind !== 'pen') {
       forceRedraw((n) => n + 1)
       return
-    }
-
-    // Ancrage automatique des flèches et lignes
-    if (draft.kind === 'arrow' || draft.kind === 'line') {
-      const p0 = draft.points[0]
-      const p1 = draft.points[draft.points.length - 1]
-      const startWord = findNearestWord(p0, boardRef.current)
-      const endWord = findNearestWord(p1, boardRef.current)
-      if (startWord && startWord.distance < 120) {
-        draft.startAnchor = {
-          kind: 'word',
-          key: startWord.wordKey,
-          subPosition: startWord.dock === 'below' ? 'bottom' : startWord.dock === 'above' ? 'top' : startWord.dock === 'left' ? 'left' : 'right',
-          offsetX: startWord.offsetX,
-          offsetY: startWord.offsetY,
-        }
-      }
-      if (endWord && endWord.distance < 120) {
-        draft.endAnchor = {
-          kind: 'word',
-          key: endWord.wordKey,
-          subPosition: endWord.dock === 'below' ? 'bottom' : endWord.dock === 'above' ? 'top' : endWord.dock === 'left' ? 'left' : 'right',
-          offsetX: endWord.offsetX,
-          offsetY: endWord.offsetY,
-        }
-      }
-    } else if (draft.kind === 'pen') {
-      const nearestPar = findNearestParagraph(draft.points[0], boardRef.current)
-      if (nearestPar) {
-        draft.anchorParagraphKey = nearestPar.paragraphKey
-      }
     }
 
     updatePage((p) => ({ ...p, strokes: [...p.strokes, draft], order: [...p.order, { kind: 'stroke', id: draft.id }] }))
@@ -1162,29 +1089,7 @@ export function LearningFocus({
     dragNoteRef.current = null
     if (!drag) return
     event.stopPropagation()
-    // Si déplacée, mettre à jour son ancrage relatif au mot le plus proche
-    if (drag.moved) {
-      const finalNote = current.texts.find((n) => n.id === drag.id)
-      if (finalNote) {
-        const nearest = findNearestWord({ x: finalNote.x, y: finalNote.y }, boardRef.current)
-        if (nearest) {
-          updatePage((p) => ({
-            ...p,
-            texts: p.texts.map((n) =>
-              n.id === drag.id
-                ? {
-                    ...n,
-                    anchorWordKey: nearest.wordKey,
-                    dockPosition: nearest.dock,
-                    offsetX: nearest.offsetX,
-                    offsetY: nearest.offsetY,
-                  }
-                : n
-            ),
-          }))
-        }
-      }
-    } else {
+    if (!drag.moved) {
       // clic simple (sans déplacement) → sélectionne la note et ses poignées
       setSelectedStroke(null)
       setSelectedNote(note.id)
@@ -1389,14 +1294,6 @@ export function LearningFocus({
       </div>
     </div>
 
-    {/* Toast notification de confirmation d'alignement IA */}
-    {aiAlignToast && (
-      <div className="focus-ai-toast glass">
-        <Sparkles size={14} className="toast-sparkle" />
-        <span>{aiAlignToast}</span>
-      </div>
-    )}
-
     {/* navigation pages — haut centre */}
     <div className="focus-nav-pill glass">
       <button title={t.prevPage} disabled={safePage === 0} onClick={() => goto(safePage - 1)} aria-label={t.prevPage}><ChevronLeft size={16} /></button>
@@ -1404,18 +1301,8 @@ export function LearningFocus({
       <button title={t.nextPage} disabled={safePage >= pages.length - 1} onClick={() => goto(safePage + 1)} aria-label={t.nextPage}><ChevronRight size={16} /></button>
     </div>
 
-    {/* zoom + quitter + Fidélité IA — haut droite */}
+    {/* zoom + quitter — haut droite */}
     <div className="focus-actions-pill glass">
-      <button
-        className={`focus-ai-btn ${isAiAligning ? 'loading' : ''}`}
-        title={t.aiAlignTooltip}
-        onClick={handleAiAlign}
-        disabled={isAiAligning}
-      >
-        {isAiAligning ? <Loader2 size={13} className="spin-slow" /> : <Sparkles size={13} />}
-        <span>{isAiAligning ? t.aiAligning : t.aiAlignBtn}</span>
-      </button>
-      <span className="panel-sep" style={{ height: 16, margin: '0 4px' }} />
       <button title={t.zoomIn} onClick={() => setFontSize(Math.min(46, fontSize + 2))}>A+</button>
       <button title={t.zoomOut} onClick={() => setFontSize(Math.max(20, fontSize - 2))}>A−</button>
       <button className="focus-zoom" title={t.resetZoom} onClick={() => setFontSize(BASE_FONT)}>{zoom} %</button>

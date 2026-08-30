@@ -29,7 +29,6 @@ import type {
   ExportedLessonTooltip,
 } from './teacherExportDomain'
 import {
-  findNearestWord,
   resolveLiaisonGeometry,
   resolveTextNoteGeometry,
   resolveStrokeGeometry,
@@ -225,9 +224,6 @@ export function ExportPreviewFrame({
       return
     }
 
-    const boardEl = pageRefs.current[pIdx]
-    const nearest = findNearestWord({ x, y }, boardEl)
-
     setPageAnnotationsMap((prev) => {
       const pageAnn = prev[pIdx] || { strokes: [], liaisons: [], texts: [], grayed: [], order: [] }
       if (id) {
@@ -242,10 +238,6 @@ export function ExportPreviewFrame({
                     runs: [{ t: text.trim(), c: color }],
                     color,
                     size,
-                    anchorWordKey: nearest?.wordKey ?? t.anchorWordKey,
-                    dockPosition: nearest?.dock ?? t.dockPosition,
-                    offsetX: nearest?.offsetX ?? t.offsetX,
-                    offsetY: nearest?.offsetY ?? t.offsetY,
                   }
                 : t
             ),
@@ -259,10 +251,6 @@ export function ExportPreviewFrame({
         runs: [{ t: text.trim(), c: color }],
         color,
         size,
-        anchorWordKey: nearest?.wordKey,
-        dockPosition: nearest?.dock || 'relative',
-        offsetX: nearest?.offsetX ?? 0,
-        offsetY: nearest?.offsetY ?? 0,
       }
       return {
         ...prev,
@@ -477,36 +465,6 @@ export function ExportPreviewFrame({
     const onPointerUp = () => {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
-      if (dragNoteRef.current?.moved) {
-        const boardEl = pageRefs.current[pIdx]
-        const currentNote = (pageAnnotationsMap[pIdx] || { texts: [] }).texts.find((t) => t.id === note.id)
-        if (currentNote) {
-          const nearest = findNearestWord({ x: currentNote.x, y: currentNote.y }, boardEl)
-          if (nearest) {
-            setPageAnnotationsMap((prev) => {
-              const pageAnn = prev[pIdx]
-              if (!pageAnn) return prev
-              return {
-                ...prev,
-                [pIdx]: {
-                  ...pageAnn,
-                  texts: pageAnn.texts.map((t) =>
-                    t.id === note.id
-                      ? {
-                          ...t,
-                          anchorWordKey: nearest.wordKey,
-                          dockPosition: nearest.dock,
-                          offsetX: nearest.offsetX,
-                          offsetY: nearest.offsetY,
-                        }
-                      : t
-                  ),
-                },
-              }
-            })
-          }
-        }
-      }
       dragNoteRef.current = null
     }
 
