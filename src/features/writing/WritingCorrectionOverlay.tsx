@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react'
 import type { UiLanguage } from '../../domain'
 import { writeCopy } from '../../i18n'
 import type { CorrectionItem, WritingCorrectionResult } from './writingCorrectionAiService'
@@ -30,6 +30,290 @@ type WritingCorrectionOverlayProps = {
 type TextSegment =
   | { type: 'text'; text: string }
   | { type: 'correction'; correction: CorrectionItem }
+
+type AnnotatedCorrectionAnchorProps = {
+  corr: CorrectionItem
+  sIdx: number
+  isActive: boolean
+  isHovered: boolean
+  onToggleActive: () => void
+  onAnchorMouseEnter: () => void
+  onAnchorMouseLeave: () => void
+  onPopoverMouseEnter: () => void
+  onPopoverMouseLeave: () => void
+  onClosePopover: () => void
+  onApplySingle: (corr: CorrectionItem) => void
+  onDismissSingle: (id: string) => void
+  getCategoryLabel: (type: CorrectionItem['type']) => string
+  t: (typeof writeCopy)['fr']
+}
+
+function AnnotatedCorrectionAnchor({
+  corr,
+  sIdx,
+  isActive,
+  isHovered,
+  onToggleActive,
+  onAnchorMouseEnter,
+  onAnchorMouseLeave,
+  onPopoverMouseEnter,
+  onPopoverMouseLeave,
+  onClosePopover,
+  onApplySingle,
+  onDismissSingle,
+  getCategoryLabel,
+  t,
+}: AnnotatedCorrectionAnchorProps) {
+  const anchorRef = useRef<HTMLSpanElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const [popoverPos, setPopoverPos] = useState<{
+    leftOffset: number
+    isAbove: boolean
+    isMeasured: boolean
+  }>({
+    leftOffset: 0,
+    isAbove: false,
+    isMeasured: false,
+  })
+
+  const isOpen = isActive || isHovered
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setPopoverPos((prev) => (prev.isMeasured ? { ...prev, isMeasured: false } : prev))
+      return
+    }
+
+    const updatePosition = () => {
+      const anchorEl = anchorRef.current
+      const popoverEl = popoverRef.current
+      if (!anchorEl || !popoverEl) return
+
+      const anchorRect = anchorEl.getBoundingClientRect()
+      const popoverRect = popoverEl.getBoundingClientRect()
+      const viewportWidth = document.documentElement.clientWidth || window.innerWidth
+      const viewportHeight = window.innerHeight
+      const MARGIN = 16
+
+      const popoverWidth = popoverRect.width || 340
+      const popoverHeight = popoverRect.height || 200
+
+      // Clamp horizontally within the visible screen: [MARGIN, viewportWidth - MARGIN]
+      const maxViewportLeft = Math.max(MARGIN, viewportWidth - popoverWidth - MARGIN)
+      const targetViewportLeft = Math.max(MARGIN, Math.min(maxViewportLeft, anchorRect.left))
+      const leftOffset = Math.round(targetViewportLeft - anchorRect.left)
+
+      // Calculate vertical placement (below vs above)
+      const spaceBelow = viewportHeight - anchorRect.bottom - MARGIN
+      const spaceAbove = anchorRect.top - MARGIN
+      const isAbove = spaceBelow < popoverHeight && spaceAbove > spaceBelow
+
+      setPopoverPos({
+        leftOffset,
+        isAbove,
+        isMeasured: true,
+      })
+    }
+
+    updatePosition()
+
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+
+    let ro: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined' && popoverRef.current) {
+      ro = new ResizeObserver(() => {
+        updatePosition()
+      })
+      ro.observe(popoverRef.current)
+    }
+
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+      if (ro) ro.disconnect()
+    }
+  }, [isOpen, corr.id, corr.original, corr.corrected, corr.explanation])
+
+  return (
+    <span
+      ref={anchorRef}
+      className={`annotated-correction-anchor ${corr.type} ${isActive ? 'active-popover' : ''} ${isHovered ? 'hovered' : ''}`}
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggleActive()
+      }}
+      onMouseEnter={onAnchorMouseEnter}
+      onMouseLeave={onAnchorMouseLeave}
+    >
+      {/* TYPE 1: Letter Error / Word Typo with standard inline serif style */}
+      {(corr.type === 'letter_error' || corr.type === 'word_error' || corr.type === 'punctuation') && (
+        <span className="letter-correction-wrap">
+          {corr.charDiffs && corr.charDiffs.length > 0 ? (
+            corr.charDiffs.map((diff, dIdx) => {
+              if (diff.type === 'removed') {
+                return (
+                  <span key={dIdx} className="char-del" title="Supprimer / Erreur">
+                    {diff.text}
+                  </span>
+                )
+              }
+              if (diff.type === 'inserted') {
+                return (
+                  <span key={dIdx} className="char-ins" title="Remplacer / Ajouter">
+                    {diff.text}
+                  </span>
+                )
+              }
+              return <span key={dIdx} className="char-eq">{diff.text}</span>
+            })
+          ) : (
+            <>
+              <span className="word-del">{corr.original}</span>
+              <span className="word-ins">{corr.corrected}</span>
+            </>
+          )}
+        </span>
+      )}
+
+      {/* TYPE 2: Syntax Structure with hand-drawn arrow & absolute floating handwriting underneath */}
+      {corr.type === 'syntax_structure' && (
+        <span className="syntax-correction-wrap">
+          <span className="faulty-syntax-phrase">{corr.original}</span>
+          <span className={`teacher-restructure-under ${corr.displaySize === 'large' ? 'large' : ''}`}>
+            <svg
+              className="teacher-arrow-svg"
+              width="16"
+              height="14"
+              viewBox="0 0 16 14"
+            >
+              <path
+                d="M 14 13 Q 7 12 3 3"
+                stroke="#16a34a"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                fill="none"
+                markerEnd="url(#teacher-arrowhead-green)"
+              />
+            </svg>
+            <span className="teacher-handwriting-text">{corr.corrected}</span>
+          </span>
+        </span>
+      )}
+
+      {/* TYPE 3: Unnatural phrasing with wavy underline & absolute floating handwriting */}
+      {corr.type === 'unnatural_phrasing' && (
+        <span className="unnatural-correction-wrap">
+          <span className="unnatural-phrase-text">{corr.original}</span>
+          <span className={`teacher-restructure-under ${corr.displaySize === 'large' ? 'large' : ''}`}>
+            <svg
+              className="teacher-arrow-svg"
+              width="16"
+              height="14"
+              viewBox="0 0 16 14"
+            >
+              <path
+                d="M 14 13 Q 7 12 3 3"
+                stroke="#16a34a"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                fill="none"
+                markerEnd="url(#teacher-arrowhead-green)"
+              />
+            </svg>
+            <span className="teacher-handwriting-text">{corr.corrected}</span>
+          </span>
+        </span>
+      )}
+
+      {/* Interactive Floating Popover / Tooltip */}
+      {isOpen && (
+        <div
+          ref={popoverRef}
+          className={`correction-floating-popover ${popoverPos.isAbove ? 'placed-above' : ''}`}
+          style={{
+            left: `${popoverPos.leftOffset}px`,
+            ...(popoverPos.isAbove
+              ? {
+                  top: 'auto',
+                  bottom: '100%',
+                  marginTop: 0,
+                  marginBottom: '6px',
+                }
+              : {
+                  top: '100%',
+                  bottom: 'auto',
+                  marginTop: '4px',
+                  marginBottom: 0,
+                }),
+            visibility: popoverPos.isMeasured ? 'visible' : 'hidden',
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseEnter={onPopoverMouseEnter}
+          onMouseLeave={onPopoverMouseLeave}
+        >
+          <div className="popover-header">
+            <span className={`category-tag ${corr.severity}`}>
+              {getCategoryLabel(corr.type)}
+            </span>
+            <button
+              type="button"
+              className="popover-close-btn"
+              onClick={onClosePopover}
+            >
+              <X size={12} />
+            </button>
+          </div>
+
+          <div className="popover-diff-preview">
+            <div className="diff-item original">
+              <span className="diff-label">Original :</span>
+              <span className="diff-val strike">{corr.original}</span>
+            </div>
+            <div className="diff-arrow"><ArrowRight size={13} /></div>
+            <div className="diff-item corrected">
+              <span className="diff-label">Suggestion :</span>
+              <span className="diff-val correct-handwriting">{corr.corrected}</span>
+            </div>
+          </div>
+
+          {corr.explanation && (
+            <div className="popover-explanation">
+              <HelpCircle size={13} className="explanation-icon" />
+              <p>{corr.explanation}</p>
+            </div>
+          )}
+
+          <div className="popover-actions">
+            <button
+              type="button"
+              className="popover-btn apply"
+              onClick={() => {
+                onApplySingle(corr)
+                onClosePopover()
+              }}
+            >
+              <Check size={13} />
+              <span>{t.replace}</span>
+            </button>
+
+            <button
+              type="button"
+              className="popover-btn dismiss"
+              onClick={() => {
+                onDismissSingle(corr.id)
+                onClosePopover()
+              }}
+            >
+              <X size={13} />
+              <span>{t.dismiss}</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </span>
+  )
+}
 
 export function WritingCorrectionOverlay({
   correctionResult,
@@ -291,167 +575,25 @@ export function WritingCorrectionOverlay({
               const corr = seg.correction
               const isActive = activePopoverId === corr.id
               const isHovered = hoveredCorrectionId === corr.id
-              const rotation = corr.rotation ?? (sIdx % 2 === 0 ? -1.5 : 1.5)
 
               return (
-                <span
+                <AnnotatedCorrectionAnchor
                   key={corr.id}
-                  className={`annotated-correction-anchor ${corr.type} ${isActive ? 'active-popover' : ''} ${isHovered ? 'hovered' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setActivePopoverId(isActive ? null : corr.id)
-                  }}
-                  onMouseEnter={() => handleAnchorMouseEnter(corr.id)}
-                  onMouseLeave={handleAnchorMouseLeave}
-                >
-                  {/* TYPE 1: Letter Error / Word Typo with standard inline serif style */}
-                  {(corr.type === 'letter_error' || corr.type === 'word_error' || corr.type === 'punctuation') && (
-                    <span className="letter-correction-wrap">
-                      {corr.charDiffs && corr.charDiffs.length > 0 ? (
-                        corr.charDiffs.map((diff, dIdx) => {
-                          if (diff.type === 'removed') {
-                            return (
-                              <span key={dIdx} className="char-del" title="Supprimer / Erreur">
-                                {diff.text}
-                              </span>
-                            )
-                          }
-                          if (diff.type === 'inserted') {
-                            return (
-                              <span key={dIdx} className="char-ins" title="Remplacer / Ajouter">
-                                {diff.text}
-                              </span>
-                            )
-                          }
-                          return <span key={dIdx} className="char-eq">{diff.text}</span>
-                        })
-                      ) : (
-                        <>
-                          <span className="word-del">{corr.original}</span>
-                          <span className="word-ins">{corr.corrected}</span>
-                        </>
-                      )}
-                    </span>
-                  )}
-
-                  {/* TYPE 2: Syntax Structure with hand-drawn arrow & absolute floating handwriting underneath */}
-                  {corr.type === 'syntax_structure' && (
-                    <span className="syntax-correction-wrap">
-                      <span className="faulty-syntax-phrase">{corr.original}</span>
-                      <span className={`teacher-restructure-under ${corr.displaySize === 'large' ? 'large' : ''}`}>
-                        <svg
-                          className="teacher-arrow-svg"
-                          width="16"
-                          height="14"
-                          viewBox="0 0 16 14"
-                        >
-                          <path
-                            d="M 14 13 Q 7 12 3 3"
-                            stroke="#16a34a"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            fill="none"
-                            markerEnd="url(#teacher-arrowhead-green)"
-                          />
-                        </svg>
-                        <span className="teacher-handwriting-text">{corr.corrected}</span>
-                      </span>
-                    </span>
-                  )}
-
-                  {/* TYPE 3: Unnatural phrasing with wavy underline & absolute floating handwriting */}
-                  {corr.type === 'unnatural_phrasing' && (
-                    <span className="unnatural-correction-wrap">
-                      <span className="unnatural-phrase-text">{corr.original}</span>
-                      <span className={`teacher-restructure-under ${corr.displaySize === 'large' ? 'large' : ''}`}>
-                        <svg
-                          className="teacher-arrow-svg"
-                          width="16"
-                          height="14"
-                          viewBox="0 0 16 14"
-                        >
-                          <path
-                            d="M 14 13 Q 7 12 3 3"
-                            stroke="#16a34a"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            fill="none"
-                            markerEnd="url(#teacher-arrowhead-green)"
-                          />
-                        </svg>
-                        <span className="teacher-handwriting-text">{corr.corrected}</span>
-                      </span>
-                    </span>
-                  )}
-
-                  {/* Interactive Floating Popover / Tooltip */}
-                  {(isActive || isHovered) && (
-                    <div
-                      className="correction-floating-popover"
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseEnter={handlePopoverMouseEnter}
-                      onMouseLeave={handlePopoverMouseLeave}
-                    >
-                      <div className="popover-header">
-                        <span className={`category-tag ${corr.severity}`}>
-                          {getCategoryLabel(corr.type)}
-                        </span>
-                        <button
-                          type="button"
-                          className="popover-close-btn"
-                          onClick={() => setActivePopoverId(null)}
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-
-                      <div className="popover-diff-preview">
-                        <div className="diff-item original">
-                          <span className="diff-label">Original :</span>
-                          <span className="diff-val strike">{corr.original}</span>
-                        </div>
-                        <div className="diff-arrow"><ArrowRight size={13} /></div>
-                        <div className="diff-item corrected">
-                          <span className="diff-label">Suggestion :</span>
-                          <span className="diff-val correct-handwriting">{corr.corrected}</span>
-                        </div>
-                      </div>
-
-                      {corr.explanation && (
-                        <div className="popover-explanation">
-                          <HelpCircle size={13} className="explanation-icon" />
-                          <p>{corr.explanation}</p>
-                        </div>
-                      )}
-
-                      <div className="popover-actions">
-                        <button
-                          type="button"
-                          className="popover-btn apply"
-                          onClick={() => {
-                            onApplySingle(corr)
-                            setActivePopoverId(null)
-                          }}
-                        >
-                          <Check size={13} />
-                          <span>{t.replace}</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="popover-btn dismiss"
-                          onClick={() => {
-                            onDismissSingle(corr.id)
-                            setActivePopoverId(null)
-                          }}
-                        >
-                          <X size={13} />
-                          <span>{t.dismiss}</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </span>
+                  corr={corr}
+                  sIdx={sIdx}
+                  isActive={isActive}
+                  isHovered={isHovered}
+                  onToggleActive={() => setActivePopoverId(isActive ? null : corr.id)}
+                  onAnchorMouseEnter={() => handleAnchorMouseEnter(corr.id)}
+                  onAnchorMouseLeave={handleAnchorMouseLeave}
+                  onPopoverMouseEnter={handlePopoverMouseEnter}
+                  onPopoverMouseLeave={handlePopoverMouseLeave}
+                  onClosePopover={() => setActivePopoverId(null)}
+                  onApplySingle={onApplySingle}
+                  onDismissSingle={onDismissSingle}
+                  getCategoryLabel={getCategoryLabel}
+                  t={t}
+                />
               )
             })}
           </div>
