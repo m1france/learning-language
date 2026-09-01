@@ -14703,6 +14703,85 @@ h2 {
   color: #ef4444;
 }
 
+.vault-select-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.vault-select-mode-btn:hover {
+  background: var(--paper-hover, rgba(0, 0, 0, 0.04));
+  color: var(--ink);
+  border-color: #cbd5e1;
+}
+
+.vault-select-mode-btn.active {
+  background: rgba(59, 130, 246, 0.12) !important;
+  border-color: rgba(59, 130, 246, 0.45) !important;
+  color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.batch-actions-capsule {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  height: 32px;
+  overflow: hidden;
+  animation: fadeIn 0.15s ease;
+}
+
+.batch-capsule-sub-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+
+.batch-capsule-sub-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.batch-capsule-sub-btn.delete:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.batch-capsule-sub-btn.tags:hover {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.batch-capsule-sub-btn.level:hover {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.batch-capsule-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--line);
+}
+
 .phonetic-stress {
   font-weight: 700;
   color: inherit;
@@ -15129,6 +15208,37 @@ h2 {
   background: #faf5ff;
 }
 
+.vocab-word-item.in-select-mode {
+  user-select: none;
+}
+
+.vocab-word-item.multi-selected {
+  background: rgba(37, 99, 235, 0.06) !important;
+  border-color: rgba(37, 99, 235, 0.45) !important;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
+}
+
+.word-select-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid #cbd5e1;
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 2px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  color: #fff;
+}
+
+.word-select-checkbox.checked {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
 .word-item-main {
   flex: 1;
 }
@@ -15323,6 +15433,135 @@ h2 {
 .vocab-word-panel-card .wp-field input:focus,
 .vocab-word-panel-card .wp-field textarea:focus {
   border-color: #7e22ce;
+}
+
+.wp-input-preview {
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--paper-hover, rgba(0, 0, 0, 0.04));
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-top: 3px;
+  display: inline-block;
+  line-height: 1.4;
+  border: 1px dashed var(--line);
+}
+
+.wp-input-preview em {
+  font-style: italic;
+}
+
+.wp-input-preview strong {
+  font-weight: 700;
+}
+
+.batch-edit-modal-card {
+  width: min(420px, 94vw);
+  background: var(--white);
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.16);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: popIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.batch-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.batch-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.batch-modal-title h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: Fraunces, serif;
+}
+
+.batch-tag-mode-switch {
+  display: flex;
+  border-radius: 8px;
+  background: var(--paper-hover, #f1f5f9);
+  padding: 3px;
+  gap: 4px;
+}
+
+.batch-mode-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.batch-mode-tab.active {
+  background: var(--white);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.batch-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.batch-levels-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.batch-level-choice-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.batch-level-choice-btn:hover {
+  background: var(--paper-hover, #f8fafc);
+  border-color: #cbd5e1;
+  transform: translateX(2px);
+}
+
+.batch-level-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.batch-level-label {
+  font-size: 13px;
+  color: var(--ink);
 }
 
 .danger-btn {
@@ -19538,7 +19777,39 @@ h2 {
   padding: 14px 20px;
   border-top: 1px solid var(--line);
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-saved-delete-all-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.page-saved-delete-all-btn:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+
+.page-saved-delete-all-btn:active {
+  transform: translateY(0);
+}
+
+.page-saved-close-btn {
+  flex: 1;
 }
 
 /* ==========================================================================

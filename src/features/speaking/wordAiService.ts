@@ -251,3 +251,135 @@ export async function testAgentConnection(
   }
 }
 
+export type PageVocabularyItem = {
+  word: string
+  translation: string
+  pronunciation: string
+  parent: string
+  partOfSpeech: string
+  contextSentence: string
+  tags: string[]
+}
+
+/**
+ * Intelligently analyzes a reading page or text in full context using the configured AI agent.
+ * - Identifies multi-word expressions, idioms, phrasal verbs, and collocations (e.g. "far end", "look forward to")
+ *   so they are saved as a single unit without separate constituent words.
+ * - Strictly ignores words/expressions that the user has already saved.
+ * - Extracts all new words/expressions with contextual translation, IPA pronunciation, root lemma, and tags.
+ */
+export async function extractAndAnalyzePageVocabularyWithAi(args: {
+  text: string
+  targetLang: Language
+  uiLang: string
+  existingWords: string[]
+  existingTags: string[]
+  api: ApiSettings
+}): Promise<PageVocabularyItem[]> {
+  const { text, targetLang, uiLang, existingWords, existingTags, api } = args
+  const cleanText = text.trim()
+  if (!cleanText) return []
+
+  const agentConfig = getAgentConfig(api, api.taskModelWordAnalysis)
+  if (!agentConfig || !agentConfig.key) {
+    return []
+  }
+
+  const targetLangName = getLanguageName(targetLang)
+  const uiLangName = getUiLanguageName(uiLang as UiLanguage)
+
+  // Pass a concise sample or slice of existing words if large to keep within prompt limits
+  const sampleExisting = existingWords.slice(0, 600)
+
+  const systemPrompt = `You are an expert linguistics and language learning dictionary assistant.
+Target language: ${targetLangName}.
+Learner UI language: ${uiLangName}.
+
+The user is reading a text and wants to automatically record all new vocabulary words and expressions from this page into their personal dictionary.
+
+CRITICAL LINGUISTIC RULES:
+1. CONTEXTUAL EXPRESSIONS & LINKED WORDS (MANDATORY):
+   Analyze the context of every sentence. Whenever words together form a multi-word expression, phrasal verb, idiomatic phrase, collocation, or compound unit that has a distinct combined meaning (e.g. "far end", "waiting for", "look forward to", "take care of", "as well as", "at all costs", "stand out", "on purpose"), extract the ENTIRE expression as a single item.
+   Example: In "She saw him standing at the far end of the platform", "far end" is a linked expression forming a distinct meaning ("far end" = extremity/furthest point). Save "far end" as a single expression.
+   CRITICAL: When you extract a multi-word expression (e.g. "far end"), NEVER extract its individual constituent words ("far", "end") separately! The expression takes precedence.
+
+2. DO NOT SAVE ALREADY RECORDED WORDS (MANDATORY):
+   The user already has the following words/expressions in their vocabulary dictionary:
+   ${JSON.stringify(sampleExisting)}
+   DO NOT extract or include any word, expression, or direct inflections of items in this list.
+
+3. INDIVIDUAL WORDS:
+   Extract all other non-trivial, meaningful words from the text that are not part of multi-word expressions and not in the already recorded list. Ignore pure numbers or single-letter punctuation noise.
+
+4. REQUIRED JSON STRUCTURE FOR EACH ITEM:
+   For every extracted word or expression, provide:
+   - "word": exact word or expression in base or contextual form (e.g. "far end", "platform", "stand out").
+   - "translation": concise and accurate translation in ${uiLangName} adapted to this specific context. If there are multiple common nuances, provide up to 3 translations separated by commas (e.g. "au bout, à l'extrémité").
+   - "pronunciation": standard IPA transcription for ${targetLangName} enclosed in slashes, with syllable boundaries marked by " · " and the primary stressed syllable in bold markdown (e.g. "/ˌfɑːr **end**/", "/ˈplæt · fɔːrm/").
+   - "parent": base lemma/infinitive if inflected (e.g. "standing" -> "stand", "went" -> "go"), or empty string "".
+   - "partOfSpeech": "expression", "phrasal verb", "idiom", "noun", "verb", "adjective", "adverb", etc.
+   - "contextSentence": the exact sentence from the text containing this word or expression.
+   - "tags": an array of tags strictly matching the User's existing vocabulary tags: ${JSON.stringify(existingTags)}. If none match, return [].
+
+Return ONLY a valid JSON array of objects with no surrounding commentary or markdown code blocks:`
+
+  const userPrompt = `Text to analyze:\n"""\n${cleanText}\n"""`
+
+  try {
+    const response = await fetch(agentConfig.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${agentConfig.key}`,
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+        'X-Title': 'Language Learning App - Batch Reader Word AI',
+      },
+      body: JSON.stringify({
+        model: agentConfig.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 3500,
+      }),
+    })
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '')
+      console.warn('[wordAiService] Batch vocabulary AI failed with status:', response.status, errText)
+      return []
+    }
+
+    const data = await response.json()
+    const content = extractAiContent(data)
+    if (!content) return []
+
+    const parsed = extractCleanJson<PageVocabularyItem[]>(content)
+    if (!Array.isArray(parsed)) return []
+
+    const validExistingTags = new Set(existingTags)
+
+    return parsed
+      .filter((item) => item && typeof item.word === 'string' && item.word.trim().length > 0)
+      .map((item) => {
+        const cleanWord = item.word.trim().replace(/^[.,!?;:()"“”«»'’\s]+|[.,!?;:()"“”«»'’\s]+$/g, '')
+        const rawTags = Array.isArray(item.tags) ? item.tags : []
+        const filteredTags = rawTags.filter((t) => typeof t === 'string' && validExistingTags.has(t))
+
+        return {
+          word: cleanWord,
+          translation: (item.translation || cleanWord).trim(),
+          pronunciation: formatIpaPronunciation(item.pronunciation || ''),
+          parent: (item.parent || '').trim(),
+          partOfSpeech: (item.partOfSpeech || '').trim(),
+          contextSentence: (item.contextSentence || '').trim(),
+          tags: filteredTags,
+        }
+      })
+  } catch (err) {
+    console.warn('[wordAiService] Batch vocabulary extraction error:', err)
+    return []
+  }
+}
+

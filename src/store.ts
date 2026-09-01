@@ -445,6 +445,64 @@ export const deleteWord = (state: AppState, rawOrNormalized: string, language: L
   }
 }
 
+/** Batch delete multiple words. */
+export const batchDeleteWords = (state: AppState, rawOrNormalizedList: string[], language: Language): AppState => {
+  const normSet = new Set(rawOrNormalizedList.map((r) => normalizeWord(r)))
+  return {
+    ...state,
+    words: state.words.filter((w) => !(w.language === language && normSet.has(w.normalized))),
+  }
+}
+
+/** Batch update tags for multiple words. */
+export const batchUpdateWordTags = (
+  state: AppState,
+  rawOrNormalizedList: string[],
+  language: Language,
+  tags: string[],
+  mode: 'replace' | 'add' | 'remove' = 'replace',
+): AppState => {
+  const normSet = new Set(rawOrNormalizedList.map((r) => normalizeWord(r)))
+  return {
+    ...state,
+    words: state.words.map((w) => {
+      if (w.language !== language || !normSet.has(w.normalized)) return w
+      let nextTags: string[] = []
+      const currentTags = w.tags || []
+      if (mode === 'replace') {
+        nextTags = Array.from(new Set(tags))
+      } else if (mode === 'add') {
+        nextTags = Array.from(new Set([...currentTags, ...tags]))
+      } else if (mode === 'remove') {
+        const removeSet = new Set(tags)
+        nextTags = currentTags.filter((t) => !removeSet.has(t))
+      }
+      return { ...w, tags: nextTags }
+    }),
+  }
+}
+
+/** Batch update knowledge / mastery level for multiple words. */
+export const batchUpdateWordKnowledge = (
+  state: AppState,
+  rawOrNormalizedList: string[],
+  language: Language,
+  knowledge: number,
+): AppState => {
+  const normSet = new Set(rawOrNormalizedList.map((r) => normalizeWord(r)))
+  return {
+    ...state,
+    words: state.words.map((w) => {
+      if (w.language !== language || !normSet.has(w.normalized)) return w
+      return {
+        ...w,
+        knowledge,
+        status: knowledge === 6 ? 'mastered' : (w.status === 'mastered' && knowledge < 6 ? 'learning' : w.status),
+      }
+    }),
+  }
+}
+
 /** All distinct custom tags already used, for the tag suggestions. */
 export const knownTags = (state: AppState, language?: Language): string[] => {
   const set = new Set<string>(state.customTags ?? [])

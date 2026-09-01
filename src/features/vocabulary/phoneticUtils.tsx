@@ -109,33 +109,58 @@ export function renderPhoneticFormatted(raw?: string): React.ReactNode {
 }
 
 /**
- * Safely parses simple markdown like **bold**, *italic*, __bold__, _italic_, <u>underline</u>.
- * Returns formatted React nodes without raw markdown syntax characters.
+ * Safely parses markdown bold (**...**, __...__), italic (*...*, _..._), and underline (<u>...</u>).
+ * Returns cleanly formatted React nodes without raw markdown syntax characters.
  */
 export function renderStyledMarkdown(text?: string): React.ReactNode {
   if (!text || !text.trim()) return null
-  const regex = /(\*\*[\s\S]+?\*\*|__[\s\S]+?__|<u>[\s\S]*?<\/u>|\*[^*]+?\*|_[^_]+?_)/i
-  const parts = text.split(regex)
 
-  return parts.map((part, index) => {
-    const key = `md-${index}`
-    if (!part) return null
+  function parse(input: string, keyPrefix = ''): React.ReactNode[] {
+    if (!input) return []
 
-    if (
-      (part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
-      (part.startsWith('__') && part.endsWith('__') && part.length >= 4)
-    ) {
-      return <strong key={key}>{part.slice(2, -2)}</strong>
-    }
-    if (part.toLowerCase().startsWith('<u>') && part.toLowerCase().endsWith('</u>') && part.length >= 7) {
-      return <u key={key}>{part.slice(3, -4)}</u>
-    }
-    if (
-      (part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
-      (part.startsWith('_') && part.endsWith('_') && part.length >= 2)
-    ) {
-      return <em key={key}>{part.slice(1, -1)}</em>
-    }
-    return part
-  })
+    const regex = /(\*\*(?:[\s\S]+?)\*\*|__(?:[\s\S]+?)__|<u>[\s\S]*?<\/u>|\*(?:[^*]+?)\*|_(?:[^_]+?)_)/i
+    const parts = input.split(regex)
+
+    return parts.map((part, index) => {
+      const key = `${keyPrefix}-${index}`
+      if (!part) return null
+
+      if (
+        (part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
+        (part.startsWith('__') && part.endsWith('__') && part.length >= 4)
+      ) {
+        const inner = part.slice(2, -2)
+        return <strong key={key}>{parse(inner, `${key}-b`)}</strong>
+      }
+
+      if (part.toLowerCase().startsWith('<u>') && part.toLowerCase().endsWith('</u>') && part.length >= 7) {
+        const inner = part.slice(3, -4)
+        return <u key={key}>{parse(inner, `${key}-u`)}</u>
+      }
+
+      if (
+        (part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
+        (part.startsWith('_') && part.endsWith('_') && part.length >= 2)
+      ) {
+        const inner = part.slice(1, -1)
+        return <em key={key}>{parse(inner, `${key}-i`)}</em>
+      }
+
+      return part
+    })
+  }
+
+  return <>{parse(text, 'md')}</>
+}
+
+/**
+ * Strips common markdown characters (*, _, **, __, <u>, </u>) from a string.
+ */
+export function stripMarkdown(text?: string): string {
+  if (!text) return ''
+  return text
+    .replace(/(\*\*|__)([\s\S]+?)\1/g, '$2')
+    .replace(/(\*|_)([\s\S]+?)\1/g, '$2')
+    .replace(/<u>([\s\S]*?)<\/u>/gi, '$1')
+    .trim()
 }

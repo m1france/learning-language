@@ -1,6 +1,6 @@
 import React from 'react'
 import type { Language, LearnedWord, UiLanguage } from '../../domain'
-import { renderPhoneticFormatted } from './phoneticUtils'
+import { renderPhoneticFormatted, renderStyledMarkdown } from './phoneticUtils'
 import {
   X,
   Sparkles,
@@ -20,6 +20,7 @@ export type PageSavedWordsModalProps = {
   ui?: UiLanguage
   onEditWord: (word: LearnedWord) => void
   onDeleteWord?: (raw: string, language: Language) => void
+  onDeleteAllWords?: () => void
   api?: any
 }
 
@@ -31,6 +32,7 @@ export function PageSavedWordsModal({
   ui = 'fr',
   onEditWord,
   onDeleteWord,
+  onDeleteAllWords,
   api,
 }: PageSavedWordsModalProps) {
   const t = vocabCopy[ui] || vocabCopy.fr
@@ -48,6 +50,17 @@ export function PageSavedWordsModal({
       }
     } finally {
       setSpeakingWord(null)
+    }
+  }
+
+  const handleDeleteAll = () => {
+    if (onDeleteAllWords) {
+      onDeleteAllWords()
+    } else if (onDeleteWord) {
+      for (const w of words) {
+        onDeleteWord(w.word, language)
+      }
+      onClose()
     }
   }
 
@@ -103,7 +116,7 @@ export function PageSavedWordsModal({
                     </div>
 
                     {w.translation && (
-                      <p className="word-translation-line">{w.translation}</p>
+                      <p className="word-translation-line">{renderStyledMarkdown(w.translation)}</p>
                     )}
 
                     {w.parent && (
@@ -114,7 +127,7 @@ export function PageSavedWordsModal({
 
                     {w.contextSentence && (
                       <blockquote className="word-context-line">
-                        « {w.contextSentence} »
+                        « {renderStyledMarkdown(w.contextSentence)} »
                       </blockquote>
                     )}
                   </div>
@@ -160,7 +173,18 @@ export function PageSavedWordsModal({
         </div>
 
         <footer className="page-saved-modal-footer">
-          <button type="button" className="primary btn-block" onClick={onClose}>
+          {words.length > 0 && (
+            <button
+              type="button"
+              className="page-saved-delete-all-btn"
+              onClick={handleDeleteAll}
+              title={t.cancelAndDeleteAllWords}
+              aria-label={t.cancelAndDeleteAllWords}
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+          <button type="button" className="primary btn-block page-saved-close-btn" onClick={onClose}>
             {t.close}
           </button>
         </footer>

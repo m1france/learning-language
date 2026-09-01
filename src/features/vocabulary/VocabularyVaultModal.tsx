@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import type { AppState, Language, LearnedWord, UiLanguage, WordRelationType } from '../../domain'
 import { ObsidianWordGraph } from './ObsidianWordGraph'
-import { renderPhoneticFormatted } from './phoneticUtils'
+import { renderPhoneticFormatted, renderStyledMarkdown } from './phoneticUtils'
 import { speak } from '../../ai'
 import { downloadAnkiExport } from './ankiExporter'
 import { vocabCopy } from '../../i18n'
@@ -15,6 +15,9 @@ import {
   X,
   Download,
   Check,
+  ListChecks,
+  Tag,
+  Award,
 } from 'lucide-react'
 
 type VocabularyVaultModalProps = {
@@ -33,6 +36,9 @@ type VocabularyVaultModalProps = {
     tags?: string[]
   }) => void
   onDeleteWord: (raw: string, language: Language) => void
+  onBatchDeleteWords?: (raws: string[], language: Language) => void
+  onBatchUpdateTags?: (raws: string[], language: Language, tags: string[], mode: 'replace' | 'add' | 'remove') => void
+  onBatchUpdateKnowledge?: (raws: string[], language: Language, knowledge: number) => void
   onClose: () => void
 }
 
@@ -44,103 +50,94 @@ function TagInput({
   existingTags,
   onAdd,
   onRemove,
-  label,
+  label = 'Tags associés',
 }: {
   allTags: string[]
   existingTags: string[]
   onAdd: (tag: string) => void
   onRemove: (tag: string) => void
-  label: string
+  label?: string
 }) {
-  const [input, setInput] = useState('')
-  const [dismissedSuggestion, setDismissedSuggestion] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [tagInput, setTagInput] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
-  const query = input.trim().toLowerCase()
-  const match =
-    !dismissedSuggestion && query && allTags.length > 0
-      ? allTags.find(
-          (t) =>
-            t.toLowerCase().startsWith(query) &&
-            !existingTags.some((ex) => ex.toLowerCase() === t.toLowerCase()),
-        )
-      : undefined
+  const suggestions = useMemo(() => {
+    const q = tagInput.trim().toLowerCase().replace(/^#/, '')
+    if (!q) return []
+    return allTags.filter((t) => t.toLowerCase().includes(q) && !existingTags.includes(t))
+  }, [allTags, existingTags, tagInput])
 
-  const ghostSuffix =
-    match && input && match.toLowerCase().startsWith(input.toLowerCase())
-      ? match.slice(input.length)
-      : ''
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
-  const handleCommit = (tagToCommit?: string) => {
-    const finalTag = tagToCommit || match || input.trim()
-    if (finalTag) {
-      onAdd(finalTag)
-      setInput('')
-      setDismissedSuggestion(false)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      const clean = tagInput.trim().replace(/^#/, '').replace(/,/g, '')
+      if (clean && !existingTags.includes(clean)) {
+        onAdd(clean)
+        setTagInput('')
+        setShowSuggestions(false)
+      }
+    } else if (e.key === 'Backspace' && !tagInput && existingTags.length > 0) {
+      onRemove(existingTags[existingTags.length - 1])
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleCommit()
-    } else if (e.key === 'ArrowRight' || e.key === 'Tab') {
-      if (match) {
-        e.preventDefault()
-        setInput(match)
-      }
-    } else if (e.key === 'Backspace' || e.key === 'Delete') {
-      if (ghostSuffix && !dismissedSuggestion) {
-        e.preventDefault()
-        setDismissedSuggestion(true)
-      }
-    } else if (e.key === 'Escape') {
-      if (ghostSuffix && !dismissedSuggestion) {
-        e.preventDefault()
-        setDismissedSuggestion(true)
-      } else {
-        setInput('')
-        setDismissedSuggestion(false)
-      }
-    }
+  const handleSelectSuggestion = (tag: string) => {
+    onAdd(tag)
+    setTagInput('')
+    setShowSuggestions(false)
   }
 
   return (
-    <div className="wp-tag-line-row">
-      <div className="wp-tag-input-box">
-        <div className="wp-tag-ghost-text" aria-hidden="true">
-          <span className="wp-tag-ghost-typed">{input}</span>
-          <span className="wp-tag-ghost-suffix">{ghostSuffix}</span>
-        </div>
+    <div className="wp-tag-field" ref={wrapperRef}>
+      <span>{label}</span>
+      <div className="wp-tag-container">
+        {existingTags.map((tag) => (
+          <span key={tag} className="wp-tag-pill">
+            #{tag}
+            <button
+              type="button"
+              className="wp-tag-remove"
+              onClick={() => onRemove(tag)}
+              title="Supprimer le tag"
+            >
+              ×
+            </button>
+          </span>
+        ))}
         <input
-          ref={inputRef}
-          className="wp-tag-input-field"
-          value={input}
-          placeholder={existingTags.length === 0 ? label : '+ Tag'}
+          type="text"
+          value={tagInput}
+          placeholder={existingTags.length === 0 ? 'Ajouter un tag (#verbe, #idiom...)' : 'Ajouter...'}
           onChange={(e) => {
-            setInput(e.target.value)
-            setDismissedSuggestion(false)
+            setTagInput(e.target.value)
+            setShowSuggestions(true)
           }}
+          onFocus={() => setShowSuggestions(true)}
           onKeyDown={handleKeyDown}
-          onBlur={() => {
-            if (input.trim()) {
-              handleCommit()
-            }
-          }}
         />
       </div>
-      {existingTags.length > 0 && (
-        <div className="wp-tag-text-list">
-          {existingTags.map((item) => (
+
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="wp-tag-suggestions">
+          {suggestions.map((s) => (
             <button
-              key={item}
+              key={s}
               type="button"
-              className="wp-tag-text-item"
-              title="Cliquer pour supprimer"
-              aria-label={`Supprimer ${item}`}
-              onClick={() => onRemove(item)}
+              className="wp-tag-suggestion-item"
+              onClick={() => handleSelectSuggestion(s)}
             >
-              {item} <X size={10} style={{ marginLeft: 2, opacity: 0.7 }} />
+              #{s}
             </button>
           ))}
         </div>
@@ -155,6 +152,9 @@ export function VocabularyVaultModal({
   ui,
   onSaveWord,
   onDeleteWord,
+  onBatchDeleteWords,
+  onBatchUpdateTags,
+  onBatchUpdateKnowledge,
   onClose,
 }: VocabularyVaultModalProps) {
   const currentUi = ui || state.settings.uiLanguage || 'fr'
@@ -166,6 +166,14 @@ export function VocabularyVaultModal({
   const [editingWord, setEditingWord] = useState<LearnedWord | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [speakingWord, setSpeakingWord] = useState<string | null>(null)
+
+  // Multi-selection state
+  const [isMultiSelectActive, setIsMultiSelectActive] = useState(false)
+  const [selectedWordIds, setSelectedWordIds] = useState<Set<string>>(new Set())
+  const [batchTagModalOpen, setBatchTagModalOpen] = useState(false)
+  const [batchKnowledgeModalOpen, setBatchKnowledgeModalOpen] = useState(false)
+  const [batchTags, setBatchTags] = useState<string[]>([])
+  const [batchTagMode, setBatchTagMode] = useState<'replace' | 'add'>('replace')
 
   // Center clicked word from graph in the word list on the right
   useEffect(() => {
@@ -215,6 +223,101 @@ export function VocabularyVaultModal({
       return matchesSearch && matchesTag
     })
   }, [words, searchQuery, selectedTag])
+
+  const getWordKey = (w: LearnedWord) => w.normalized || w.word.toLowerCase().trim()
+
+  const toggleMultiSelectMode = () => {
+    if (isMultiSelectActive) {
+      setIsMultiSelectActive(false)
+      setSelectedWordIds(new Set())
+    } else {
+      setIsMultiSelectActive(true)
+    }
+  }
+
+  const toggleWordSelection = (word: LearnedWord) => {
+    const key = getWordKey(word)
+    setSelectedWordIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const getSelectedWordsList = () => {
+    return words.filter((w) => selectedWordIds.has(getWordKey(w)))
+  }
+
+  const handleBatchDelete = () => {
+    const selectedList = getSelectedWordsList()
+    if (selectedList.length === 0) return
+    if (window.confirm(t.batchDeleteConfirm(selectedList.length))) {
+      const raws = selectedList.map((w) => w.word)
+      if (onBatchDeleteWords) {
+        onBatchDeleteWords(raws, language)
+      } else {
+        for (const w of selectedList) {
+          onDeleteWord(w.word, language)
+        }
+      }
+      setSelectedWordIds(new Set())
+      setIsMultiSelectActive(false)
+    }
+  }
+
+  const handleApplyBatchTags = () => {
+    const selectedList = getSelectedWordsList()
+    if (selectedList.length === 0) return
+    const raws = selectedList.map((w) => w.word)
+    if (onBatchUpdateTags) {
+      onBatchUpdateTags(raws, language, batchTags, batchTagMode)
+    } else {
+      for (const w of selectedList) {
+        let nextTags = batchTags
+        if (batchTagMode === 'add') {
+          nextTags = Array.from(new Set([...(w.tags || []), ...batchTags]))
+        }
+        onSaveWord({
+          raw: w.word,
+          translation: w.translation || '',
+          pronunciation: w.phonetic,
+          parent: w.parent,
+          knowledge: w.knowledge,
+          tags: nextTags,
+          language,
+        })
+      }
+    }
+    setSelectedWordIds(new Set())
+    setIsMultiSelectActive(false)
+    setBatchTagModalOpen(false)
+    setBatchTags([])
+  }
+
+  const handleApplyBatchKnowledge = (lvl: number) => {
+    const selectedList = getSelectedWordsList()
+    if (selectedList.length === 0) return
+    const raws = selectedList.map((w) => w.word)
+    if (onBatchUpdateKnowledge) {
+      onBatchUpdateKnowledge(raws, language, lvl)
+    } else {
+      for (const w of selectedList) {
+        onSaveWord({
+          raw: w.word,
+          translation: w.translation || '',
+          pronunciation: w.phonetic,
+          parent: w.parent,
+          knowledge: lvl,
+          tags: w.tags,
+          language,
+        })
+      }
+    }
+    setSelectedWordIds(new Set())
+    setIsMultiSelectActive(false)
+    setBatchKnowledgeModalOpen(false)
+  }
 
   const openAddForm = () => {
     setFormRaw('')
@@ -279,7 +382,6 @@ export function VocabularyVaultModal({
   return (
     <div className="vocab-vault-backdrop vocab-vault-overlay" onClick={onClose}>
       <div className="vocab-vault-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Compact Toolbar: search + scrolling tags + actions on one line */}
         <header className="vocab-vault-toolbar">
           <div className="search-field">
             <Search size={14} className="search-icon" />
@@ -319,6 +421,50 @@ export function VocabularyVaultModal({
           )}
 
           <div className="vault-top-actions">
+            {isMultiSelectActive && selectedWordIds.size >= 2 && (
+              <div className="batch-actions-capsule">
+                <button
+                  type="button"
+                  className="batch-capsule-sub-btn delete"
+                  onClick={handleBatchDelete}
+                  title={t.batchDeleteTitle(selectedWordIds.size)}
+                >
+                  <Trash2 size={14} />
+                </button>
+                <div className="batch-capsule-divider" />
+                <button
+                  type="button"
+                  className="batch-capsule-sub-btn tags"
+                  onClick={() => {
+                    setBatchTags([])
+                    setBatchTagMode('replace')
+                    setBatchTagModalOpen(true)
+                  }}
+                  title={t.batchEditTagsTitle(selectedWordIds.size)}
+                >
+                  <Tag size={14} />
+                </button>
+                <div className="batch-capsule-divider" />
+                <button
+                  type="button"
+                  className="batch-capsule-sub-btn level"
+                  onClick={() => setBatchKnowledgeModalOpen(true)}
+                  title={t.batchEditLevelTitle(selectedWordIds.size)}
+                >
+                  <Award size={14} />
+                </button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              className={`vault-select-mode-btn ${isMultiSelectActive ? 'active' : ''}`}
+              onClick={toggleMultiSelectMode}
+              title={t.selectionMode}
+            >
+              <ListChecks size={15} />
+            </button>
+
             <button
               type="button"
               className="outline icon-btn-sm"
@@ -340,14 +486,16 @@ export function VocabularyVaultModal({
           </div>
         </header>
 
-        {/* Main Content Workspace */}
         <div className="vocab-vault-workspace layout-split">
           <div className="vault-graph-panel">
             <div className="graph-embed-container">
               <ObsidianWordGraph
                 words={filteredWords}
                 selectedWordId={selectedWord?.normalized || selectedWord?.word.toLowerCase().trim()}
+                selectedWordIds={Array.from(selectedWordIds)}
+                isMultiSelectMode={isMultiSelectActive}
                 onSelectWord={setSelectedWord}
+                onToggleWordSelection={toggleWordSelection}
                 ui={currentUi}
               />
             </div>
@@ -370,15 +518,29 @@ export function VocabularyVaultModal({
                   <div className="words-cards-list">
                     {filteredWords.map((w) => {
                       const isSelected = selectedWord?.id === w.id
+                      const key = getWordKey(w)
+                      const isMultiSelected = selectedWordIds.has(key)
                       const kColor = w.knowledge === 6 ? '#16a34a' : (w.knowledge ? KNOWLEDGE_COLORS[w.knowledge - 1] : '#8b5cf6')
 
                       return (
                         <div
-                          key={w.id}
+                          key={w.id || w.word}
                           id={`vocab-item-${w.id}`}
-                          className={`vocab-word-item ${isSelected ? 'selected' : ''}`}
-                          onClick={() => setSelectedWord(w)}
+                          className={`vocab-word-item ${isSelected && !isMultiSelectActive ? 'selected' : ''} ${isMultiSelectActive ? 'in-select-mode' : ''} ${isMultiSelected ? 'multi-selected' : ''}`}
+                          onClick={() => {
+                            if (isMultiSelectActive) {
+                              toggleWordSelection(w)
+                            } else {
+                              setSelectedWord(w)
+                            }
+                          }}
                         >
+                          {isMultiSelectActive && (
+                            <div className={`word-select-checkbox ${isMultiSelected ? 'checked' : ''}`}>
+                              {isMultiSelected && <Check size={12} strokeWidth={3} />}
+                            </div>
+                          )}
+
                           <div className="word-item-main">
                             <div className="word-header-line">
                               <strong className="word-title">{w.word}</strong>
@@ -390,7 +552,7 @@ export function VocabularyVaultModal({
                               />
                             </div>
 
-                            {w.translation && <p className="word-translation-text">{w.translation}</p>}
+                            {w.translation && <p className="word-translation-text">{renderStyledMarkdown(w.translation)}</p>}
 
                             {w.parent && (
                               <span className="word-root-badge">{t.rootWord} {w.parent}</span>
@@ -398,43 +560,45 @@ export function VocabularyVaultModal({
 
                             {w.contextSentence && (
                               <blockquote className="word-context-quote">
-                                « {w.contextSentence} »
+                                « {renderStyledMarkdown(w.contextSentence)} »
                               </blockquote>
                             )}
                           </div>
 
-                          <div className="word-item-actions">
-                            <button
-                              type="button"
-                              className="icon-action-btn"
-                              onClick={(e) => handleSpeak(e, w.word)}
-                              title={t.listenPronunciation}
-                            >
-                              <Volume2 size={14} className={speakingWord === w.word ? 'spinning' : ''} />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-action-btn"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openEditForm(w)
-                              }}
-                              title={t.editWord}
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-action-btn delete"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDelete(w)
-                              }}
-                              title={t.deleteWord}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
+                          {!isMultiSelectActive && (
+                            <div className="word-item-actions">
+                              <button
+                                type="button"
+                                className="icon-action-btn"
+                                onClick={(e) => handleSpeak(e, w.word)}
+                                title={t.listenPronunciation}
+                              >
+                                <Volume2 size={14} className={speakingWord === w.word ? 'spinning' : ''} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-action-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openEditForm(w)
+                                }}
+                                title={t.editWord}
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-action-btn delete"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDelete(w)
+                                }}
+                                title={t.deleteWord}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -444,7 +608,6 @@ export function VocabularyVaultModal({
           </div>
         </div>
 
-        {/* Add / Edit Word Modal Popup matching Reader Word Card */}
         {isAddingNew && (
           <div className="vocab-form-drawer-overlay" onClick={() => setIsAddingNew(false)}>
             <div className="vocab-word-panel-card" onClick={(e) => e.stopPropagation()}>
@@ -452,53 +615,24 @@ export function VocabularyVaultModal({
                 <h3>{editingWord ? t.editWordTitle : t.saveWordTitle}</h3>
                 <button
                   type="button"
-                  className="vault-modal-close-btn"
+                  className="modal-close-icon-btn"
                   onClick={() => setIsAddingNew(false)}
-                  title={t.close}
                 >
                   <X size={16} />
                 </button>
               </div>
 
-              {/* 1. Knowledge Rating Header (1 to 5 + Known by heart Check) */}
-              <div className="wp-field">
-                <div className="wp-knowledge">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      className={formKnowledge === n ? 'kl-btn active' : 'kl-btn'}
-                      style={{ ['--kl' as string]: KNOWLEDGE_COLORS[n - 1] }}
-                      onClick={() => setFormKnowledge(formKnowledge === n ? undefined : n)}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className={formKnowledge === 6 ? 'kl-btn known active' : 'kl-btn known'}
-                    title={t.masteryKnown}
-                    aria-label={t.masteryKnown}
-                    onClick={() => setFormKnowledge(formKnowledge === 6 ? undefined : 6)}
-                  >
-                    <Check size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {/* 2. Word Input */}
               <div className="wp-field">
                 <span>{t.wordField}</span>
                 <input
                   type="text"
                   value={formRaw}
                   placeholder={t.wordField}
-                  autoFocus
                   onChange={(e) => setFormRaw(e.target.value)}
+                  autoFocus
                 />
               </div>
 
-              {/* 3. Reference Word (Parent / Lemma) */}
               <div className="wp-field">
                 <span>{t.referenceWordField}</span>
                 <input
@@ -509,7 +643,32 @@ export function VocabularyVaultModal({
                 />
               </div>
 
-              {/* 4. Pronunciation */}
+              <div className="wp-field">
+                <span>{t.masteryField}</span>
+                <div className="wp-knowledge">
+                  {[1, 2, 3, 4, 5].map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      className={`kl-btn ${formKnowledge === lvl ? 'active' : ''}`}
+                      style={{ ['--kl' as string]: KNOWLEDGE_COLORS[lvl - 1] }}
+                      onClick={() => setFormKnowledge(lvl)}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={`kl-btn known ${formKnowledge === 6 ? 'active' : ''}`}
+                    title={t.masteryKnown}
+                    aria-label={t.masteryKnown}
+                    onClick={() => setFormKnowledge(6)}
+                  >
+                    <Check size={14} />
+                  </button>
+                </div>
+              </div>
+
               <div className="wp-field">
                 <span>{t.pronunciationField}</span>
                 <input
@@ -518,9 +677,13 @@ export function VocabularyVaultModal({
                   placeholder="/.../"
                   onChange={(e) => setFormPronunciation(e.target.value)}
                 />
+                {formPronunciation && (formPronunciation.includes('*') || formPronunciation.includes('_')) && (
+                  <div className="wp-input-preview">
+                    {renderPhoneticFormatted(formPronunciation)}
+                  </div>
+                )}
               </div>
 
-              {/* 5. Translation */}
               <div className="wp-field">
                 <span>{t.translationField}</span>
                 <textarea
@@ -529,9 +692,13 @@ export function VocabularyVaultModal({
                   rows={2}
                   onChange={(e) => setFormTranslation(e.target.value)}
                 />
+                {formTranslation && (formTranslation.includes('*') || formTranslation.includes('_') || formTranslation.includes('<')) && (
+                  <div className="wp-input-preview">
+                    {renderStyledMarkdown(formTranslation)}
+                  </div>
+                )}
               </div>
 
-              {/* 6. Tags */}
               <div className="wp-field">
                 <TagInput
                   allTags={allTags}
@@ -547,7 +714,6 @@ export function VocabularyVaultModal({
                 />
               </div>
 
-              {/* 7. Save / Delete actions */}
               <div className="wp-footer" style={{ marginTop: 4 }}>
                 <button
                   type="button"
@@ -560,18 +726,98 @@ export function VocabularyVaultModal({
                   </span>
                   {formRaw.trim() && <em className="wp-save-btn-word">{formRaw.trim()}</em>}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-                {editingWord && (
-                  <button
-                    type="button"
-                    className="danger-btn outline"
-                    style={{ marginTop: 8, width: '100%', justifyContent: 'center', borderRadius: 8, padding: '7px 12px', fontSize: 12 }}
-                    onClick={() => handleDelete(editingWord)}
-                  >
-                    <Trash2 size={13} />
-                    <span>{t.deleteWord}</span>
-                  </button>
-                )}
+        {batchTagModalOpen && (
+          <div className="vocab-form-drawer-overlay" onClick={() => setBatchTagModalOpen(false)}>
+            <div className="batch-edit-modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="batch-modal-head">
+                <div className="batch-modal-title">
+                  <Tag size={16} />
+                  <h3>{t.batchEditTagsModalTitle} ({selectedWordIds.size} {t.wordsCount})</h3>
+                </div>
+                <button type="button" className="modal-close-icon-btn" onClick={() => setBatchTagModalOpen(false)}>
+                  <X size={15} />
+                </button>
+              </div>
+
+              <div className="batch-tag-mode-switch">
+                <button
+                  type="button"
+                  className={`batch-mode-tab ${batchTagMode === 'replace' ? 'active' : ''}`}
+                  onClick={() => setBatchTagMode('replace')}
+                >
+                  {t.replaceTagsMode}
+                </button>
+                <button
+                  type="button"
+                  className={`batch-mode-tab ${batchTagMode === 'add' ? 'active' : ''}`}
+                  onClick={() => setBatchTagMode('add')}
+                >
+                  {t.addTagsMode}
+                </button>
+              </div>
+
+              <div className="batch-modal-body">
+                <TagInput
+                  allTags={allTags}
+                  existingTags={batchTags}
+                  onAdd={(tagItem) => {
+                    const clean = tagItem.trim().replace(/^#/, '')
+                    if (clean && !batchTags.includes(clean)) {
+                      setBatchTags([...batchTags, clean])
+                    }
+                  }}
+                  onRemove={(tagItem) => setBatchTags(batchTags.filter((x) => x !== tagItem))}
+                  label={t.associatedTags}
+                />
+              </div>
+
+              <div className="batch-modal-footer">
+                <button type="button" className="outline btn-sm" onClick={() => setBatchTagModalOpen(false)}>
+                  {t.cancel}
+                </button>
+                <button type="button" className="primary btn-sm" onClick={handleApplyBatchTags}>
+                  <Check size={14} />
+                  <span>{t.apply}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {batchKnowledgeModalOpen && (
+          <div className="vocab-form-drawer-overlay" onClick={() => setBatchKnowledgeModalOpen(false)}>
+            <div className="batch-edit-modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="batch-modal-head">
+                <div className="batch-modal-title">
+                  <Award size={16} />
+                  <h3>{t.batchEditLevelModalTitle} ({selectedWordIds.size} {t.wordsCount})</h3>
+                </div>
+                <button type="button" className="modal-close-icon-btn" onClick={() => setBatchKnowledgeModalOpen(false)}>
+                  <X size={15} />
+                </button>
+              </div>
+
+              <div className="batch-levels-grid">
+                {[1, 2, 3, 4, 5, 6].map((lvl) => {
+                  const color = lvl === 6 ? '#059669' : ['#e11d48', '#ea580c', '#d97706', '#2563eb', '#7c3aed'][lvl - 1]
+                  const label = lvl === 6 ? t.masteryKnown : `${t.masteryLevel} ${lvl} / 5`
+                  return (
+                    <button
+                      key={lvl}
+                      type="button"
+                      className="batch-level-choice-btn"
+                      onClick={() => handleApplyBatchKnowledge(lvl)}
+                    >
+                      <span className="batch-level-dot" style={{ background: color }} />
+                      <span className="batch-level-label">{label}</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -580,4 +826,3 @@ export function VocabularyVaultModal({
     </div>
   )
 }
-

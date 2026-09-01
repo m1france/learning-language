@@ -6,7 +6,7 @@ import { TOP_LEARNING_LANGUAGES } from '../languages'
 import { listVoices, speak, testOpenRouterTts } from '../ai'
 import { testAgentConnection } from './speaking/wordAiService'
 import { testDeepLConnection } from './speaking/deeplService'
-import { renderPhoneticFormatted } from './vocabulary/phoneticUtils'
+import { renderPhoneticFormatted, renderStyledMarkdown } from './vocabulary/phoneticUtils'
 import { addCustomTag, addMarking, DEFAULT_MARKINGS, DEFAULT_TEACHER_SHORTCUTS, deleteCustomTag, deleteMarking, knownTags, renameCustomTag, renameMarking, reorderMarkings, setMarkingColor } from '../store'
 import {
   User,
@@ -963,10 +963,10 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                             </button>
                           </div>
                           {word.translation && (
-                            <span className="tag-word-translation">{word.translation}</span>
+                            <span className="tag-word-translation">{renderStyledMarkdown(word.translation)}</span>
                           )}
                           {word.contextSentence && (
-                            <p className="tag-word-sentence">« {word.contextSentence} »</p>
+                            <p className="tag-word-sentence">« {renderStyledMarkdown(word.contextSentence)} »</p>
                           )}
                         </div>
                       ))}

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, Difficulty, Language, Resource, UiLanguage } from './domain'
 import { BUILTIN_CATEGORIES, id } from './domain'
-import { addMarking, batchMarkWordsKnown, batchUpsertWordDetails, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
+import { addMarking, batchDeleteWords, batchMarkWordsKnown, batchUpdateWordKnowledge, batchUpdateWordTags, batchUpsertWordDetails, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
 import { getResourceWordStats } from './features/readingProgressUtils'
 import { importFromFile, importFromUrl, paragraphsToResource } from './importer'
 import { Reader, Cover } from './features/Reader'
@@ -1030,6 +1030,9 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
         ui={ui}
         onSaveWord={(args) => onChange(upsertWordDetails(state, args))}
         onDeleteWord={(raw, lang) => onChange(deleteWord(state, raw, lang))}
+        onBatchDeleteWords={(raws, lang) => onChange(batchDeleteWords(state, raws, lang))}
+        onBatchUpdateTags={(raws, lang, tags, mode) => onChange(batchUpdateWordTags(state, raws, lang, tags, mode))}
+        onBatchUpdateKnowledge={(raws, lang, knowledge) => onChange(batchUpdateWordKnowledge(state, raws, lang, knowledge))}
         onClose={() => setVocabVaultOpen(false)}
       />
     )}

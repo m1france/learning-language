@@ -35,7 +35,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { speak } from '../ai'
-import { analyzeWordWithAi } from './speaking/wordAiService'
+import { analyzeWordWithAi, extractAndAnalyzePageVocabularyWithAi } from './speaking/wordAiService'
 import { getResourceWordStats, extractPageUniqueWords } from './readingProgressUtils'
 import { PageSavedWordsModal } from './vocabulary/PageSavedWordsModal'
 import { resourcesCopy } from '../i18n'
@@ -362,95 +362,222 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     setPageValidationMenu(null)
   }
 
-  const executeBatchSaveAi = async (wordsList: { raw: string; normalized: string; sentence: string }[]) => {
+  const executeBatchSaveAi = async (entriesToProcess: { text: string; chapterIndex: number; paragraphIndex: number }[]) => {
     setPageValidationMenu(null)
-    if (wordsList.length === 0) return
+    if (!entriesToProcess || entriesToProcess.length === 0) return
 
     setIsBatchSavingAi(true)
-    onAiTaskChange?.(true, `Analyse IA en cours (0/${wordsList.length})…`)
+    onAiTaskChange?.(true, 'Analyse du contexte par l’IA en cours…')
+
     const newlySaved: LearnedWord[] = []
     const allWordDetails: WordDetails[] = []
+    const newlySavedSeen = new Set<string>()
 
-    for (let i = 0; i < wordsList.length; i++) {
-      const item = wordsList[i]
-      onAiTaskChange?.(true, `Analyse IA en cours (${i + 1}/${wordsList.length})…`)
-      try {
-        const analysis = await analyzeWordWithAi({
-          word: item.raw,
+    // Identify already saved words in this language to prevent duplicates
+    const existingLanguageWords = state.words.filter((w) => w.language === resource.language)
+    const existingNormalizedSet = new Set(
+      existingLanguageWords
+        .map((w) => w.normalized)
+        .concat(existingLanguageWords.map((w) => normalizeWord(w.word)))
+        .concat(existingLanguageWords.filter((w) => w.parent).map((w) => normalizeWord(w.parent!)))
+    )
+    const existingWordsList = Array.from(new Set(existingLanguageWords.map((w) => w.word)))
+    const existingTagsList = knownTags(state, resource.language)
+
+    // Group entries into manageable chunks (approx. 350 words)
+    const chunks: { text: string; entries: typeof entriesToProcess }[] = []
+    let currentChunkText = ''
+    let currentChunkEntries: typeof entriesToProcess = []
+    let currentWordCount = 0
+
+    for (const entry of entriesToProcess) {
+      const text = entry.text.trim()
+      if (!text) continue
+      const wordCount = text.split(/\s+/).length
+      if (currentWordCount + wordCount > 350 && currentChunkText) {
+        chunks.push({ text: currentChunkText.trim(), entries: currentChunkEntries })
+        currentChunkText = text + '\n\n'
+        currentChunkEntries = [entry]
+        currentWordCount = wordCount
+      } else {
+        currentChunkText += text + '\n\n'
+        currentChunkEntries.push(entry)
+        currentWordCount += wordCount
+      }
+    }
+    if (currentChunkText.trim()) {
+      chunks.push({ text: currentChunkText.trim(), entries: currentChunkEntries })
+    }
+
+    if (chunks.length === 0) {
+      setIsBatchSavingAi(false)
+      onAiTaskChange?.(false)
+      return
+    }
+
+    try {
+      for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+        const { text: chunkText, entries: chunkEntries } = chunks[chunkIdx]
+        const progressLabel = chunks.length > 1
+          ? `Analyse IA du contexte (${chunkIdx + 1}/${chunks.length})…`
+          : 'Analyse IA du contexte en cours…'
+        onAiTaskChange?.(true, progressLabel)
+
+        // Run smart context analysis & extraction (grouping linked expressions like "far end" & skipping already saved words)
+        const items = await extractAndAnalyzePageVocabularyWithAi({
+          text: chunkText,
           targetLang: resource.language,
           uiLang: ui,
-          existingTags: knownTags(state, resource.language),
+          existingWords: [...existingWordsList, ...Array.from(newlySavedSeen)],
+          existingTags: existingTagsList,
           api: state.settings.api,
-          contextSentence: item.sentence,
         })
-        const wordDetails: WordDetails = {
-          raw: analysis.word || item.raw,
-          sentence: item.sentence,
-          language: resource.language,
-          sourceResourceId: resource.id,
-          translation: analysis.translation,
-          parent: analysis.parent,
-          pronunciation: analysis.pronunciation,
-          partOfSpeech: analysis.partOfSpeech,
-          tags: analysis.tags,
-          knowledge: 6,
-        }
-        allWordDetails.push(wordDetails)
-        newlySaved.push({
-          id: `saved-${Date.now()}-${i}`,
-          word: analysis.word || item.raw,
-          normalized: item.normalized,
-          language: resource.language,
-          phonetic: analysis.pronunciation,
-          translation: analysis.translation,
-          parent: analysis.parent,
-          partOfSpeech: analysis.partOfSpeech || '',
-          knowledge: 6,
-          definitions: analysis.translation ? [{ definition: '', translation: analysis.translation }] : [],
-          contextSentence: item.sentence,
-          sourceResourceId: resource.id,
-          sourceSkill: 'reading',
-          status: 'mastered',
-          intervalDays: 30,
-          nextReview: new Date().toISOString(),
-          easeFactor: 2.5,
-          reviewCount: 1,
-          tags: analysis.tags || [],
-          createdAt: new Date().toISOString(),
-        })
-      } catch (err) {
-        console.warn('[Reader] Batch analyze word error:', err)
-      }
-    }
 
-    if (allWordDetails.length > 0) {
-      if (onBatchSaveWords) {
-        onBatchSaveWords(allWordDetails)
-      } else {
-        for (const wd of allWordDetails) {
-          onSaveWord(wd)
+        if (items && items.length > 0) {
+          for (const item of items) {
+            const raw = item.word.trim()
+            if (!raw) continue
+            const norm = normalizeWord(raw)
+            if (!norm || existingNormalizedSet.has(norm) || newlySavedSeen.has(norm)) {
+              continue
+            }
+            newlySavedSeen.add(norm)
+
+            const wordDetails: WordDetails = {
+              raw,
+              sentence: item.contextSentence || '',
+              language: resource.language,
+              sourceResourceId: resource.id,
+              translation: item.translation,
+              parent: item.parent || '',
+              pronunciation: item.pronunciation || '',
+              partOfSpeech: item.partOfSpeech || undefined,
+              tags: item.tags,
+              knowledge: 6,
+            }
+            allWordDetails.push(wordDetails)
+
+            newlySaved.push({
+              id: `saved-${Date.now()}-${newlySaved.length}`,
+              word: raw,
+              normalized: norm,
+              language: resource.language,
+              phonetic: item.pronunciation || undefined,
+              translation: item.translation,
+              parent: item.parent || undefined,
+              partOfSpeech: item.partOfSpeech || '',
+              knowledge: 6,
+              definitions: item.translation ? [{ definition: '', translation: item.translation }] : [],
+              contextSentence: item.contextSentence || '',
+              sourceResourceId: resource.id,
+              sourceSkill: 'reading',
+              status: 'mastered',
+              intervalDays: 30,
+              nextReview: new Date().toISOString(),
+              easeFactor: 2.5,
+              reviewCount: 1,
+              tags: item.tags || [],
+              createdAt: new Date().toISOString(),
+            })
+          }
+        } else {
+          // Fallback if AI call returned empty or offline: extract unique words, filtering out already known words
+          const fallbackWords = extractPageUniqueWords(chunkEntries).filter(
+            (w) => !existingNormalizedSet.has(w.normalized) && !newlySavedSeen.has(w.normalized)
+          )
+
+          for (const fw of fallbackWords) {
+            newlySavedSeen.add(fw.normalized)
+            try {
+              const analysis = await analyzeWordWithAi({
+                word: fw.raw,
+                targetLang: resource.language,
+                uiLang: ui,
+                existingTags: existingTagsList,
+                api: state.settings.api,
+                contextSentence: fw.sentence,
+              })
+              const wordDetails: WordDetails = {
+                raw: analysis.word || fw.raw,
+                sentence: fw.sentence,
+                language: resource.language,
+                sourceResourceId: resource.id,
+                translation: analysis.translation,
+                parent: analysis.parent,
+                pronunciation: analysis.pronunciation,
+                partOfSpeech: analysis.partOfSpeech,
+                tags: analysis.tags,
+                knowledge: 6,
+              }
+              allWordDetails.push(wordDetails)
+              newlySaved.push({
+                id: `saved-${Date.now()}-${newlySaved.length}`,
+                word: analysis.word || fw.raw,
+                normalized: fw.normalized,
+                language: resource.language,
+                phonetic: analysis.pronunciation,
+                translation: analysis.translation,
+                parent: analysis.parent,
+                partOfSpeech: analysis.partOfSpeech || '',
+                knowledge: 6,
+                definitions: analysis.translation ? [{ definition: '', translation: analysis.translation }] : [],
+                contextSentence: fw.sentence,
+                sourceResourceId: resource.id,
+                sourceSkill: 'reading',
+                status: 'mastered',
+                intervalDays: 30,
+                nextReview: new Date().toISOString(),
+                easeFactor: 2.5,
+                reviewCount: 1,
+                tags: analysis.tags || [],
+                createdAt: new Date().toISOString(),
+              })
+            } catch (err) {
+              console.warn('[Reader] Fallback word analyze error:', err)
+            }
+          }
         }
       }
-    }
 
-    setIsBatchSavingAi(false)
-    onAiTaskChange?.(false)
-    if (newlySaved.length > 0) {
-      setSavedPageWordsList(newlySaved)
-      setShowSavedToast(true)
-      setShowSavedModal(true)
-      setTimeout(() => setShowSavedToast(false), 12000)
+      if (allWordDetails.length > 0) {
+        if (onBatchSaveWords) {
+          onBatchSaveWords(allWordDetails)
+        } else {
+          for (const wd of allWordDetails) {
+            onSaveWord(wd)
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Reader] Batch save with AI error:', err)
+    } finally {
+      setIsBatchSavingAi(false)
+      onAiTaskChange?.(false)
+      if (newlySaved.length > 0) {
+        setSavedPageWordsList(newlySaved)
+        setShowSavedToast(true)
+        setShowSavedModal(true)
+        setTimeout(() => setShowSavedToast(false), 12000)
+      }
     }
   }
 
   const handleSaveAllPageWordsWithAi = () => {
-    const pageWords = extractPageUniqueWords(page)
-    executeBatchSaveAi(pageWords)
+    executeBatchSaveAi(page)
   }
 
   const handleSaveAllResourceWordsWithAi = () => {
-    const allWords = extractPageUniqueWords(entries)
-    executeBatchSaveAi(allWords)
+    executeBatchSaveAi(entries)
+  }
+
+  const handleDeleteAllSavedBatch = () => {
+    if (savedPageWordsList.length === 0) return
+    for (const item of savedPageWordsList) {
+      onDeleteWord?.(item.word, resource.language)
+    }
+    setSavedPageWordsList([])
+    setShowSavedModal(false)
+    setShowSavedToast(false)
   }
 
   const handleCompleteResource = () => {
@@ -1405,6 +1532,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           onDeleteWord?.(raw, lang)
           setSavedPageWordsList((prev) => prev.filter((p) => normalizeWord(p.word) !== normalizeWord(raw)))
         }}
+        onDeleteAllWords={handleDeleteAllSavedBatch}
       />
     )}
 

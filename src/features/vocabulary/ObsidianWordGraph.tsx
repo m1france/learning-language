@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import type { LearnedWord, UiLanguage } from '../../domain'
 import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Minimize2, Search, Sparkles } from 'lucide-react'
-import { renderPhoneticFormatted } from './phoneticUtils'
+import { renderPhoneticFormatted, renderStyledMarkdown } from './phoneticUtils'
 import { vocabCopy } from '../../i18n'
 
 type Node = {
@@ -30,7 +30,10 @@ type Edge = {
 type ObsidianWordGraphProps = {
   words: LearnedWord[]
   selectedWordId?: string | null
+  selectedWordIds?: string[]
+  isMultiSelectMode?: boolean
   onSelectWord?: (word: LearnedWord) => void
+  onToggleWordSelection?: (word: LearnedWord) => void
   compact?: boolean
   ui?: UiLanguage
 }
@@ -47,7 +50,10 @@ const KNOWLEDGE_COLORS: Record<number, string> = {
 export function ObsidianWordGraph({
   words,
   selectedWordId,
+  selectedWordIds,
+  isMultiSelectMode = false,
   onSelectWord,
+  onToggleWordSelection,
   compact = false,
   ui = 'fr',
 }: ObsidianWordGraphProps) {
@@ -331,15 +337,20 @@ export function ObsidianWordGraph({
       nodes.forEach((node) => {
         const isHovered = node.id === hoveredId
         const isSelected = node.id === selectedId
+        const isMultiSelected = selectedWordIds && selectedWordIds.includes(node.id)
         const isMatchSearch = activeSearch && node.word.toLowerCase().includes(activeSearch)
 
         ctx.beginPath()
-        ctx.arc(node.x, node.y, node.radius + (isHovered || isSelected ? 3 : 0), 0, Math.PI * 2)
+        ctx.arc(node.x, node.y, node.radius + (isHovered || isSelected || isMultiSelected ? 3.5 : 0), 0, Math.PI * 2)
 
         if (isMatchSearch) {
           ctx.fillStyle = '#0284c7'
           ctx.shadowColor = 'rgba(2, 132, 199, 0.4)'
           ctx.shadowBlur = 10
+        } else if (isMultiSelected) {
+          ctx.fillStyle = '#2563eb'
+          ctx.shadowColor = 'rgba(37, 99, 235, 0.55)'
+          ctx.shadowBlur = 14
         } else if (isHovered || isSelected) {
           ctx.fillStyle = '#e11d48'
           ctx.shadowColor = 'rgba(225, 29, 72, 0.45)'
@@ -352,8 +363,14 @@ export function ObsidianWordGraph({
         ctx.fill()
         ctx.shadowBlur = 0
 
-        // Outer focus ring for selected or hovered nodes
-        if (isHovered || isSelected || isMatchSearch) {
+        // Outer focus ring for selected, multi-selected, or hovered nodes
+        if (isMultiSelected) {
+          ctx.strokeStyle = '#2563eb'
+          ctx.lineWidth = 2.2
+          ctx.beginPath()
+          ctx.arc(node.x, node.y, node.radius + 6, 0, Math.PI * 2)
+          ctx.stroke()
+        } else if (isHovered || isSelected || isMatchSearch) {
           ctx.strokeStyle = isHovered || isSelected ? '#e11d48' : '#0284c7'
           ctx.lineWidth = 1.8
           ctx.beginPath()
@@ -393,7 +410,7 @@ export function ObsidianWordGraph({
       window.removeEventListener('resize', handleResize)
       cancelAnimationFrame(animId)
     }
-  }, [nodes, edges, nodeMap, physicsActive, hoveredNode, selectedWordId, searchQuery, compact])
+  }, [nodes, edges, nodeMap, physicsActive, hoveredNode, selectedWordId, selectedWordIds, isMultiSelectMode, searchQuery, compact])
 
   // Mouse / Pointer Events
   const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -473,8 +490,12 @@ export function ObsidianWordGraph({
       const clickedWord = words.find(
         (w) => (w.normalized || w.word.toLowerCase().trim()) === draggedNodeRef.current?.id,
       )
-      if (clickedWord && onSelectWord) {
-        onSelectWord(clickedWord)
+      if (clickedWord) {
+        if (isMultiSelectMode && onToggleWordSelection) {
+          onToggleWordSelection(clickedWord)
+        } else if (onSelectWord) {
+          onSelectWord(clickedWord)
+        }
       }
       draggedNodeRef.current = null
     }
@@ -573,7 +594,7 @@ export function ObsidianWordGraph({
             )}
           </div>
           {hoveredNode.translation && (
-            <p className="tooltip-trans">{hoveredNode.translation}</p>
+            <p className="tooltip-trans">{renderStyledMarkdown(hoveredNode.translation)}</p>
           )}
           {hoveredNode.parent && (
             <span className="tooltip-parent">{t.rootWord} {hoveredNode.parent}</span>
