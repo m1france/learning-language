@@ -362,19 +362,26 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     setPageValidationMenu(null)
   }
 
-  const handleSaveAllPageWordsWithAi = async () => {
+  const handleMarkResourceAsDone = () => {
+    const allWords = extractPageUniqueWords(entries)
+    if (allWords.length > 0) {
+      onBatchMarkKnown?.(allWords, resource.language)
+    }
     setPageValidationMenu(null)
-    const pageWords = extractPageUniqueWords(page)
-    if (pageWords.length === 0) return
+  }
+
+  const executeBatchSaveAi = async (wordsList: { raw: string; normalized: string; sentence: string }[]) => {
+    setPageValidationMenu(null)
+    if (wordsList.length === 0) return
 
     setIsBatchSavingAi(true)
-    onAiTaskChange?.(true, `Analyse IA en cours (0/${pageWords.length})…`)
+    onAiTaskChange?.(true, `Analyse IA en cours (0/${wordsList.length})…`)
     const newlySaved: LearnedWord[] = []
     const allWordDetails: WordDetails[] = []
 
-    for (let i = 0; i < pageWords.length; i++) {
-      const item = pageWords[i]
-      onAiTaskChange?.(true, `Analyse IA en cours (${i + 1}/${pageWords.length})…`)
+    for (let i = 0; i < wordsList.length; i++) {
+      const item = wordsList[i]
+      onAiTaskChange?.(true, `Analyse IA en cours (${i + 1}/${wordsList.length})…`)
       try {
         const analysis = await analyzeWordWithAi({
           word: item.raw,
@@ -442,6 +449,21 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       setShowSavedModal(true)
       setTimeout(() => setShowSavedToast(false), 12000)
     }
+  }
+
+  const handleSaveAllPageWordsWithAi = () => {
+    const pageWords = extractPageUniqueWords(page)
+    executeBatchSaveAi(pageWords)
+  }
+
+  const handleSaveAllResourceWordsWithAi = () => {
+    const allWords = extractPageUniqueWords(entries)
+    executeBatchSaveAi(allWords)
+  }
+
+  const handleCompleteResource = () => {
+    onUpdate({ ...resource, archived: true })
+    onBack()
   }
 
   const toggleLeftPanel = () => {
@@ -532,6 +554,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const pages = useMemo(() => paginate(entries, settings.readerPageSize), [entries, settings.readerPageSize])
   const safePage = Math.min(pageIndex, pages.length - 1)
   const page = pages[safePage] ?? []
+  const isLastPage = pages.length > 0 && safePage >= pages.length - 1
 
   useEffect(() => {
     localStorage.setItem(`vivre-page-${resource.id}`, String(safePage))
@@ -921,11 +944,22 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             type="button"
             className="reader-page-check-btn"
             onClick={handleOpenValidationMenu}
-            title="Valider la page (Enregistrer tous les mots ou marquer comme terminé)"
-            aria-label="Valider la page"
+            title={resT.validatePageTooltip}
+            aria-label={resT.validatePageAria}
           >
             <CheckCircle2 size={22} className="check-icon" />
           </button>
+          {isLastPage && (
+            <button
+              type="button"
+              className="reader-page-check-btn reader-resource-done-btn"
+              onClick={handleCompleteResource}
+              title={resT.resourceCompletedTooltip || 'Ressource terminée'}
+              aria-label={resT.resourceCompletedTooltip || 'Ressource terminée'}
+            >
+              <Check size={22} className="check-icon" />
+            </button>
+          )}
         </div>
       </article>
 
@@ -1264,26 +1298,64 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       <div
         className="page-context-menu page-validation-menu"
         style={{
-          left: Math.max(10, Math.min(window.innerWidth - 220, pageValidationMenu.x - 90)),
-          top: Math.max(10, pageValidationMenu.y - 100),
+          left: Math.max(10, Math.min(window.innerWidth - 270, pageValidationMenu.x - 110)),
+          top: Math.max(10, pageValidationMenu.y - (isLastPage ? 180 : 100)),
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          className="page-context-item"
-          onClick={handleSaveAllPageWordsWithAi}
-          disabled={isBatchSavingAi}
-        >
-          <i><Sparkles size={15} /></i> {resT.saveAllPageWords}
-        </button>
-        <button
-          type="button"
-          className="page-context-item"
-          onClick={handleMarkPageAsDone}
-        >
-          <i><Check size={15} /></i> {resT.markPageDone}
-        </button>
+        {isLastPage ? (
+          <>
+            <button
+              type="button"
+              className="page-context-item"
+              onClick={handleSaveAllPageWordsWithAi}
+              disabled={isBatchSavingAi}
+            >
+              <i><Sparkles size={15} /></i> {resT.savePageWords}
+            </button>
+            <button
+              type="button"
+              className="page-context-item"
+              onClick={handleSaveAllResourceWordsWithAi}
+              disabled={isBatchSavingAi}
+            >
+              <i><BookOpen size={15} /></i> {resT.saveAllResourceWords}
+            </button>
+            <div className="page-context-sep" />
+            <button
+              type="button"
+              className="page-context-item"
+              onClick={handleMarkPageAsDone}
+            >
+              <i><Check size={15} /></i> {resT.markPageDone}
+            </button>
+            <button
+              type="button"
+              className="page-context-item"
+              onClick={handleMarkResourceAsDone}
+            >
+              <i><Check size={15} /></i> {resT.markResourceDone}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="page-context-item"
+              onClick={handleSaveAllPageWordsWithAi}
+              disabled={isBatchSavingAi}
+            >
+              <i><Sparkles size={15} /></i> {resT.saveAllPageWords}
+            </button>
+            <button
+              type="button"
+              className="page-context-item"
+              onClick={handleMarkPageAsDone}
+            >
+              <i><Check size={15} /></i> {resT.markPageDone}
+            </button>
+          </>
+        )}
       </div>
     )}
 

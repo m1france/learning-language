@@ -629,7 +629,8 @@ function Dashboard({
     state.customCategories.find((category) => category.id === typeId)?.label ??
     typeId
 
-  const hasResources = state.resources.length > 0
+  const activeResources = useMemo(() => state.resources.filter((r) => !r.archived), [state.resources])
+  const hasResources = activeResources.length > 0
   const hasSpeakingSessions = sessions.length > 0
 
   return (
@@ -654,7 +655,7 @@ function Dashboard({
         {hasResources ? (
           <div className="resume-carousel-wrapper">
             <div className="resume-carousel" ref={carouselRef}>
-              {state.resources.map((resource) => {
+              {activeResources.map((resource) => {
                 const progress = progressFor(state, resource)
                 const typeLabel = labelFor(resource.type)
                 return (
@@ -838,9 +839,44 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
   const coverFileRef = useRef<HTMLInputElement>(null)
 
   const hasResources = state.resources.length > 0
-  const labelFor = (typeId: string) => t.categories[typeId] ?? state.customCategories.find((category) => category.id === typeId)?.label ?? typeId
-  const types = useMemo(() => ['all', ...new Set([...BUILTIN_CATEGORIES.filter((category) => state.resources.some((resource) => resource.type === category)), ...state.customCategories.map((category) => category.id)])], [state.resources, state.customCategories])
-  const filtered = useMemo(() => state.resources.filter((resource) => (type === 'all' || resource.type === type) && (difficulty === 'all' || resource.difficulty === difficulty)), [state.resources, type, difficulty])
+  const hasArchived = useMemo(() => state.resources.some((r) => r.archived), [state.resources])
+  const activeResources = useMemo(() => state.resources.filter((r) => !r.archived), [state.resources])
+
+  useEffect(() => {
+    if (type === 'archive' && !hasArchived) {
+      setType('all')
+    }
+  }, [type, hasArchived])
+
+  const labelFor = (typeId: string) => {
+    if (typeId === 'archive') return t.archive || 'Archive'
+    return t.categories[typeId] ?? state.customCategories.find((category) => category.id === typeId)?.label ?? typeId
+  }
+
+  const types = useMemo(() => {
+    const list = [
+      'all',
+      ...new Set([
+        ...BUILTIN_CATEGORIES.filter((category) => activeResources.some((resource) => resource.type === category)),
+        ...state.customCategories.map((category) => category.id),
+      ]),
+    ]
+    if (hasArchived) {
+      list.push('archive')
+    }
+    return list
+  }, [activeResources, state.customCategories, hasArchived])
+
+  const filtered = useMemo(() => {
+    if (type === 'archive') {
+      return state.resources.filter(
+        (resource) => resource.archived && (difficulty === 'all' || resource.difficulty === difficulty),
+      )
+    }
+    return state.resources.filter(
+      (resource) => !resource.archived && (type === 'all' || resource.type === type) && (difficulty === 'all' || resource.difficulty === difficulty),
+    )
+  }, [state.resources, type, difficulty])
 
   const learningWordsCount = useMemo(
     () => (state.words ?? []).filter((w) => w.language === state.settings.learningLanguage).length,
@@ -853,7 +889,13 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
     else if (action === 'changeCover') {
       setCoverTargetResource(res)
       coverFileRef.current?.click()
-    } else if (action === 'delete') setDeletingResource(res)
+    } else if (action === 'archive') {
+      onChange(upsertResource(state, { ...res, archived: true }))
+    } else if (action === 'unarchive') {
+      onChange(upsertResource(state, { ...res, archived: false }))
+    } else if (action === 'delete') {
+      setDeletingResource(res)
+    }
   }
 
   const handleCoverPicked = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -30,6 +30,7 @@ export type Resource = {
   createdAt: string
   imported?: boolean
   isAiGenerated?: boolean
+  archived?: boolean
 }
 
 export type ReadingProgress = {

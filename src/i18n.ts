@@ -57,6 +57,7 @@ export type AppCopy = {
   today: string
   continueReading: string
   library: string
+  archive: string
   add: string
   all: string
   allLevels: string
@@ -121,7 +122,7 @@ const fr: AppCopy = {
   noSpeakingSessions: 'Aucun enregistrement pour le moment.',
   startSpeakingSession: 'Démarrer une session',
   welcome: 'Bienvenue', darkMode: 'Mode sombre', collapseSidebar: 'Réduire la barre latérale', expandSidebar: 'Agrandir la barre latérale', lightMode: 'Mode clair', roleLabel: 'Apprenant au quotidien', home: 'Accueil', reading: 'Lire', speaking: 'Parler', writing: 'Écrire', exercises: 'Exercices', seeMore: 'Voir plus', seeLess: 'Voir moins', settings: 'Paramètres',
-  today: 'Aujourd’hui', continueReading: 'Continuer à lire', library: 'Bibliothèque', add: 'Ajouter une ressource',
+  today: 'Aujourd’hui', continueReading: 'Continuer à lire', library: 'Bibliothèque', archive: 'Archive', add: 'Ajouter une ressource',
   all: 'Tout', allLevels: 'Tous niveaux', dayCard: 'Ta carte du jour', startActivity: 'Commencer l’activité',
   dailyPrompt: 'Le Mur des Mots', save: 'Enregistrer', publish: 'Publier sur le Mur', published: 'Publié — bienvenue sur le Mur.',
   wordGoal: 'mots utilisés', noPush: 'Sans notifications. À ton rythme.',
@@ -159,7 +160,7 @@ const en: AppCopy = {
   noSpeakingSessions: 'No recordings yet.',
   startSpeakingSession: 'Start a session',
   welcome: 'Welcome', darkMode: 'Dark mode', collapseSidebar: 'Collapse sidebar', expandSidebar: 'Expand sidebar', lightMode: 'Light mode', roleLabel: 'Everyday learner', home: 'Home', reading: 'Read', speaking: 'Speak', writing: 'Write', exercises: 'Exercises', seeMore: 'See more', seeLess: 'See less', settings: 'Settings',
-  today: 'Today', continueReading: 'Keep reading', library: 'Library', add: 'Add a resource',
+  today: 'Today', continueReading: 'Keep reading', library: 'Library', archive: 'Archive', add: 'Add a resource',
   all: 'All', allLevels: 'All levels', dayCard: 'Your card for today', startActivity: 'Start activity',
   dailyPrompt: 'The Word Wall', save: 'Save', publish: 'Publish to the Wall', published: 'Published — welcome to the Wall.',
   wordGoal: 'words used', noPush: 'No notifications. At your pace.',
@@ -197,7 +198,7 @@ const es: AppCopy = {
   noSpeakingSessions: 'No hay grabaciones todavía.',
   startSpeakingSession: 'Iniciar una sesión',
   welcome: 'Bienvenido', darkMode: 'Modo oscuro', collapseSidebar: 'Reducir la barra lateral', expandSidebar: 'Ampliar la barra lateral', lightMode: 'Modo claro', roleLabel: 'Aprendiz cotidiano', home: 'Inicio', reading: 'Leer', speaking: 'Hablar', writing: 'Escribir', exercises: 'Ejercicios', seeMore: 'Ver más', seeLess: 'Ver menos', settings: 'Ajustes',
-  today: 'Hoy', continueReading: 'Seguir leyendo', library: 'Biblioteca', add: 'Añadir un recurso',
+  today: 'Hoy', continueReading: 'Seguir leyendo', library: 'Biblioteca', archive: 'Archivo', add: 'Añadir un recurso',
   all: 'Todo', allLevels: 'Todos los niveles', dayCard: 'Tu tarjeta del día', startActivity: 'Empezar la actividad',
   dailyPrompt: 'El Muro de Palabras', save: 'Guardar', publish: 'Publicar en el Muro', published: 'Publicado — bienvenido al Muro.',
   wordGoal: 'palabras usadas', noPush: 'Sin notificaciones. A tu ritmo.',
@@ -235,7 +236,7 @@ const zh: AppCopy = {
   noSpeakingSessions: '暂无录音记录。',
   startSpeakingSession: '开始口语练习',
   welcome: '欢迎', darkMode: '深色模式', collapseSidebar: '收起侧边栏', expandSidebar: '展开侧边栏', lightMode: '浅色模式', roleLabel: '日常学习者', home: '首页', reading: '阅读', speaking: '口语', writing: '写作', exercises: '练习', seeMore: '查看更多', seeLess: '收起', settings: '设置',
-  today: '今天', continueReading: '继续阅读', library: '书库', add: '添加资源',
+  today: '今天', continueReading: '继续阅读', library: '书库', archive: '归档', add: '添加资源',
   all: '全部', allLevels: '所有级别', dayCard: '今日卡片', startActivity: '开始活动',
   dailyPrompt: '单词墙', save: '保存', publish: '发布到单词墙', published: '已发布——欢迎来到单词墙。',
   wordGoal: '个已用单词', noPush: '没有通知，按你的节奏来。',
@@ -273,7 +274,7 @@ const ru: AppCopy = {
   noSpeakingSessions: 'Записей пока нет.',
   startSpeakingSession: 'Начать сессию',
   welcome: 'Добро пожаловать', darkMode: 'Тёмная тема', collapseSidebar: 'Свернуть панель', expandSidebar: 'Развернуть панель', lightMode: 'Светлая тема', roleLabel: 'Учусь каждый день', home: 'Главная', reading: 'Читать', speaking: 'Говорить', writing: 'Писать', exercises: 'Упражнения', seeMore: 'Показать ещё', seeLess: 'Свернуть', settings: 'Настройки',
-  today: 'Сегодня', continueReading: 'Продолжить чтение', library: 'Библиотека', add: 'Добавить ресурс',
+  today: 'Сегодня', continueReading: 'Продолжить чтение', library: 'Библиотека', archive: 'Архив', add: 'Добавить ресурс',
   all: 'Все', allLevels: 'Все уровни', dayCard: 'Твоя карточка дня', startActivity: 'Начать занятие',
   dailyPrompt: 'Стена слов', save: 'Сохранить', publish: 'Опубликовать на Стене', published: 'Опубликовано — добро пожаловать на Стену.',
   wordGoal: 'слов использовано', noPush: 'Без уведомлений. В твоём темпе.',
@@ -311,7 +312,7 @@ const pt: AppCopy = {
   noSpeakingSessions: 'Nenhuma gravação ainda.',
   startSpeakingSession: 'Iniciar uma sessão',
   welcome: 'Bem-vindo', darkMode: 'Modo escuro', collapseSidebar: 'Recolher a barra lateral', expandSidebar: 'Expandir a barra lateral', lightMode: 'Modo claro', roleLabel: 'Aprendiz do dia a dia', home: 'Início', reading: 'Ler', speaking: 'Falar', writing: 'Escrever', exercises: 'Exercícios', seeMore: 'Ver mais', seeLess: 'Ver menos', settings: 'Definições',
-  today: 'Hoje', continueReading: 'Continuar a ler', library: 'Biblioteca', add: 'Adicionar um recurso',
+  today: 'Hoje', continueReading: 'Continuar a ler', library: 'Biblioteca', archive: 'Arquivo', add: 'Adicionar um recurso',
   all: 'Tudo', allLevels: 'Todos os níveis', dayCard: 'O teu cartão do dia', startActivity: 'Começar a atividade',
   dailyPrompt: 'O Muro das Palavras', save: 'Guardar', publish: 'Publicar no Muro', published: 'Publicado — bem-vindo ao Muro.',
   wordGoal: 'palavras usadas', noPush: 'Sem notificações. Ao teu ritmo.',

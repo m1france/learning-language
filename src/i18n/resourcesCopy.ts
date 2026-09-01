@@ -39,6 +39,8 @@ export type ResourcesCopy = {
   editContentAction: string
   renameAction: string
   changeCoverAction: string
+  archiveAction: string
+  unarchiveAction: string
   deleteAction: string
   editContentModalTitle: string
   editContentEyebrow: string
@@ -69,8 +71,12 @@ export type ResourcesCopy = {
   saveWordsAction: string
   validatePageTooltip: string
   validatePageAria: string
+  resourceCompletedTooltip: string
   saveAllPageWords: string
+  savePageWords: string
+  saveAllResourceWords: string
   markPageDone: string
+  markResourceDone: string
   savedToastSingle: string
   savedToastMultiple: (count: number) => string
   savedToastSub: string
@@ -123,6 +129,8 @@ const frResources: ResourcesCopy = {
   editContentAction: 'Modifier le contenu',
   renameAction: 'Renommer',
   changeCoverAction: 'Modifier la couverture',
+  archiveAction: 'Archiver',
+  unarchiveAction: 'Désarchiver',
   deleteAction: 'Supprimer',
   editContentModalTitle: 'Modifier le contenu',
   editContentEyebrow: 'MODIFIER LE CONTENU',
@@ -152,8 +160,12 @@ const frResources: ResourcesCopy = {
   saveWordsAction: 'Enregistrer les mots',
   validatePageTooltip: 'Valider la page (Enregistrer tous les mots ou marquer comme terminé)',
   validatePageAria: 'Valider la page',
+  resourceCompletedTooltip: 'Ressource terminée',
   saveAllPageWords: 'Enregistrer tous les mots',
+  savePageWords: 'Enregistrer les mots de la page',
+  saveAllResourceWords: 'Enregistrer tous les mots de la ressource',
   markPageDone: 'Terminé',
+  markResourceDone: 'Marquer la ressource comme terminée',
   savedToastSingle: '1 mot enregistré avec succès',
   savedToastMultiple: (n: number) => `${n} mots enregistrés avec succès`,
   savedToastSub: 'Clique pour voir la liste complète et modifier',
@@ -206,6 +218,8 @@ const enResources: ResourcesCopy = {
   editContentAction: 'Edit content',
   renameAction: 'Rename',
   changeCoverAction: 'Change cover',
+  archiveAction: 'Archive',
+  unarchiveAction: 'Unarchive',
   deleteAction: 'Delete',
   editContentModalTitle: 'Edit content',
   editContentEyebrow: 'EDIT CONTENT',
@@ -235,8 +249,12 @@ const enResources: ResourcesCopy = {
   saveWordsAction: 'Save words',
   validatePageTooltip: 'Validate page (Save all words or mark as done)',
   validatePageAria: 'Validate page',
+  resourceCompletedTooltip: 'Resource completed',
   saveAllPageWords: 'Save all words with AI',
+  savePageWords: 'Save page words',
+  saveAllResourceWords: 'Save all words in resource',
   markPageDone: 'Done',
+  markResourceDone: 'Mark resource as completed',
   savedToastSingle: '1 word successfully saved',
   savedToastMultiple: (n: number) => `${n} words successfully saved`,
   savedToastSub: 'Click to view complete list and edit',
@@ -289,6 +307,8 @@ const esResources: ResourcesCopy = {
   editContentAction: 'Modificar contenido',
   renameAction: 'Renombrar',
   changeCoverAction: 'Cambiar portada',
+  archiveAction: 'Archivar',
+  unarchiveAction: 'Desarchivar',
   deleteAction: 'Eliminar',
   editContentModalTitle: 'Modificar contenido',
   editContentEyebrow: 'MODIFICAR CONTENIDO',
@@ -318,8 +338,12 @@ const esResources: ResourcesCopy = {
   saveWordsAction: 'Guardar palabras',
   validatePageTooltip: 'Validar página (Guardar todas las palabras o marcar como completada)',
   validatePageAria: 'Validar página',
+  resourceCompletedTooltip: 'Recurso terminado',
   saveAllPageWords: 'Guardar todas las palabras con IA',
+  savePageWords: 'Guardar palabras de la página',
+  saveAllResourceWords: 'Guardar todas las palabras del recurso',
   markPageDone: 'Completado',
+  markResourceDone: 'Marcar recurso como completado',
   savedToastSingle: '1 palabra guardada con éxito',
   savedToastMultiple: (n: number) => `${n} palabras guardadas con éxito`,
   savedToastSub: 'Haz clic para ver la lista completa y editar',
@@ -372,6 +396,8 @@ const zhResources: ResourcesCopy = {
   editContentAction: '编辑正文内容',
   renameAction: '重命名',
   changeCoverAction: '修改封面图片',
+  archiveAction: '归档',
+  unarchiveAction: '取消归档',
   deleteAction: '删除',
   editContentModalTitle: '编辑文章内容',
   editContentEyebrow: '编辑文章内容',
@@ -401,8 +427,12 @@ const zhResources: ResourcesCopy = {
   saveWordsAction: '批量保存单词',
   validatePageTooltip: '完成本页（AI 批量保存词汇或标记为已读）',
   validatePageAria: '确认本页',
+  resourceCompletedTooltip: '资源已完成',
   saveAllPageWords: '使用 AI 保存全页单词',
+  savePageWords: '保存本页单词',
+  saveAllResourceWords: '保存整个资源的所有单词',
   markPageDone: '标记已读',
+  markResourceDone: '将资源标记为已完成',
   savedToastSingle: '已成功记录 1 个新词',
   savedToastMultiple: (n: number) => `已成功记录 ${n} 个新词`,
   savedToastSub: '点击查看完整词表并编辑',
@@ -455,6 +485,8 @@ const ruResources: ResourcesCopy = {
   editContentAction: 'Редактировать текст',
   renameAction: 'Переименовать',
   changeCoverAction: 'Изменить обложку',
+  archiveAction: 'В архив',
+  unarchiveAction: 'Из архива',
   deleteAction: 'Удалить',
   editContentModalTitle: 'Редактировать текст',
   editContentEyebrow: 'РЕДАКТИРОВАТЬ ТЕКСТ',
@@ -484,8 +516,12 @@ const ruResources: ResourcesCopy = {
   saveWordsAction: 'Сохранить слова',
   validatePageTooltip: 'Завершить страницу (Сохранить все слова или отметить как прочитанную)',
   validatePageAria: 'Завершить страницу',
+  resourceCompletedTooltip: 'Ресурс завершён',
   saveAllPageWords: 'Сохранить все слова через ИИ',
+  savePageWords: 'Сохранить слова со страницы',
+  saveAllResourceWords: 'Сохранить все слова ресурса',
   markPageDone: 'Готово',
+  markResourceDone: 'Отметить ресурс как завершённый',
   savedToastSingle: '1 слово успешно сохранено',
   savedToastMultiple: (n: number) => `Успешно сохранено слов: ${n}`,
   savedToastSub: 'Нажмите для просмотра полного списка и редактирования',
@@ -538,6 +574,8 @@ const ptResources: ResourcesCopy = {
   editContentAction: 'Modificar conteúdo',
   renameAction: 'Mudar o nome',
   changeCoverAction: 'Modificar capa',
+  archiveAction: 'Arquivar',
+  unarchiveAction: 'Desarquivar',
   deleteAction: 'Eliminar',
   editContentModalTitle: 'Modificar conteúdo',
   editContentEyebrow: 'MODIFICAR CONTEÚDO',
@@ -567,8 +605,12 @@ const ptResources: ResourcesCopy = {
   saveWordsAction: 'Guardar palavras',
   validatePageTooltip: 'Validar página (Guardar todas as palavras ou marcar como concluída)',
   validatePageAria: 'Validar página',
+  resourceCompletedTooltip: 'Recurso concluído',
   saveAllPageWords: 'Guardar todas as palavras com IA',
+  savePageWords: 'Guardar palavras da página',
+  saveAllResourceWords: 'Guardar todas as palavras do recurso',
   markPageDone: 'Concluído',
+  markResourceDone: 'Marcar recurso como concluído',
   savedToastSingle: '1 palavra guardada com sucesso',
   savedToastMultiple: (n: number) => `${n} palavras guardadas com sucesso`,
   savedToastSub: 'Clica para ver a lista completa e editar',

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Check, FileText, Image, Pencil, Trash2, X } from 'lucide-react'
+import { Archive, ArchiveRestore, Check, FileText, Image, Pencil, Trash2, X } from 'lucide-react'
 import type { Resource, UiLanguage } from '../domain'
 import { toChapters } from '../importer'
 import { resourcesCopy } from '../i18n'
@@ -10,7 +10,7 @@ export type ResourceContextTarget = {
   y: number
 }
 
-export type ResourceAction = 'editContent' | 'rename' | 'changeCover' | 'delete'
+export type ResourceAction = 'editContent' | 'rename' | 'changeCover' | 'archive' | 'unarchive' | 'delete'
 
 export function ResourceContextMenu({
   target,
@@ -48,7 +48,7 @@ export function ResourceContextMenu({
   }, [onClose])
 
   const menuWidth = 210
-  const menuHeight = 170
+  const menuHeight = 210
   const left = Math.max(10, Math.min(window.innerWidth - menuWidth - 10, target.x))
   const top = Math.max(10, Math.min(window.innerHeight - menuHeight - 10, target.y))
 
@@ -90,6 +90,18 @@ export function ResourceContextMenu({
         }}
       >
         <i><Image size={15} /></i> {t.changeCoverAction}
+      </button>
+
+      <button
+        type="button"
+        className="page-context-item"
+        onClick={() => {
+          onClose()
+          onSelectAction(target.resource.archived ? 'unarchive' : 'archive', target.resource)
+        }}
+      >
+        <i>{target.resource.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}</i>
+        {target.resource.archived ? t.unarchiveAction : t.archiveAction}
       </button>
 
       <div className="page-context-sep" />
