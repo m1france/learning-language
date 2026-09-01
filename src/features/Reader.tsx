@@ -362,14 +362,6 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     setPageValidationMenu(null)
   }
 
-  const handleMarkResourceAsDone = () => {
-    const allWords = extractPageUniqueWords(entries)
-    if (allWords.length > 0) {
-      onBatchMarkKnown?.(allWords, resource.language)
-    }
-    setPageValidationMenu(null)
-  }
-
   const executeBatchSaveAi = async (wordsList: { raw: string; normalized: string; sentence: string }[]) => {
     setPageValidationMenu(null)
     if (wordsList.length === 0) return
@@ -1299,7 +1291,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         className="page-context-menu page-validation-menu"
         style={{
           left: Math.max(10, Math.min(window.innerWidth - 270, pageValidationMenu.x - 110)),
-          top: Math.max(10, pageValidationMenu.y - (isLastPage ? 180 : 100)),
+          top: Math.max(10, pageValidationMenu.y - (isLastPage ? 135 : 95)),
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1321,20 +1313,12 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             >
               <i><BookOpen size={15} /></i> {resT.saveAllResourceWords}
             </button>
-            <div className="page-context-sep" />
             <button
               type="button"
               className="page-context-item"
               onClick={handleMarkPageAsDone}
             >
               <i><Check size={15} /></i> {resT.markPageDone}
-            </button>
-            <button
-              type="button"
-              className="page-context-item"
-              onClick={handleMarkResourceAsDone}
-            >
-              <i><Check size={15} /></i> {resT.markResourceDone}
             </button>
           </>
         ) : (
