@@ -11,77 +11,79 @@ export function formatIpaPronunciation(raw?: string): string {
   if (!raw || !raw.trim()) return ''
   let str = raw.trim()
 
-  // Remove outer slashes / brackets
-  if ((str.startsWith('/') && str.endsWith('/')) || (str.startsWith('[') && str.endsWith(']'))) {
+  // Remove outer slashes / brackets / quotes
+  if ((str.startsWith('/') && str.endsWith('/') && str.length >= 2) ||
+      (str.startsWith('[') && str.endsWith(']') && str.length >= 2)) {
     str = str.slice(1, -1).trim()
   }
 
-  // If already formatted with **bold**, normalize separators
-  if (str.includes('**')) {
-    const normalized = str
+  // Remove any remaining leading/trailing stray slashes, backslashes, or quotes
+  str = str.replace(/^[/\\"'`]+|[/\\"'`]+$/g, '').trim()
+  if (!str) return ''
+
+  // Normalize syllable separator variants to uniform ' · '
+  const normalizedSeparators = str
+    .replace(/\s*·\s*/g, ' · ')
+    .replace(/[ˌ]/g, ' · ')
+    .replace(/\s*([.,\-])\s*/g, ' · ')
+
+  const rawTokens = normalizedSeparators
+    .split(/\s*·\s+|\s+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+
+  if (rawTokens.length === 0) return ''
+
+  // Single syllable word: clean IPA without stress marks or broken bold
+  if (rawTokens.length === 1) {
+    const cleanSyllable = rawTokens[0]
       .replace(/[ˈ']/g, '')
-      .replace(/[.,ˌ]\s*/g, ' · ')
-      .replace(/\s*·\s*/g, ' · ')
+      .replace(/[*_~`]/g, '')
       .trim()
-    return `/${normalized}/`
+    return cleanSyllable ? `/${cleanSyllable}/` : ''
   }
 
-  // Syllable boundary detection
-  const hasSeparators = /[.,·\-\sˌ]/.test(str)
+  // Multi-syllable word: identify stressed syllables and enclose in balanced **...**
+  const formattedSyllables = rawTokens.map((token) => {
+    const hasStress = token.includes('ˈ') || token.includes("'") || token.includes('**') || token.startsWith('*')
+    const cleanToken = token
+      .replace(/[ˈ']/g, '')
+      .replace(/[*_~`]/g, '')
+      .trim()
 
-  if (hasSeparators) {
-    const rawTokens = str.split(/[.,·\-\sˌ]+/).filter(Boolean)
-    const formattedSyllables = rawTokens.map((token) => {
-      if (token.includes('ˈ') || token.includes("'")) {
-        const cleaned = token.replace(/[ˈ']/g, '').trim()
-        return cleaned ? `**${cleaned}**` : ''
-      }
-      return token.replace(/[ˈ']/g, '').trim()
-    }).filter(Boolean)
-    return `/${formattedSyllables.join(' · ')}/`
-  }
-
-  // If there are no syllable separators, but has ˈ or '
-  if (str.includes('ˈ') || str.includes("'")) {
-    const stressIdx = str.search(/[ˈ']/)
-    const before = str.slice(0, stressIdx).trim()
-    const after = str.slice(stressIdx + 1).trim()
-    if (before) {
-      return `/${before} · **${after}**/`
+    if (!cleanToken) return ''
+    if (hasStress) {
+      return `**${cleanToken}**`
     }
-    return `/**${after}**/`
-  }
+    return cleanToken
+  }).filter(Boolean)
 
-  return `/${str}/`
+  if (formattedSyllables.length === 0) return ''
+  return `/${formattedSyllables.join(' · ')}/`
 }
 
 /**
- * Parses and renders phonetic IPA strings containing Markdown emphasis (e.g. `**tʃɪ**`, `*stress*`, `__bold__`).
- * Also ensures surrounding brackets `[...]` or `/.../` are cleanly formatted without duplicates.
+ * Parses and renders phonetic IPA strings containing Markdown emphasis (e.g. `**tʃɪ**`).
+ * Automatically formats and cleans the phonetic string first to guarantee valid display.
  */
 export function renderPhoneticFormatted(raw?: string): React.ReactNode {
   if (!raw || !raw.trim()) return null
-  const trimmed = raw.trim()
+  const formatted = formatIpaPronunciation(raw)
+  if (!formatted) return null
 
-  // Remove outermost brackets/slashes if they enclose the whole string, so we control the presentation
-  let clean = trimmed
-  let hasOuterBrackets = false
-  let hasOuterSlashes = false
-
-  if (clean.startsWith('[') && clean.endsWith(']') && clean.length > 2) {
+  // Remove outermost brackets/slashes so we control the presentation
+  let clean = formatted.trim()
+  if (clean.startsWith('/') && clean.endsWith('/') && clean.length >= 2) {
     clean = clean.slice(1, -1).trim()
-    hasOuterBrackets = true
-  } else if (clean.startsWith('/') && clean.endsWith('/') && clean.length > 2) {
+  } else if (clean.startsWith('[') && clean.endsWith(']') && clean.length >= 2) {
     clean = clean.slice(1, -1).trim()
-    hasOuterSlashes = true
   }
 
-  // Parse markdown bold (**...** or __...__) and italic (*...* or _..._)
-  const parts = clean.split(/(\*\*[\s\S]*?\*\*|__[\s\S]*?__|\*[\s\S]*?\*|_[\s\S]*?_)/g)
+  // Parse markdown bold (**...**)
+  const parts = clean.split(/(\*\*[\s\S]*?\*\*)/g)
 
   const elements = parts.map((part, idx) => {
-    if ((part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
-        (part.startsWith('__') && part.endsWith('__') && part.length >= 4)) {
+    if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
       const inner = part.slice(2, -2)
       return (
         <strong key={idx} className="phonetic-stress" style={{ fontWeight: 700, color: 'inherit' }}>
@@ -89,31 +91,39 @@ export function renderPhoneticFormatted(raw?: string): React.ReactNode {
         </strong>
       )
     }
-    if ((part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
-        (part.startsWith('_') && part.endsWith('_') && part.length >= 2)) {
-      const inner = part.slice(1, -1)
-      return (
-        <em key={idx} className="phonetic-italic" style={{ fontStyle: 'italic', color: 'inherit' }}>
-          {inner}
-        </em>
-      )
-    }
     return <React.Fragment key={idx}>{part}</React.Fragment>
   })
 
-  // Format with consistent wrapping if it originally had slashes or brackets
-  if (hasOuterSlashes) {
-    return <span className="phonetic-wrapper">/{elements}/</span>
-  }
-  return <span className="phonetic-wrapper">[{elements}]</span>
+  return <span className="phonetic-wrapper">/{elements}/</span>
 }
 
 /**
  * Safely parses markdown bold (**...**, __...__), italic (*...*, _..._), and underline (<u>...</u>).
- * Returns cleanly formatted React nodes without raw markdown syntax characters.
+ * Automatically balances unclosed tokens and strips malformed characters.
+ * Returns cleanly formatted React nodes without raw markdown syntax characters leaking.
  */
 export function renderStyledMarkdown(text?: string): React.ReactNode {
   if (!text || !text.trim()) return null
+
+  // Auto-balance unclosed <u>
+  let sanitized = text.trim()
+  const openU = (sanitized.match(/<u>/gi) || []).length
+  const closeU = (sanitized.match(/<\/u>/gi) || []).length
+  if (openU > closeU) {
+    sanitized += '</u>'.repeat(openU - closeU)
+  }
+
+  // Balance unclosed ** (odd count)
+  const countBold = (sanitized.match(/\*\*/g) || []).length
+  if (countBold % 2 !== 0) {
+    sanitized += '**'
+  }
+
+  // Balance unclosed __ (odd count)
+  const countUnderBold = (sanitized.match(/__/g) || []).length
+  if (countUnderBold % 2 !== 0) {
+    sanitized += '__'
+  }
 
   function parse(input: string, keyPrefix = ''): React.ReactNode[] {
     if (!input) return []
@@ -150,7 +160,7 @@ export function renderStyledMarkdown(text?: string): React.ReactNode {
     })
   }
 
-  return <>{parse(text, 'md')}</>
+  return <>{parse(sanitized, 'md')}</>
 }
 
 /**
@@ -162,5 +172,6 @@ export function stripMarkdown(text?: string): string {
     .replace(/(\*\*|__)([\s\S]+?)\1/g, '$2')
     .replace(/(\*|_)([\s\S]+?)\1/g, '$2')
     .replace(/<u>([\s\S]*?)<\/u>/gi, '$1')
+    .replace(/[*_~`]/g, '')
     .trim()
 }

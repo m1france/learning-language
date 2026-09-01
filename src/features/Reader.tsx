@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, GrammarMarkStyle, GrammarMarkType, Language, LearnedWord, Resource, UiLanguage, WordMark, WordRelationType } from '../domain'
-import { normalizeWord } from '../domain'
+import { normalizeWord, getInflectionVariants } from '../domain'
 import { DEFAULT_MARKINGS, knownParents, knownTags, resolveWordFamily, setWordAsReference, type WordFamily } from '../store'
 import { copy, readerCopy } from '../i18n'
 import { loadOriginals, modifiedCharIndices } from './LearningFocus'
@@ -35,7 +35,9 @@ import {
   Loader2,
 } from 'lucide-react'
 import { speak } from '../ai'
-import { analyzeWordWithAi, extractAndAnalyzePageVocabularyWithAi } from './speaking/wordAiService'
+import { analyzeWordWithAi, extractAndAnalyzePageVocabularyWithAi, isUniversalProperNoun, selectBestSingleTag } from './speaking/wordAiService'
+import { formatIpaPronunciation, renderPhoneticFormatted, renderStyledMarkdown } from './vocabulary/phoneticUtils'
+import { RichInputField } from './vocabulary/RichInputField'
 import { getResourceWordStats, extractPageUniqueWords } from './readingProgressUtils'
 import { PageSavedWordsModal } from './vocabulary/PageSavedWordsModal'
 import { resourcesCopy } from '../i18n'
@@ -310,6 +312,15 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         api: state.settings.api,
         contextSentence: sentence,
       })
+      const existingTagsList = knownTags(state, resource.language)
+      const singleBestTag = selectBestSingleTag({
+        rawTags: analysis.tags,
+        word: cleaned,
+        parent: analysis.parent || '',
+        partOfSpeech: analysis.partOfSpeech || '',
+        existingTags: existingTagsList,
+      })
+      const formattedPronunciation = formatIpaPronunciation(analysis.pronunciation)
       onSaveWord({
         raw: analysis.word || cleaned,
         sentence,
@@ -317,9 +328,9 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         sourceResourceId: resource.id,
         translation: analysis.translation,
         parent: analysis.parent,
-        pronunciation: analysis.pronunciation,
+        pronunciation: formattedPronunciation,
         partOfSpeech: analysis.partOfSpeech,
-        tags: analysis.tags,
+        tags: singleBestTag,
         knowledge: 1,
       })
     } catch (e) {
@@ -373,15 +384,30 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     const allWordDetails: WordDetails[] = []
     const newlySavedSeen = new Set<string>()
 
-    // Identify already saved words in this language to prevent duplicates
+    // Identify already saved words in this language to prevent duplicates (including plurals and inflections)
     const existingLanguageWords = state.words.filter((w) => w.language === resource.language)
-    const existingNormalizedSet = new Set(
-      existingLanguageWords
-        .map((w) => w.normalized)
-        .concat(existingLanguageWords.map((w) => normalizeWord(w.word)))
-        .concat(existingLanguageWords.filter((w) => w.parent).map((w) => normalizeWord(w.parent!)))
+    const existingNormalizedSet = new Set<string>()
+    for (const w of existingLanguageWords) {
+      for (const v of getInflectionVariants(w.normalized)) {
+        existingNormalizedSet.add(v)
+      }
+      for (const v of getInflectionVariants(w.word)) {
+        existingNormalizedSet.add(v)
+      }
+      if (w.parent) {
+        for (const v of getInflectionVariants(w.parent)) {
+          existingNormalizedSet.add(v)
+        }
+      }
+    }
+
+    const existingWordsList = Array.from(
+      new Set(
+        existingLanguageWords
+          .flatMap((w) => [w.word, w.parent, ...getInflectionVariants(w.word)])
+          .filter(Boolean) as string[]
+      )
     )
-    const existingWordsList = Array.from(new Set(existingLanguageWords.map((w) => w.word)))
     const existingTagsList = knownTags(state, resource.language)
 
     // Group entries into manageable chunks (approx. 350 words)
@@ -437,11 +463,37 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           for (const item of items) {
             const raw = item.word.trim()
             if (!raw) continue
+            // Skip universal proper nouns (names, cities, countries)
+            if (isUniversalProperNoun(item)) continue
+
             const norm = normalizeWord(raw)
-            if (!norm || existingNormalizedSet.has(norm) || newlySavedSeen.has(norm)) {
+            if (!norm) continue
+
+            const parentNorm = item.parent ? normalizeWord(item.parent) : ''
+            const variants = getInflectionVariants(norm)
+            const parentVariants = parentNorm ? getInflectionVariants(parentNorm) : []
+
+            // Check if this word, its parent, or any singular/plural inflection variant is already recorded
+            const isAlreadyKnown =
+              variants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v)) ||
+              (parentVariants.length > 0 && parentVariants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v)))
+
+            if (isAlreadyKnown) {
               continue
             }
-            newlySavedSeen.add(norm)
+
+            // Register all variants so no plural or 3rd-person duplicate is saved later in the batch
+            for (const v of variants) newlySavedSeen.add(v)
+            for (const v of parentVariants) newlySavedSeen.add(v)
+
+            const formattedPronunciation = formatIpaPronunciation(item.pronunciation || '')
+            const singleBestTag = selectBestSingleTag({
+              rawTags: item.tags,
+              word: raw,
+              parent: item.parent || '',
+              partOfSpeech: item.partOfSpeech || '',
+              existingTags: existingTagsList,
+            })
 
             const wordDetails: WordDetails = {
               raw,
@@ -450,9 +502,9 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               sourceResourceId: resource.id,
               translation: item.translation,
               parent: item.parent || '',
-              pronunciation: item.pronunciation || '',
+              pronunciation: formattedPronunciation,
               partOfSpeech: item.partOfSpeech || undefined,
-              tags: item.tags,
+              tags: singleBestTag,
               knowledge: 6,
             }
             allWordDetails.push(wordDetails)
@@ -462,7 +514,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               word: raw,
               normalized: norm,
               language: resource.language,
-              phonetic: item.pronunciation || undefined,
+              phonetic: formattedPronunciation || undefined,
               translation: item.translation,
               parent: item.parent || undefined,
               partOfSpeech: item.partOfSpeech || '',
@@ -476,18 +528,24 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               nextReview: new Date().toISOString(),
               easeFactor: 2.5,
               reviewCount: 1,
-              tags: item.tags || [],
+              tags: singleBestTag,
               createdAt: new Date().toISOString(),
             })
           }
         } else {
           // Fallback if AI call returned empty or offline: extract unique words, filtering out already known words
-          const fallbackWords = extractPageUniqueWords(chunkEntries).filter(
-            (w) => !existingNormalizedSet.has(w.normalized) && !newlySavedSeen.has(w.normalized)
-          )
+          const fallbackWords = extractPageUniqueWords(chunkEntries).filter((w) => {
+            const variants = getInflectionVariants(w.normalized)
+            return !variants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v))
+          })
 
           for (const fw of fallbackWords) {
-            newlySavedSeen.add(fw.normalized)
+            const fwVariants = getInflectionVariants(fw.normalized)
+            if (fwVariants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v))) {
+              continue
+            }
+            for (const v of fwVariants) newlySavedSeen.add(v)
+
             try {
               const analysis = await analyzeWordWithAi({
                 word: fw.raw,
@@ -497,6 +555,17 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 api: state.settings.api,
                 contextSentence: fw.sentence,
               })
+              if (isUniversalProperNoun({ word: fw.raw, translation: analysis.translation, partOfSpeech: analysis.partOfSpeech })) {
+                continue
+              }
+              const formattedPronunciation = formatIpaPronunciation(analysis.pronunciation || '')
+              const singleBestTag = selectBestSingleTag({
+                rawTags: analysis.tags,
+                word: fw.raw,
+                parent: analysis.parent || '',
+                partOfSpeech: analysis.partOfSpeech || '',
+                existingTags: existingTagsList,
+              })
               const wordDetails: WordDetails = {
                 raw: analysis.word || fw.raw,
                 sentence: fw.sentence,
@@ -504,9 +573,9 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 sourceResourceId: resource.id,
                 translation: analysis.translation,
                 parent: analysis.parent,
-                pronunciation: analysis.pronunciation,
+                pronunciation: formattedPronunciation,
                 partOfSpeech: analysis.partOfSpeech,
-                tags: analysis.tags,
+                tags: singleBestTag,
                 knowledge: 6,
               }
               allWordDetails.push(wordDetails)
@@ -515,7 +584,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 word: analysis.word || fw.raw,
                 normalized: fw.normalized,
                 language: resource.language,
-                phonetic: analysis.pronunciation,
+                phonetic: formattedPronunciation,
                 translation: analysis.translation,
                 parent: analysis.parent,
                 partOfSpeech: analysis.partOfSpeech || '',
@@ -529,7 +598,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 nextReview: new Date().toISOString(),
                 easeFactor: 2.5,
                 reviewCount: 1,
-                tags: analysis.tags || [],
+                tags: singleBestTag,
                 createdAt: new Date().toISOString(),
               })
             } catch (err) {
@@ -1739,228 +1808,13 @@ function WikiPanel({ word, language, initialTab, onClose }: {
   )
 }
 
-/**
- * Convert markdown to HTML for rich contentEditable fields.
- */
-function markdownToHtml(md: string): string {
-  if (!md) return ''
 
-  let escaped = md
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-
-  escaped = escaped
-    .replace(/&lt;u&gt;/gi, '<u>')
-    .replace(/&lt;\/u&gt;/gi, '</u>')
-    .replace(/&lt;ins&gt;/gi, '<u>')
-    .replace(/&lt;\/ins&gt;/gi, '</u>')
-
-  escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-  escaped = escaped.replace(/__([^_]+)__/g, '<strong>$1</strong>')
-  escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>')
-  escaped = escaped.replace(/_([^_]+)_/g, '<em>$1</em>')
-  escaped = escaped.replace(/\n/g, '<br>')
-
-  return escaped
-}
-
-/**
- * Serialize rich contentEditable HTML back to clean markdown.
- */
-function htmlToMarkdown(html: string): string {
-  if (!html) return ''
-
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html')
-
-  function traverse(node: Node): string {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return node.textContent || ''
-    }
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement
-      const tag = el.tagName.toLowerCase()
-
-      let inner = ''
-      el.childNodes.forEach((child) => {
-        inner += traverse(child)
-      })
-
-      if (tag === 'br') return '\n'
-      if (tag === 'strong' || tag === 'b') {
-        const clean = inner.trim()
-        if (!clean) return inner
-        return `**${clean}**`
-      }
-      if (tag === 'em' || tag === 'i') {
-        const clean = inner.trim()
-        if (!clean) return inner
-        return `*${clean}*`
-      }
-      if (tag === 'u' || tag === 'ins') {
-        const clean = inner.trim()
-        if (!clean) return inner
-        return `<u>${clean}</u>`
-      }
-      if (tag === 'div' || tag === 'p') {
-        if (!inner || inner === '\n') return '\n'
-        return `\n${inner}`
-      }
-
-      return inner
-    }
-    return ''
-  }
-
-  let result = traverse(doc.body)
-  result = result.replace(/^\n+/, '').replace(/\n+$/, '')
-  return result
-}
-
-/**
- * Rich editable field rendering bold, italic, and underline directly in-place.
- */
-function RichInputField({
-  value,
-  placeholder,
-  multiline = false,
-  className,
-  onChange,
-}: {
-  value: string
-  placeholder?: string
-  multiline?: boolean
-  className?: string
-  onChange: (value: string) => void
-}) {
-  const editorRef = useRef<HTMLDivElement>(null)
-  const lastEmittedRef = useRef(value)
-  const isComposingRef = useRef(false)
-
-  useEffect(() => {
-    if (editorRef.current) {
-      const currentMd = htmlToMarkdown(editorRef.current.innerHTML)
-      if (value !== currentMd && value !== lastEmittedRef.current) {
-        editorRef.current.innerHTML = markdownToHtml(value)
-        lastEmittedRef.current = value
-      }
-    }
-  }, [value])
-
-  useEffect(() => {
-    if (editorRef.current) {
-      editorRef.current.innerHTML = markdownToHtml(value)
-      lastEmittedRef.current = value
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleInput = () => {
-    if (!editorRef.current || isComposingRef.current) return
-    const md = htmlToMarkdown(editorRef.current.innerHTML)
-    lastEmittedRef.current = md
-    onChange(md)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.metaKey || e.ctrlKey) {
-      const key = e.key.toLowerCase()
-      if (key === 'b') {
-        e.preventDefault()
-        document.execCommand('bold', false)
-        handleInput()
-        return
-      }
-      if (key === 'i') {
-        e.preventDefault()
-        document.execCommand('italic', false)
-        handleInput()
-        return
-      }
-      if (key === 'u') {
-        e.preventDefault()
-        document.execCommand('underline', false)
-        handleInput()
-        return
-      }
-    }
-
-    if (!multiline && e.key === 'Enter') {
-      e.preventDefault()
-    }
-  }
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const text = e.clipboardData.getData('text/plain')
-    const clean = multiline ? text : text.replace(/[\r\n]+/g, ' ')
-    document.execCommand('insertText', false, clean)
-    handleInput()
-  }
-
-  const isEmpty = !value || value.trim() === ''
-
-  return (
-    <div
-      ref={editorRef}
-      contentEditable
-      role="textbox"
-      aria-multiline={multiline}
-      data-placeholder={placeholder}
-      data-empty={isEmpty ? 'true' : undefined}
-      className={className}
-      onInput={handleInput}
-      onKeyDown={handleKeyDown}
-      onPaste={handlePaste}
-      onCompositionStart={() => { isComposingRef.current = true }}
-      onCompositionEnd={() => { isComposingRef.current = false; handleInput() }}
-    />
-  )
-}
 
 /**
  * Safely renders markdown bold, italic, and underline tokens into React nodes.
  */
 function renderSimpleMarkdown(text?: string): React.ReactNode {
-  if (!text) return null
-
-  function parse(input: string, keyPrefix = ''): React.ReactNode[] {
-    if (!input) return []
-
-    const regex = /(\*\*(?:[\s\S]+?)\*\*|__(?:[\s\S]+?)__|<u>[\s\S]*?<\/u>|\*(?:[^*]+?)\*|_(?:[^_]+?)_)/i
-    const parts = input.split(regex)
-
-    return parts.map((part, index) => {
-      const key = `${keyPrefix}-${index}`
-      if (!part) return null
-
-      if (
-        (part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
-        (part.startsWith('__') && part.endsWith('__') && part.length >= 4)
-      ) {
-        const inner = part.slice(2, -2)
-        return <strong key={key}>{parse(inner, `${key}-b`)}</strong>
-      }
-
-      if (part.toLowerCase().startsWith('<u>') && part.toLowerCase().endsWith('</u>') && part.length >= 7) {
-        const inner = part.slice(3, -4)
-        return <u key={key}>{parse(inner, `${key}-u`)}</u>
-      }
-
-      if (
-        (part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
-        (part.startsWith('_') && part.endsWith('_') && part.length >= 2)
-      ) {
-        const inner = part.slice(1, -1)
-        return <em key={key}>{parse(inner, `${key}-i`)}</em>
-      }
-
-      return part
-    }).filter(Boolean)
-  }
-
-  const nodes = parse(text, 'md')
-  return <>{nodes}</>
+  return renderStyledMarkdown(text)
 }
 
 /**
@@ -2122,7 +1976,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
       <div className="wp-view-field">
         <span>{t.pronunciationLabel}</span>
         <div className="wp-pronunciation-content-row">
-          <p className="wp-view-text">{renderSimpleMarkdown(pronunciation)}</p>
+          <p className="wp-view-text">{renderPhoneticFormatted(pronunciation)}</p>
           <button
             type="button"
             className="wp-view-speak-btn"

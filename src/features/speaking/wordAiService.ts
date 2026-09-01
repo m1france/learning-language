@@ -1,4 +1,5 @@
 import type { ApiSettings, Language, UiLanguage } from '../../domain'
+import { normalizeWord, getInflectionVariants } from '../../domain'
 import { formatIpaPronunciation } from '../vocabulary/phoneticUtils'
 import { getLanguageName, getUiLanguageName } from '../../languages'
 import { extractAiContent, extractCleanJson } from '../aiResponseUtils'
@@ -93,10 +94,116 @@ export function getAgentConfig(
 }
 
 /**
+ * Selects at most ONE best tag from candidate tags.
+ * Prioritizes specific tags over generic category tags.
+ * For example:
+ * - For conjugated / inflected verbs ("saw", "was", "went"), chooses ONLY "verbe conjugué" / "verbe conjugé" / "conjugated verb", never "verbe".
+ * - For expressions / phrasal verbs, chooses expression / phrasal tags over generic tags.
+ * - Enforces that the result array has at most 1 item.
+ */
+export function selectBestSingleTag(args: {
+  rawTags?: string[]
+  word?: string
+  parent?: string
+  partOfSpeech?: string
+  existingTags: string[]
+}): string[] {
+  const { rawTags, word = '', parent = '', partOfSpeech = '', existingTags } = args
+  if (!rawTags || rawTags.length === 0 || !existingTags || existingTags.length === 0) {
+    return []
+  }
+
+  const existingSet = new Set(existingTags.map((t) => t.trim()))
+  const validCandidates = rawTags
+    .map((t) => (typeof t === 'string' ? t.trim() : ''))
+    .filter((t) => t && existingSet.has(t))
+
+  if (validCandidates.length === 0) return []
+  if (validCandidates.length === 1) return [validCandidates[0]]
+
+  const isInflected = Boolean(
+    (parent && parent.trim().toLowerCase() !== word.trim().toLowerCase()) ||
+    /conjug|past|inflect|participle|plur/i.test(partOfSpeech)
+  )
+
+  const isExpression = Boolean(
+    /\s+/.test(word.trim()) ||
+    /expression|idiom|phrasal|locution|collocation/i.test(partOfSpeech)
+  )
+
+  const getTagScore = (tag: string): number => {
+    const t = tag.toLowerCase()
+
+    // 1. Conjugated verb tags
+    const isConjugatedTag = /conjugu|conjug|irrégulier|irregular/i.test(t)
+    if (isConjugatedTag) {
+      return isInflected ? 100 : 80
+    }
+
+    // 2. Expression / phrasal tags
+    const isExpressionTag = /phrasal|expression|idiom|locution|colloc/i.test(t)
+    if (isExpressionTag) {
+      return isExpression ? 95 : 75
+    }
+
+    // 3. Generic single-word category tags like "verbe", "nom", "verb", "noun", etc.
+    const isGeneric = /^(verbe|verb|verbo|nom|noun|sustantivo|adjectif|adjective|adjetivo|adverbe|adverb|adverbio|autre|other)$/i.test(t)
+    if (isGeneric) {
+      return 10
+    }
+
+    // 4. Other custom tags: prefer longer/more specific tags
+    return 30 + Math.min(tag.length, 20)
+  }
+
+  const sorted = [...validCandidates].sort((a, b) => getTagScore(b) - getTagScore(a))
+  return [sorted[0]]
+}
+
+/**
+ * Checks if a word or item represents a universal entity or proper noun (e.g. person names, cities, countries, brands)
+ * that should not be extracted as vocabulary to study/translate.
+ */
+export function isUniversalProperNoun(item: {
+  word: string
+  translation?: string
+  partOfSpeech?: string
+}): boolean {
+  const { word, translation = '', partOfSpeech = '' } = item
+  const cleanWord = word.trim()
+  if (!cleanWord) return true
+
+  const pos = partOfSpeech.toLowerCase()
+  if (
+    pos.includes('proper noun') ||
+    pos.includes('proper name') ||
+    pos.includes('nom propre') ||
+    pos.includes('nombre propio') ||
+    pos.includes('person') ||
+    pos.includes('city') ||
+    pos.includes('country') ||
+    pos.includes('location')
+  ) {
+    return true
+  }
+
+  // Check if word is capitalized (like "Harry", "London", "France") and translation is identical or nearly identical
+  const cleanTrans = translation.trim()
+  if (/^[A-Z][a-z]+$/.test(cleanWord) && cleanTrans.toLowerCase() === cleanWord.toLowerCase()) {
+    const isDayOrMonth = /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(cleanWord)
+    if (!isDayOrMonth) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
  * Analyzes a word using the main AI agent configured in Settings (or taskModelWordAnalysis override).
- * Generates US IPA pronunciation (with bold markdown on stressed syllable and ' · ' separators),
- * accurate translations in the user's interface language (up to 3 comma-separated meanings),
- * and matches applicable tags strictly from the user's existing tags list.
+ * Generates US IPA pronunciation (with bold markdown on stressed syllable and ' · ' separators for multi-syllables,
+ * clean IPA for single syllables), accurate translations in the user's interface language (up to 3 comma-separated meanings),
+ * and matches at most ONE applicable tag strictly from the user's existing tags list (prioritizing specific tags like "verbe conjugué").
  */
 export async function analyzeWordWithAi(args: {
   word: string
@@ -137,10 +244,19 @@ User's existing vocabulary tags: ${JSON.stringify(existingTags)}.
 Tasks:
 1. "word": provide the exact word or canonical form "${clean}".
 2. "translation": provide the concise and accurate translation in ${uiLangName}. If the word has multiple common meanings or nuances, provide up to 3 translations separated by commas and a space (e.g. "serrer, resserrer, tendre").
-3. "pronunciation": provide standard IPA transcription for ${targetLangName} enclosed in slashes. Represent syllable boundaries with " · " and the primary stressed syllable formatted in markdown bold (**syllable**), without the "'" or "ˈ" stress marker (e.g. "/**taɪ** · tən/", "/kəm · **pjuː** · tər/", "/**wɔː** · tər/").
-4. "parent": if "${clean}" is an inflected/conjugated form (e.g. "went" -> "go", "speaking" -> "speak"), provide the base lemma; otherwise empty string "".
+3. "pronunciation": provide standard IPA transcription for ${targetLangName} enclosed in slashes.
+   - For single-syllable words (e.g. "coat", "train", "was", "saw"), provide clean IPA without bold or stress markers (e.g. "/koʊt/", "/treɪn/", "/wɒz/", "/sɔː/").
+   - For multi-syllable words, mark syllable boundaries with " · " and the primary stressed syllable formatted in markdown bold (**syllable**), without "'" or "ˈ" stress markers (e.g. "/**taɪ** · tən/", "/kəm · **pjuː** · tər/").
+   - CRITICAL: Never output unclosed bold asterisks like "/**word/".
+4. "parent": if "${clean}" is an inflected/conjugated form (e.g. "went" -> "go", "was" -> "be", "speaking" -> "speak"), provide the base lemma; otherwise empty string "".
 5. "partOfSpeech": noun, verb, adjective, adverb, expression, or phrase.
-6. "tags": an array of tags. IMPORTANT: ONLY include tags that strictly exist in the User's existing vocabulary tags list (${JSON.stringify(existingTags)}). If none match or the list is empty, return an empty array [].
+6. "tags": an array containing AT MOST ONE tag strictly from the User's existing vocabulary tags list (${JSON.stringify(existingTags)}).
+   CRITICAL RULES FOR TAGS:
+   - NEVER return more than 1 tag. Limit the array to ["tag"] or [].
+   - Pick the single most specific tag that applies:
+     - If the word is a conjugated verb (e.g. "saw", "was", "went"), select ONLY "verbe conjugué" / "verbe conjugé" / "conjugated verb" (if present in the list) and NEVER "verbe" / "verb".
+     - If the item is an expression or phrasal verb, choose the expression/phrasal tag over a generic tag.
+     - If no specific tag matches, choose the single best category tag or [] if none match.
 
 Return ONLY a JSON object with this exact structure (no other markdown or commentary):
 {
@@ -182,11 +298,14 @@ Return ONLY a JSON object with this exact structure (no other markdown or commen
         const content = extractAiContent(data)
         if (content) {
           const parsed = extractCleanJson<Partial<AiWordAnalysisResult>>(content)
-          const validTags = Array.isArray(parsed.tags)
-            ? parsed.tags.filter((t) => typeof t === 'string' && existingTags.includes(t))
-            : []
-
           const formattedPronunciation = formatIpaPronunciation(parsed.pronunciation || '')
+          const singleBestTag = selectBestSingleTag({
+            rawTags: parsed.tags,
+            word: clean,
+            parent: parsed.parent || '',
+            partOfSpeech: parsed.partOfSpeech || '',
+            existingTags,
+          })
 
           return {
             word: parsed.word || clean,
@@ -194,7 +313,7 @@ Return ONLY a JSON object with this exact structure (no other markdown or commen
             pronunciation: formattedPronunciation,
             parent: parsed.parent || '',
             partOfSpeech: parsed.partOfSpeech || '',
-            tags: validTags,
+            tags: singleBestTag,
           }
         }
       }
@@ -265,8 +384,9 @@ export type PageVocabularyItem = {
  * Intelligently analyzes a reading page or text in full context using the configured AI agent.
  * - Identifies multi-word expressions, idioms, phrasal verbs, and collocations (e.g. "far end", "look forward to")
  *   so they are saved as a single unit without separate constituent words.
+ * - Strictly ignores universal proper nouns (person first/last names, cities, countries, landmarks, brand names).
  * - Strictly ignores words/expressions that the user has already saved.
- * - Extracts all new words/expressions with contextual translation, IPA pronunciation, root lemma, and tags.
+ * - Extracts all new words/expressions with contextual translation, clean IPA pronunciation, root lemma, and at most 1 tag.
  */
 export async function extractAndAnalyzePageVocabularyWithAi(args: {
   text: string
@@ -303,23 +423,40 @@ CRITICAL LINGUISTIC RULES:
    Example: In "She saw him standing at the far end of the platform", "far end" is a linked expression forming a distinct meaning ("far end" = extremity/furthest point). Save "far end" as a single expression.
    CRITICAL: When you extract a multi-word expression (e.g. "far end"), NEVER extract its individual constituent words ("far", "end") separately! The expression takes precedence.
 
-2. DO NOT SAVE ALREADY RECORDED WORDS (MANDATORY):
+2. DO NOT EXTRACT OR TRANSLATE UNIVERSAL WORDS & PROPER NOUNS (MANDATORY):
+   - NEVER extract, translate, or save proper names, person names (first names, surnames, e.g. "Harry", "John", "Smith", "Potter", "Marie", "Dupont"), fictional character names, or real people.
+   - NEVER extract, translate, or save names of cities, towns, regions, countries, geographical places, or landmarks (e.g. "London", "Paris", "New York", "Tokyo", "England", "France", "Thames").
+   - NEVER extract brand names, company names, or universal proper nouns that are identical or untranslated across languages.
+   - ONLY extract meaningful vocabulary words, contextual expressions, idioms, and phrasal verbs that a language learner needs to study.
+
+3. LEMMATIZATION, NO REDUNDANT PLURALS OR 3RD-PERSON "-S" (MANDATORY):
+   - Always extract the CANONICAL BASE / SINGULAR form of regular words (e.g. extract "train", NOT "trains"; "coat", NOT "coats"; "car", NOT "cars"; "door", NOT "doors"; "walk", NOT "walks").
+   - NEVER extract both the singular and the plural form of the same word (e.g. if the text contains both "train" and "trains", extract ONLY "train").
+   - NEVER extract simple regular plurals ending in "-s", "-es", "-ies" as distinct separate words when the singular base word is already recorded or being recorded.
+   - NEVER extract regular 3rd-person singular present verbs ending in "-s" / "-es" (e.g. "walks", "looks", "runs", "says") as separate words; always use the base infinitive/lemma form ("walk", "look", "run", "say").
+   - Distinct irregular inflections (like irregular past tense "saw" -> "see", "went" -> "go", "was" -> "be", or irregular plurals like "children" -> "child") can be recorded with their base parent lemma, but standard regular "-s" plurals and "-s" 3rd person forms MUST be avoided.
+
+4. DO NOT SAVE ALREADY RECORDED WORDS (MANDATORY):
    The user already has the following words/expressions in their vocabulary dictionary:
    ${JSON.stringify(sampleExisting)}
-   DO NOT extract or include any word, expression, or direct inflections of items in this list.
+   DO NOT extract or include any word, expression, regular plurals (-s), or direct inflections of items in this list. (For example, if "train" is in the list, do NOT extract "train" or "trains").
 
-3. INDIVIDUAL WORDS:
-   Extract all other non-trivial, meaningful words from the text that are not part of multi-word expressions and not in the already recorded list. Ignore pure numbers or single-letter punctuation noise.
+5. INDIVIDUAL WORDS:
+   Extract all other non-trivial, meaningful vocabulary words from the text that are not part of multi-word expressions, not universal proper nouns, and not in the already recorded list. Ignore pure numbers or single-letter punctuation noise.
 
-4. REQUIRED JSON STRUCTURE FOR EACH ITEM:
+6. REQUIRED JSON STRUCTURE FOR EACH ITEM:
    For every extracted word or expression, provide:
-   - "word": exact word or expression in base or contextual form (e.g. "far end", "platform", "stand out").
+   - "word": exact word or expression in canonical base / singular form (e.g. "train", "far end", "platform", "stand out").
    - "translation": concise and accurate translation in ${uiLangName} adapted to this specific context. If there are multiple common nuances, provide up to 3 translations separated by commas (e.g. "au bout, à l'extrémité").
-   - "pronunciation": standard IPA transcription for ${targetLangName} enclosed in slashes, with syllable boundaries marked by " · " and the primary stressed syllable in bold markdown (e.g. "/ˌfɑːr **end**/", "/ˈplæt · fɔːrm/").
-   - "parent": base lemma/infinitive if inflected (e.g. "standing" -> "stand", "went" -> "go"), or empty string "".
+   - "pronunciation": standard IPA transcription for ${targetLangName} enclosed in slashes.
+     * For single-syllable words (e.g. "coat", "train", "was", "saw"), provide clean IPA without bold or stress markers (e.g. "/koʊt/", "/treɪn/", "/wɒz/", "/sɔː/").
+     * For multi-syllable words, mark syllable boundaries with " · " and the primary stressed syllable in bold markdown (**syllable**), e.g. "/**taɪ** · tən/", "/ˌfɑːr · **end**/", "/ˈplæt · fɔːrm/".
+     * NEVER output unclosed asterisks like "/**word/".
+   - "parent": base lemma/infinitive if inflected (e.g. "standing" -> "stand", "saw" -> "see", "went" -> "go"), or empty string "".
    - "partOfSpeech": "expression", "phrasal verb", "idiom", "noun", "verb", "adjective", "adverb", etc.
    - "contextSentence": the exact sentence from the text containing this word or expression.
-   - "tags": an array of tags strictly matching the User's existing vocabulary tags: ${JSON.stringify(existingTags)}. If none match, return [].
+   - "tags": an array of AT MOST ONE tag strictly matching the User's existing vocabulary tags: ${JSON.stringify(existingTags)}.
+     CRITICAL: NEVER include more than 1 tag. If the word is a conjugated verb (e.g. "saw", "was", "went"), select ONLY "verbe conjugué" / "verbe conjugé" / "conjugated verb" (if in the user's tags) and NEVER "verbe" or "verb". If none match, return [].
 
 Return ONLY a valid JSON array of objects with no surrounding commentary or markdown code blocks:`
 
@@ -358,14 +495,43 @@ Return ONLY a valid JSON array of objects with no surrounding commentary or mark
     const parsed = extractCleanJson<PageVocabularyItem[]>(content)
     if (!Array.isArray(parsed)) return []
 
-    const validExistingTags = new Set(existingTags)
+    const seenBatchVariants = new Set<string>()
 
     return parsed
-      .filter((item) => item && typeof item.word === 'string' && item.word.trim().length > 0)
+      .filter((item) => {
+        if (!item || typeof item.word !== 'string' || item.word.trim().length === 0) return false
+        // Filter out universal proper nouns / names / cities
+        if (isUniversalProperNoun(item)) return false
+
+        const norm = normalizeWord(item.word)
+        if (!norm) return false
+        const parentNorm = item.parent ? normalizeWord(item.parent) : ''
+        const variants = getInflectionVariants(norm)
+        const parentVariants = parentNorm ? getInflectionVariants(parentNorm) : []
+
+        // If any singular/plural variant was already seen in this batch response, drop the duplicate
+        if (
+          variants.some((v) => seenBatchVariants.has(v)) ||
+          parentVariants.some((v) => seenBatchVariants.has(v))
+        ) {
+          return false
+        }
+
+        // Register all variants as seen for this batch
+        for (const v of variants) seenBatchVariants.add(v)
+        for (const v of parentVariants) seenBatchVariants.add(v)
+
+        return true
+      })
       .map((item) => {
         const cleanWord = item.word.trim().replace(/^[.,!?;:()"“”«»'’\s]+|[.,!?;:()"“”«»'’\s]+$/g, '')
-        const rawTags = Array.isArray(item.tags) ? item.tags : []
-        const filteredTags = rawTags.filter((t) => typeof t === 'string' && validExistingTags.has(t))
+        const singleBestTag = selectBestSingleTag({
+          rawTags: item.tags,
+          word: cleanWord,
+          parent: item.parent || '',
+          partOfSpeech: item.partOfSpeech || '',
+          existingTags,
+        })
 
         return {
           word: cleanWord,
@@ -374,7 +540,7 @@ Return ONLY a valid JSON array of objects with no surrounding commentary or mark
           parent: (item.parent || '').trim(),
           partOfSpeech: (item.partOfSpeech || '').trim(),
           contextSentence: (item.contextSentence || '').trim(),
-          tags: filteredTags,
+          tags: singleBestTag,
         }
       })
   } catch (err) {

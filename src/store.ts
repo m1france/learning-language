@@ -1,5 +1,6 @@
 import { type ApiSettings, type AppState, type Language, type LearnedWord, type MarkingDefinition, type Resource, type UserSettings, type WordMark, type WordRelationType, type WritingEntry, id, normalizeWord, todayKey } from './domain'
 import { getResourceWordStats } from './features/readingProgressUtils'
+import { formatIpaPronunciation } from './features/vocabulary/phoneticUtils'
 
 const stateKey = 'vivre-la-langue:state:v2'
 
@@ -285,6 +286,8 @@ export const upsertWordDetails = (state: AppState, args: {
   if (!cleaned) return state
   const normalized = normalizeWord(cleaned)
   const existing = state.words.find((word) => word.normalized === normalized && word.language === args.language)
+  const cleanPhonetic = args.pronunciation ? formatIpaPronunciation(args.pronunciation) || undefined : undefined
+
   if (existing) {
     return {
       ...state,
@@ -296,7 +299,7 @@ export const upsertWordDetails = (state: AppState, args: {
             parent: args.parent || undefined,
             relationType: args.relationType ?? word.relationType,
             partOfSpeech: args.partOfSpeech ?? word.partOfSpeech ?? '',
-            phonetic: args.pronunciation || undefined,
+            phonetic: cleanPhonetic ?? word.phonetic,
             knowledge: args.knowledge,
             tags: args.tags ?? word.tags ?? [],
             definitions: args.translation ? [{ definition: '', translation: args.translation }] : word.definitions,
@@ -312,7 +315,7 @@ export const upsertWordDetails = (state: AppState, args: {
       word: cleaned,
       normalized,
       language: args.language,
-      phonetic: args.pronunciation || undefined,
+      phonetic: cleanPhonetic,
       translation: args.translation,
       parent: args.parent || undefined,
       relationType: args.relationType,
@@ -357,6 +360,7 @@ export const batchUpsertWordDetails = (
     const cleaned = args.raw.replace(/^[.,!?;:()"“”«»'’\s]+|[.,!?;:()"“”«»'’\s]+$/g, '').replace(/\s+/g, ' ').trim()
     if (!cleaned) continue
     const normalized = normalizeWord(cleaned)
+    const cleanPhonetic = args.pronunciation ? formatIpaPronunciation(args.pronunciation) || undefined : undefined
     const existingIndex = nextWords.findIndex((w) => w.normalized === normalized && w.language === args.language)
 
     if (existingIndex >= 0) {
@@ -368,7 +372,7 @@ export const batchUpsertWordDetails = (
         parent: args.parent || undefined,
         relationType: args.relationType ?? existing.relationType,
         partOfSpeech: args.partOfSpeech ?? existing.partOfSpeech ?? '',
-        phonetic: args.pronunciation || undefined,
+        phonetic: cleanPhonetic ?? existing.phonetic,
         knowledge: args.knowledge ?? existing.knowledge,
         tags: args.tags ?? existing.tags ?? [],
         definitions: args.translation ? [{ definition: '', translation: args.translation }] : existing.definitions,
@@ -380,7 +384,7 @@ export const batchUpsertWordDetails = (
         word: cleaned,
         normalized,
         language: args.language,
-        phonetic: args.pronunciation || undefined,
+        phonetic: cleanPhonetic,
         translation: args.translation,
         parent: args.parent || undefined,
         relationType: args.relationType,

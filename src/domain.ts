@@ -242,3 +242,49 @@ export const todayKey = () => new Date().toISOString().slice(0, 10)
 export const id = (prefix: string) => `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
 export const normalizeWord = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-zà-ÿ' -]/gi, '').replace(/\s+/g, ' ').trim()
+
+/**
+ * Generates singular/base lemmas and regular inflection variants (e.g. plural -s/-es/-ies, 3rd person singular -s/-es)
+ * for a word or lemma. Used to prevent redundant duplicate vocabulary entries like "train" and "trains".
+ */
+export function getInflectionVariants(rawOrNorm: string): string[] {
+  const norm = normalizeWord(rawOrNorm)
+  if (!norm || norm.length <= 1) return norm ? [norm] : []
+
+  const variants = new Set<string>([norm])
+
+  // If word ends in 's', compute singular/base candidates:
+  if (norm.endsWith('s') && norm.length > 2) {
+    // e.g. "trains" -> "train", "books" -> "book", "walks" -> "walk", "coats" -> "coat"
+    if (norm.length > 3) {
+      variants.add(norm.slice(0, -1))
+    }
+
+    // e.g. "watches" -> "watch", "boxes" -> "box", "glasses" -> "glass", "buses" -> "bus"
+    if (norm.endsWith('es') && norm.length > 3) {
+      variants.add(norm.slice(0, -2))
+      variants.add(norm.slice(0, -1))
+    }
+
+    // e.g. "cities" -> "city", "countries" -> "country", "tries" -> "try"
+    if (norm.endsWith('ies') && norm.length > 4) {
+      variants.add(norm.slice(0, -3) + 'y')
+    }
+  } else {
+    // If word is singular/base, generate regular plural / 3rd person -s forms:
+    // e.g. "train" -> "trains", "coat" -> "coats"
+    variants.add(norm + 's')
+
+    // e.g. "watch" -> "watches", "box" -> "boxes", "pass" -> "passes", "glass" -> "glasses"
+    if (/(ch|sh|ss|x|z|o)$/i.test(norm)) {
+      variants.add(norm + 'es')
+    }
+
+    // e.g. "city" -> "cities", "country" -> "countries", "party" -> "parties"
+    if (/[^aeiou]y$/i.test(norm) && norm.length > 2) {
+      variants.add(norm.slice(0, -1) + 'ies')
+    }
+  }
+
+  return Array.from(variants)
+}
