@@ -241,11 +241,34 @@ export const todayKey = () => new Date().toISOString().slice(0, 10)
 
 export const id = (prefix: string) => `${prefix}-${crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
-export const normalizeWord = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-zà-ÿ' -]/gi, '').replace(/\s+/g, ' ').trim()
+export const normalizeWord = (value: string): string => {
+  if (!value) return ''
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}' -]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 /**
- * Generates singular/base lemmas and regular inflection variants (e.g. plural -s/-es/-ies, 3rd person singular -s/-es)
- * for a word or lemma. Used to prevent redundant duplicate vocabulary entries like "train" and "trains".
+ * Nettoie une chaîne de mot brute en supprimant la ponctuation et les guillemets
+ * en bordure de mot de façon cohérente et robuste.
+ */
+export function cleanWordRaw(raw: string): string {
+  if (!raw) return ''
+  return raw
+    .replace(/^[\s.,!?;:()"“”«»'’‘`—–[\]{}/*\\<>~|#№…]+/gu, '')
+    .replace(/[\s.,!?;:()"“”«»'’‘`—–[\]{}/*\\<>~|#№…]+$/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Generates singular/base lemmas and regular inflection variants (e.g. plural -s/-es/-ies, 3rd person singular -s/-es,
+ * regular past -ed, progressive -ing) for a word or lemma. Used to prevent redundant duplicate vocabulary entries
+ * and enable seamless matching between text surface forms and recorded lemmas.
  */
 export function getInflectionVariants(rawOrNorm: string): string[] {
   const norm = normalizeWord(rawOrNorm)
@@ -253,7 +276,7 @@ export function getInflectionVariants(rawOrNorm: string): string[] {
 
   const variants = new Set<string>([norm])
 
-  // If word ends in 's', compute singular/base candidates:
+  // 1. Déclinaisons depuis les formes plurielles ou 3e personne en -s
   if (norm.endsWith('s') && norm.length > 2) {
     // e.g. "trains" -> "train", "books" -> "book", "walks" -> "walk", "coats" -> "coat"
     if (norm.length > 3) {
@@ -271,19 +294,45 @@ export function getInflectionVariants(rawOrNorm: string): string[] {
       variants.add(norm.slice(0, -3) + 'y')
     }
   } else {
-    // If word is singular/base, generate regular plural / 3rd person -s forms:
-    // e.g. "train" -> "trains", "coat" -> "coats"
+    // Si singulier/base, générer les formes régulières pluriel / 3e personne :
     variants.add(norm + 's')
 
-    // e.g. "watch" -> "watches", "box" -> "boxes", "pass" -> "passes", "glass" -> "glasses"
     if (/(ch|sh|ss|x|z|o)$/i.test(norm)) {
       variants.add(norm + 'es')
     }
 
-    // e.g. "city" -> "cities", "country" -> "countries", "party" -> "parties"
     if (/[^aeiou]y$/i.test(norm) && norm.length > 2) {
       variants.add(norm.slice(0, -1) + 'ies')
     }
+  }
+
+  // 2. Déclinaisons du passé régulier en -ed / -d
+  if (norm.endsWith('ed') && norm.length > 3) {
+    // "walked" -> "walk", "played" -> "play"
+    variants.add(norm.slice(0, -2))
+    // "liked" -> "like", "hated" -> "hate"
+    variants.add(norm.slice(0, -1))
+    // "stopped" -> "stop"
+    if (norm.length > 5 && norm[norm.length - 3] === norm[norm.length - 4]) {
+      variants.add(norm.slice(0, -3))
+    }
+  } else if (!norm.endsWith('s')) {
+    variants.add(norm + 'ed')
+    variants.add(norm + 'd')
+  }
+
+  // 3. Déclinaisons en -ing
+  if (norm.endsWith('ing') && norm.length > 4) {
+    // "walking" -> "walk", "playing" -> "play"
+    variants.add(norm.slice(0, -3))
+    // "living" -> "live", "making" -> "make"
+    variants.add(norm.slice(0, -3) + 'e')
+    // "stopping" -> "stop"
+    if (norm.length > 6 && norm[norm.length - 4] === norm[norm.length - 5]) {
+      variants.add(norm.slice(0, -4))
+    }
+  } else if (!norm.endsWith('s')) {
+    variants.add(norm + 'ing')
   }
 
   return Array.from(variants)

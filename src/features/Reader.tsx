@@ -40,6 +40,7 @@ import { formatIpaPronunciation, renderPhoneticFormatted, renderStyledMarkdown }
 import { RichInputField } from './vocabulary/RichInputField'
 import { getResourceWordStats, extractPageUniqueWords } from './readingProgressUtils'
 import { PageSavedWordsModal } from './vocabulary/PageSavedWordsModal'
+import { cleanWordRaw, findMatchingLearnedWord } from './vocabulary/wordMatchingService'
 import { resourcesCopy } from '../i18n'
 import {
   ResourceContextMenu,
@@ -90,7 +91,7 @@ const AVAILABLE_MARK_COLORS = [
 
 let lastMultiWordDragTimestamp = 0
 
-const cleanRaw = (raw: string) => raw.replace(/^[.,!?;:()"“”«»\s]+|[.,!?;:()"“”«»\s]+$/g, '').replace(/\s+/g, ' ').trim()
+const cleanRaw = cleanWordRaw
 /** Retire les élisions françaises (l', d', j'…) pour la recherche dictionnaire. */
 const wikiLookup = (raw: string) => cleanRaw(raw).replace(/^(l|d|j|n|s|t|c|qu|m)['’]/i, '')
 const wikiUrl = (language: Language, word: string) => `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`
@@ -505,7 +506,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               pronunciation: formattedPronunciation,
               partOfSpeech: item.partOfSpeech || undefined,
               tags: singleBestTag,
-              knowledge: 6,
+              knowledge: 1,
             }
             allWordDetails.push(wordDetails)
 
@@ -518,16 +519,16 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               translation: item.translation,
               parent: item.parent || undefined,
               partOfSpeech: item.partOfSpeech || '',
-              knowledge: 6,
+              knowledge: 1,
               definitions: item.translation ? [{ definition: '', translation: item.translation }] : [],
               contextSentence: item.contextSentence || '',
               sourceResourceId: resource.id,
               sourceSkill: 'reading',
-              status: 'mastered',
-              intervalDays: 30,
+              status: 'learning',
+              intervalDays: 1,
               nextReview: new Date().toISOString(),
               easeFactor: 2.5,
-              reviewCount: 1,
+              reviewCount: 0,
               tags: singleBestTag,
               createdAt: new Date().toISOString(),
             })
@@ -576,7 +577,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 pronunciation: formattedPronunciation,
                 partOfSpeech: analysis.partOfSpeech,
                 tags: singleBestTag,
-                knowledge: 6,
+                knowledge: 1,
               }
               allWordDetails.push(wordDetails)
               newlySaved.push({
@@ -588,16 +589,16 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 translation: analysis.translation,
                 parent: analysis.parent,
                 partOfSpeech: analysis.partOfSpeech || '',
-                knowledge: 6,
+                knowledge: 1,
                 definitions: analysis.translation ? [{ definition: '', translation: analysis.translation }] : [],
                 contextSentence: fw.sentence,
                 sourceResourceId: resource.id,
                 sourceSkill: 'reading',
-                status: 'mastered',
-                intervalDays: 30,
+                status: 'learning',
+                intervalDays: 1,
                 nextReview: new Date().toISOString(),
                 easeFactor: 2.5,
-                reviewCount: 1,
+                reviewCount: 0,
                 tags: singleBestTag,
                 createdAt: new Date().toISOString(),
               })
@@ -1006,8 +1007,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     setContextMenu(null)
     setPageContextMenu(null)
     setResourceMenuTarget(null)
-    const normalized = normalizeWord(raw)
-    const isSaved = Boolean(state.words.find((w) => w.normalized === normalized && w.language === resource.language))
+    const isSaved = Boolean(findMatchingLearnedWord(state.words, raw, resource.language))
     setWordContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -1847,8 +1847,8 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
   onOpenWord: (raw: string) => void
 }) {
   const t = readerCopy[ui]
-  const findExisting = () => state.words.find((word) => word.normalized === normalizeWord(selected.raw) && word.language === language)
-  const [word, setWord] = useState(() => cleanRaw(selected.raw))
+  const findExisting = () => findMatchingLearnedWord(state.words, selected.raw, language)
+  const [word, setWord] = useState(() => findExisting()?.word ?? cleanRaw(selected.raw))
   const [parent, setParent] = useState(() => findExisting()?.parent ?? '')
   const [relationType, setRelationType] = useState<WordRelationType | undefined>(() => findExisting()?.relationType)
   const [pronunciation, setPronunciation] = useState(() => findExisting()?.phonetic ?? '')
@@ -1871,10 +1871,10 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
   const [accordionOpen, setAccordionOpen] = useState(false)
   const [creatingLinked, setCreatingLinked] = useState(false)
 
-  // Reset the form whenever another word is clicked.
+  // Reset the form whenever another word is clicked or words list updates.
   useEffect(() => {
-    const existing = state.words.find((item) => item.normalized === normalizeWord(selected.raw) && item.language === language)
-    setWord(cleanRaw(selected.raw))
+    const existing = findMatchingLearnedWord(state.words, selected.raw, language)
+    setWord(existing?.word ?? cleanRaw(selected.raw))
     setParent(existing?.parent ?? '')
     setRelationType(existing?.relationType ?? (existing?.parent ? 'derivative' : undefined))
     setPronunciation(existing?.phonetic ?? '')
@@ -1887,8 +1887,7 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     setParentTyping(false)
     setViewing(Boolean(existing))
     setCreatingLinked(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected.raw])
+  }, [selected.raw, state.words, language, ui])
 
   const family = useMemo(() => resolveWordFamily(state.words, word, language), [state.words, word, language])
 
@@ -3274,12 +3273,12 @@ function Word({
     : undefined
   const mark = (instKey ? state.wordMarks[instKey] : undefined) ?? state.wordMarks[genericKey]
   const grayed = state.silentMarks[genericKey] ?? []
-  const savedWord = state.words.find((word) => word.normalized === normalized && word.language === language)
+  const savedWord = findMatchingLearnedWord(state.words, raw, language)
 
   const letters = [...raw]
   let alphaIndex = -1
   const spans = letters.map((letter, index) => {
-    const isAlpha = /[a-zà-ÿ'-]/i.test(letter)
+    const isAlpha = /[\p{L}\p{M}'-]/u.test(letter)
     if (isAlpha) alphaIndex += 1
     const myAlpha = alphaIndex
     const isGrayed = isAlpha && grayed.includes(myAlpha)

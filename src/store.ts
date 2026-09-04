@@ -1,4 +1,4 @@
-import { type ApiSettings, type AppState, type Language, type LearnedWord, type MarkingDefinition, type Resource, type UserSettings, type WordMark, type WordRelationType, type WritingEntry, id, normalizeWord, todayKey } from './domain'
+import { type ApiSettings, type AppState, type Language, type LearnedWord, type MarkingDefinition, type Resource, type UserSettings, type WordMark, type WordRelationType, type WritingEntry, cleanWordRaw, id, normalizeWord, todayKey } from './domain'
 import { getResourceWordStats } from './features/readingProgressUtils'
 import { formatIpaPronunciation } from './features/vocabulary/phoneticUtils'
 
@@ -282,7 +282,7 @@ export const upsertWordDetails = (state: AppState, args: {
   relationType?: WordRelationType
   partOfSpeech?: string
 }): AppState => {
-  const cleaned = args.raw.replace(/^[.,!?;:()"“”\s]+|[.,!?;:()"“”\s]+$/g, '').replace(/\s+/g, ' ').trim()
+  const cleaned = cleanWordRaw(args.raw)
   if (!cleaned) return state
   const normalized = normalizeWord(cleaned)
   const existing = state.words.find((word) => word.normalized === normalized && word.language === args.language)
@@ -357,7 +357,7 @@ export const batchUpsertWordDetails = (
   const now = new Date().toISOString()
 
   for (const args of items) {
-    const cleaned = args.raw.replace(/^[.,!?;:()"“”«»'’\s]+|[.,!?;:()"“”«»'’\s]+$/g, '').replace(/\s+/g, ' ').trim()
+    const cleaned = cleanWordRaw(args.raw)
     if (!cleaned) continue
     const normalized = normalizeWord(cleaned)
     const cleanPhonetic = args.pronunciation ? formatIpaPronunciation(args.pronunciation) || undefined : undefined
@@ -379,6 +379,7 @@ export const batchUpsertWordDetails = (
         status: (args.knowledge === 6 || existing.status === 'mastered') ? 'mastered' : existing.status,
       }
     } else {
+      const defaultKl = args.knowledge ?? 1
       nextWords.push({
         id: id('word'),
         word: cleaned,
@@ -389,16 +390,16 @@ export const batchUpsertWordDetails = (
         parent: args.parent || undefined,
         relationType: args.relationType,
         partOfSpeech: args.partOfSpeech ?? '',
-        knowledge: args.knowledge ?? 6,
+        knowledge: defaultKl,
         definitions: args.translation ? [{ definition: '', translation: args.translation }] : [],
         contextSentence: args.sentence ?? '',
         sourceResourceId: args.sourceResourceId,
         sourceSkill: 'reading',
-        status: (args.knowledge === 6) ? 'mastered' : 'learning',
-        intervalDays: (args.knowledge === 6) ? 30 : 1,
+        status: (defaultKl === 6) ? 'mastered' : 'learning',
+        intervalDays: (defaultKl === 6) ? 30 : 1,
         nextReview: todayKey(),
         easeFactor: 2.5,
-        reviewCount: (args.knowledge === 6) ? 1 : 0,
+        reviewCount: (defaultKl === 6) ? 1 : 0,
         tags: args.tags ?? [],
         createdAt: now,
       })

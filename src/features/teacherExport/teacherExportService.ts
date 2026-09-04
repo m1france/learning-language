@@ -7,9 +7,9 @@ const STORAGE_KEY_PREFIX = 'vivre_shared_lesson_'
 
 function getApiBaseUrl(): string {
   if (typeof window === 'undefined') return ''
-  // Si on est en dev local sur le port 5173 et que le serveur Hono tourne sur 3001
+  // Si on est en dev local et que l'app tourne sur un port dev frontend (différent du port 3001 de l'API)
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    if (window.location.port === '5173') {
+    if (window.location.port !== '3001') {
       return 'http://localhost:3001'
     }
   }

@@ -95,8 +95,10 @@ export function buildGuaranteedCrossword(
     .map((c) => ({
       clue: String(c.clue || '').trim(),
       answer: String(c.answer || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
         .toUpperCase()
-        .replace(/[^A-Z]/g, ''),
+        .replace(/[^A-Z0-9]/g, ''),
       hint: c.hint ? String(c.hint) : undefined,
       explanation: c.explanation ? String(c.explanation) : undefined,
       direction: c.direction === 'down' ? ('down' as const) : ('across' as const),
