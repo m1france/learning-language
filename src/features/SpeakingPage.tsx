@@ -27,6 +27,7 @@ import {
   BookOpen,
   Sparkles,
   Languages,
+  SwitchCamera,
 } from 'lucide-react'
 
 type SpeakingPageProps = {
@@ -74,6 +75,7 @@ export function SpeakingPage({
     stopAllMedia,
     toggleCameraTrack,
     toggleMicTrack,
+    flipCamera,
     isCountingDown,
     countdownSeconds,
     startRecordingWithCountdown,
@@ -216,19 +218,31 @@ export function SpeakingPage({
     }
   }, [])
 
+  const [isMobileFullscreen, setIsMobileFullscreen] = useState(false)
+
   const toggleFullscreen = () => {
-    if (!studioContainerRef.current) return
     if (document.fullscreenElement) {
-      void document.exitFullscreen()
+      void document.exitFullscreen().catch(() => undefined)
+      setIsFullscreen(false)
+      setIsMobileFullscreen(false)
+    } else if (isMobileFullscreen) {
+      setIsMobileFullscreen(false)
+    } else if (studioContainerRef.current && typeof studioContainerRef.current.requestFullscreen === 'function') {
+      studioContainerRef.current.requestFullscreen().then(() => {
+        setIsFullscreen(true)
+      }).catch(() => {
+        setIsMobileFullscreen(true)
+      })
     } else {
-      void studioContainerRef.current.requestFullscreen()
+      setIsMobileFullscreen(true)
     }
   }
 
   const handleStartRecord = () => {
-    // Enter fullscreen mode then countdown
-    if (studioContainerRef.current && !document.fullscreenElement) {
-      void studioContainerRef.current.requestFullscreen().catch(() => undefined)
+    if (studioContainerRef.current && !document.fullscreenElement && typeof studioContainerRef.current.requestFullscreen === 'function') {
+      try {
+        void studioContainerRef.current.requestFullscreen().catch(() => undefined)
+      } catch {}
     }
     startRecordingWithCountdown()
   }
@@ -333,7 +347,7 @@ export function SpeakingPage({
       </div>
 
       {/* Right: Topic selection & Clear Topic button */}
-      <div className="hud-right-actions-stack">
+      <div className="hud-right-actions-stack desktop-only-topic">
         {selectedNiche && !inPrompter && (
           <>
             {/* Directive Talking Points (when without prompter) */}
@@ -399,7 +413,7 @@ export function SpeakingPage({
       <section className="studio-stage-wrapper">
         <div
           ref={studioContainerRef}
-          className={`studio-camera-viewport ${cameraActive ? 'active' : 'inactive'} ${isFullscreen ? 'fullscreen' : ''}`}
+          className={`studio-camera-viewport ${cameraActive ? 'active' : 'inactive'} ${isFullscreen ? 'fullscreen' : ''} ${isMobileFullscreen ? 'mobile-fullscreen' : ''}`}
         >
           {/* Active Live Video */}
           {cameraActive && (
@@ -453,10 +467,8 @@ export function SpeakingPage({
             >
               {/* HUD Top Bar */}
               <div className="hud-top-bar">
-                <div className="hud-top-left-actions" />
-
-                <div className="hud-top-right-tools">
-                  {/* VU Meter */}
+                <div className="hud-top-left-actions">
+                  {/* Audio Meter moved to the far left */}
                   <div className="hud-audio-meter" title={micMuted ? t.micOff : `Audio: ${audioLevel}%`}>
                     {micMuted ? (
                       <MicOff size={14} className="muted-icon" />
@@ -471,20 +483,36 @@ export function SpeakingPage({
                       </>
                     )}
                   </div>
+                </div>
+
+                <div className="hud-top-right-tools">
+                  {/* Flip Camera Button to the left of Fullscreen */}
+                  <button
+                    className="hud-glass-btn flip-cam"
+                    onClick={() => void flipCamera()}
+                    title="Tourner la caméra"
+                    aria-label="Tourner la caméra"
+                  >
+                    <SwitchCamera size={15} />
+                  </button>
 
                   {/* Fullscreen Button */}
                   <button
                     className="hud-glass-btn"
                     onClick={toggleFullscreen}
-                    title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+                    title={isFullscreen || isMobileFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+                    aria-label={isFullscreen || isMobileFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
                   >
-                    {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+                    {isFullscreen || isMobileFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
                   </button>
 
                   {/* Close / Turn Off Camera Button */}
                   <button
                     className="hud-glass-btn close-cam"
-                    onClick={stopAllMedia}
+                    onClick={() => {
+                      setIsMobileFullscreen(false)
+                      stopAllMedia()
+                    }}
                     title={t.closeCam}
                   >
                     <X size={15} />

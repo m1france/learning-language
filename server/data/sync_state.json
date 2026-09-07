@@ -1,0 +1,261 @@
+{
+  "payload": {
+    "version": 3,
+    "state": {
+      "version": 3,
+      "settings": {
+        "name": "Mathis",
+        "learningLanguage": "en",
+        "uiLanguage": "fr",
+        "theme": "dark",
+        "readerFontSize": 19,
+        "readerWidth": "comfortable",
+        "readerPageSize": 220,
+        "showGrammar": true,
+        "readerToolbarStyle": "liquid",
+        "markColors": {},
+        "teacherShortcuts": {
+          "select": "v",
+          "pen": "p",
+          "highlighter": "h",
+          "text": "t",
+          "edit": "e",
+          "rect": "r",
+          "ellipse": "c",
+          "line": "l",
+          "arrow": "a",
+          "liaison": "b",
+          "gray": "g",
+          "eraser": "x"
+        },
+        "api": {
+          "agentProvider": "openrouter",
+          "agentModel": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "openRouterKey": "",
+          "openRouterModel": "meta-llama/llama-3.3-70b-instruct:free",
+          "openAiKey": "",
+          "nvidiaKey": "",
+          "kimiKey": "",
+          "googleKey": "",
+          "ttsVoice": "alloy",
+          "ttsProvider": "google",
+          "ttsModel": "openai/gpt-4o-mini-tts-2025-12-15",
+          "elevenLabsKey": "",
+          "elevenLabsVoice": "21m00Tcm4TlvDq8ikWAM",
+          "fishKey": "",
+          "fishReferenceId": "",
+          "deepLKey": "",
+          "deepLTargetLang": "EN-US",
+          "youtubeTranscriptApiKey": "",
+          "speakingTranslationProvider": "deepl",
+          "taskModelSpeakingTranslation": "",
+          "taskModelSpeakingAnalysis": "google/gemini-2.0-flash-exp:free",
+          "taskModelResourceGeneration": "",
+          "googleImageModel": "",
+          "taskModelWordAnalysis": "",
+          "taskModelUrlExtraction": "",
+          "taskModelWritingCorrection": "",
+          "writingCorrectionAdvancedFormatting": false,
+          "taskModelExerciseBuilder": "",
+          "taskModelTeacherAlignment": ""
+        }
+      },
+      "resources": [
+        {
+          "id": "res-discussion-amicale",
+          "title": "Discussion amicale",
+          "language": "en",
+          "type": "article",
+          "difficulty": "beginner",
+          "cover": "blue",
+          "minutes": 1,
+          "imported": true,
+          "archived": false,
+          "createdAt": "2026-09-07T22:33:23.804Z",
+          "chapters": [
+            {
+              "id": "ch-disc-1",
+              "title": "Partie 1",
+              "paragraphs": [
+                "Hi I'm looking forward to get-together tomorrow"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "resource-40c310e6-6a6b-41b1-85ca-b6cef30cf5ab",
+          "title": "La Leçon de Français",
+          "author": "",
+          "type": "article",
+          "difficulty": "beginner",
+          "minutes": 1,
+          "cover": "green",
+          "language": "en",
+          "chapters": [
+            {
+              "id": "chapter-df10944f-e9e8-4dcf-abfb-46414945e688",
+              "title": "Partie 1",
+              "paragraphs": [
+                "Ceci est une dictée interactive pour les élèves. Le professeur corrige les erreurs en direct pendant la leçon. Ajout."
+              ]
+            }
+          ],
+          "createdAt": "2026-08-28T22:30:47.026Z",
+          "imported": true,
+          "archived": true
+        },
+        {
+          "id": "resource-4d822e08-d610-4ca8-a6e1-19c4be3882ac",
+          "title": "Une belle aventure à Paris",
+          "author": "",
+          "type": "article",
+          "difficulty": "beginner",
+          "minutes": 1,
+          "cover": "blue",
+          "language": "en",
+          "chapters": [
+            {
+              "id": "chapter-84dd5a5a-7981-4b8c-9ed9-5cac16033ad2",
+              "title": "Partie 1",
+              "paragraphs": [
+                "Paris est une ville magnifique. Il y a beaucoup de monuments à visiter, comme la Tour Eiffel et le Musée du Louvre.",
+                "J'aime me promener le long de la Seine et manger des croissants dans les cafés."
+              ]
+            }
+          ],
+          "createdAt": "2026-08-27T09:17:49.390Z",
+          "imported": true
+        }
+      ],
+      "progress": {
+        "resource-4d822e08-d610-4ca8-a6e1-19c4be3882ac": {
+          "resourceId": "resource-4d822e08-d610-4ca8-a6e1-19c4be3882ac",
+          "chapterIndex": 0,
+          "paragraphIndex": 0,
+          "completed": false,
+          "updatedAt": "2026-08-29T01:53:39.105Z"
+        },
+        "resource-40c310e6-6a6b-41b1-85ca-b6cef30cf5ab": {
+          "resourceId": "resource-40c310e6-6a6b-41b1-85ca-b6cef30cf5ab",
+          "chapterIndex": 0,
+          "paragraphIndex": 0,
+          "completed": false,
+          "updatedAt": "2026-08-31T17:48:40.403Z"
+        },
+        "res-discussion-amicale": {
+          "resourceId": "res-discussion-amicale",
+          "chapterIndex": 0,
+          "paragraphIndex": 0,
+          "completed": false,
+          "updatedAt": "2026-09-07T22:33:48.030Z"
+        }
+      },
+      "words": [
+        {
+          "id": "w-look-forward-to",
+          "word": "look forward to",
+          "normalized": "look forward to",
+          "language": "en",
+          "knowledge": 1,
+          "translation": "avoir hâte de, attendre avec impatience",
+          "createdAt": "2026-09-07T22:33:23.804Z",
+          "phonetic": "/lʊk · fɔːr · wərd · tu/",
+          "tags": []
+        },
+        {
+          "id": "w-get-together",
+          "word": "get-together",
+          "normalized": "get-together",
+          "language": "en",
+          "knowledge": 1,
+          "translation": "réunion, rencontre, retrouvailles",
+          "createdAt": "2026-09-07T22:33:23.804Z",
+          "phonetic": "/get · tə · ge · ðər/",
+          "tags": []
+        },
+        {
+          "id": "w-tomorrow",
+          "word": "tomorrow",
+          "normalized": "tomorrow",
+          "language": "en",
+          "knowledge": 1,
+          "translation": "demain",
+          "createdAt": "2026-09-07T22:33:23.804Z",
+          "phonetic": "/tə · mɒ · roʊ/",
+          "tags": []
+        }
+      ],
+      "writings": [
+        {
+          "id": "writing-30bd1b15-3666-4450-932a-32beb9147f23",
+          "title": "Salut",
+          "date": "2026-08-29",
+          "mode": "free",
+          "promptWords": [],
+          "wordsUsed": [],
+          "content": "Bonjour, je m'appelle Mathis. J'apprends le francais.Bonjour, je m'appelle Mathis. J'apprends le fran",
+          "published": true,
+          "cosignCount": 0,
+          "coSigned": false,
+          "wordCount": 13,
+          "timeSpentSeconds": 0,
+          "createdAt": "2026-08-29T01:21:07.360Z",
+          "updatedAt": "2026-08-29T01:21:07.360Z"
+        }
+      ],
+      "sessions": [],
+      "completedScenarios": [],
+      "wordMarks": {},
+      "silentMarks": {},
+      "markings": [
+        {
+          "id": "verb",
+          "label": "Verbe",
+          "color": "#16a34a"
+        },
+        {
+          "id": "noun",
+          "label": "Nom",
+          "color": "#2563eb"
+        },
+        {
+          "id": "adjective",
+          "label": "Adjectif",
+          "color": "#d97706"
+        },
+        {
+          "id": "adverb",
+          "label": "Adverbe",
+          "color": "#dc2626"
+        },
+        {
+          "id": "expression",
+          "label": "Expression",
+          "color": "#7c3aed"
+        }
+      ],
+      "customTools": [],
+      "removedTools": [],
+      "customCategories": [],
+      "customTags": []
+    },
+    "extraStorage": {
+      "vivre-focus-originals-resource-40c310e6-6a6b-41b1-85ca-b6cef30cf5ab": "{\"0:0\":\"Ceci est une dictée interactive pour les élèves. Le professeur corrige les erreurs en direct pendant la leçon.\"}",
+      "vivre-page-res-discussion-amicale": "0",
+      "vivre-focus-originals-resource-f135813e-f869-4742-9460-d1440da1b1b1": "{\"0:0\":\"Le chat dort sur le canapLe chat dort sur le sofa.\"}",
+      "vivre-focus-resource-4d822e08-d610-4ca8-a6e1-19c4be3882ac": "{\"resource-4d822e08-d610-4ca8-a6e1-19c4be3882ac#0\":{\"strokes\":[{\"id\":\"mtdq91nn-vu5q2i\",\"kind\":\"pen\",\"color\":\"#d64545\",\"width\":4,\"points\":[{\"x\":559,\"y\":184},{\"x\":706,\"y\":184}]},{\"id\":\"mtdqce2e-iriyfg\",\"kind\":\"pen\",\"color\":\"#d64545\",\"width\":4,\"points\":[{\"x\":1355.44921875,\"y\":819.1953125}]}],\"liaisons\":[],\"texts\":[],\"grayed\":[],\"order\":[{\"kind\":\"stroke\",\"id\":\"mtdq91nn-vu5q2i\"},{\"kind\":\"stroke\",\"id\":\"mtdqce2e-iriyfg\"}]}}",
+      "vivre-page-resource-4d822e08-d610-4ca8-a6e1-19c4be3882ac": "0",
+      "vivre-page-resource-f135813e-f869-4742-9460-d1440da1b1b1": "0",
+      "vivre-page-resource-40c310e6-6a6b-41b1-85ca-b6cef30cf5ab": "0",
+      "vivre-focus-zoom": "30",
+      "vivre-focus-resource-f135813e-f869-4742-9460-d1440da1b1b1": "{}",
+      "vivre-focus-resource-40c310e6-6a6b-41b1-85ca-b6cef30cf5ab": "{\"resource-40c310e6-6a6b-41b1-85ca-b6cef30cf5ab#0\":{\"strokes\":[{\"id\":\"mtf45n8g-qc5pvu\",\"kind\":\"arrow\",\"color\":\"#d64545\",\"width\":4,\"points\":[{\"x\":146,\"y\":209},{\"x\":293,\"y\":209}]}],\"liaisons\":[],\"texts\":[],\"grayed\":[],\"order\":[{\"kind\":\"stroke\",\"id\":\"mtf45n8g-qc5pvu\"}]}}",
+      "vivre-focus-originals-resource-4d822e08-d610-4ca8-a6e1-19c4be3882ac": "{}"
+    },
+    "lastModified": 1788820429534,
+    "deviceId": "dev-mtrtfz5r-dcxpom",
+    "deviceName": "Mac"
+  },
+  "revision": 5,
+  "lastModified": 1788820429536
+}

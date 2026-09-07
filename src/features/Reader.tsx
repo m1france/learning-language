@@ -41,6 +41,7 @@ import { RichInputField } from './vocabulary/RichInputField'
 import { getResourceWordStats, extractPageUniqueWords } from './readingProgressUtils'
 import { PageSavedWordsModal } from './vocabulary/PageSavedWordsModal'
 import { cleanWordRaw, findMatchingLearnedWord } from './vocabulary/wordMatchingService'
+import { buildPhraseRegex, matchesPhraseInflection } from './vocabulary/phraseMatchingService'
 import { resourcesCopy } from '../i18n'
 import {
   ResourceContextMenu,
@@ -474,10 +475,18 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             const variants = getInflectionVariants(norm)
             const parentVariants = parentNorm ? getInflectionVariants(parentNorm) : []
 
-            // Check if this word, its parent, or any singular/plural inflection variant is already recorded
+            // Check if this word, its parent, or any singular/plural/phrase inflection variant is already recorded
             const isAlreadyKnown =
+              Boolean(findMatchingLearnedWord(state.words, raw, resource.language)) ||
               variants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v)) ||
-              (parentVariants.length > 0 && parentVariants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v)))
+              (parentVariants.length > 0 && parentVariants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v))) ||
+              Array.from(newlySavedSeen).some((seen) => {
+                if ((norm.includes(' ') || seen.includes(' ') || norm.includes('-') || seen.includes('-')) &&
+                    matchesPhraseInflection(norm, seen, resource.language)) {
+                  return true
+                }
+                return false
+              })
 
             if (isAlreadyKnown) {
               continue
@@ -792,10 +801,10 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
   const knownPhrases = useMemo(() => {
     const fromWords = state.words
-      .filter((w) => w.language === resource.language && w.word.trim().includes(' '))
+      .filter((w) => w.language === resource.language && (w.word.trim().includes(' ') || w.word.trim().includes('-')))
       .map((w) => w.word.trim())
     const fromMarks = Object.keys(state.wordMarks)
-      .filter((k) => k.startsWith(`${resource.language}:`) && k.includes(' '))
+      .filter((k) => k.startsWith(`${resource.language}:`) && (k.includes(' ') || k.includes('-')))
       .map((k) => k.slice(resource.language.length + 1))
     const all = Array.from(new Set([...fromWords, ...fromMarks]))
     return all.sort((a, b) => b.length - a.length)
@@ -1027,10 +1036,10 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}><ArrowLeft size={16} /> {t.back.replace('←', '').trim()}</button>
       <div className="reader-controls">
         <button className="control control-learning-focus" onClick={(event) => { event.stopPropagation(); startFocus() }}><Headphones size={14} /> {t.focus}</button>
-        <button className="control control-focus" onClick={(event) => { event.stopPropagation(); onOpenFocus(resource) }}><GraduationCap size={14} /> {t.teacherMode}</button>
-        <button className="control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.min(26, fontSize + 1)) }}>A+</button>
-        <button className="control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.max(15, fontSize - 1)) }}>A−</button>
-        <select className="control page-size" value={settings.readerPageSize} onClick={(event) => event.stopPropagation()} onChange={(event) => { onPageSize(Number(event.target.value)); setPageIndex(0) }}>
+        <button className="control control-focus desktop-reader-control" onClick={(event) => { event.stopPropagation(); onOpenFocus(resource) }}><GraduationCap size={14} /> {t.teacherMode}</button>
+        <button className="control desktop-reader-control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.min(26, fontSize + 1)) }}>A+</button>
+        <button className="control desktop-reader-control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.max(15, fontSize - 1)) }}>A−</button>
+        <select className="control page-size desktop-reader-control" value={settings.readerPageSize} onClick={(event) => event.stopPropagation()} onChange={(event) => { onPageSize(Number(event.target.value)); setPageIndex(0) }}>
           {PAGE_SIZE_OPTIONS.map((size) => <option value={size} key={size}>{size} {t.wordsPerPage}</option>)}
         </select>
       </div>
@@ -1582,10 +1591,10 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         onClose={() => setShowSavedModal(false)}
         words={savedPageWordsList
           .map((sw) => {
-            const current = state.words.find((w) => w.normalized === sw.normalized && w.language === resource.language)
+            const current = findMatchingLearnedWord(state.words, sw.word, resource.language)
             return current || sw
           })
-          .filter((w) => state.words.some((sw) => sw.normalized === w.normalized && sw.language === resource.language))}
+          .filter((w) => Boolean(findMatchingLearnedWord(state.words, w.word, resource.language)))}
         language={resource.language}
         ui={ui}
         api={state.settings.api}
@@ -2686,10 +2695,10 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
 
   const knownPhrases = useMemo(() => {
     const fromWords = state.words
-      .filter((w) => w.language === resource.language && w.word.trim().includes(' '))
+      .filter((w) => w.language === resource.language && (w.word.trim().includes(' ') || w.word.trim().includes('-')))
       .map((w) => w.word.trim())
     const fromMarks = Object.keys(state.wordMarks)
-      .filter((k) => k.startsWith(`${resource.language}:`) && k.includes(' '))
+      .filter((k) => k.startsWith(`${resource.language}:`) && (k.includes(' ') || k.includes('-')))
       .map((k) => k.slice(resource.language.length + 1))
     const all = Array.from(new Set([...fromWords, ...fromMarks]))
     return all.sort((a, b) => b.length - a.length)
@@ -3048,7 +3057,7 @@ function ChapterTitle({ title, hint, onRename }: { title: string; hint: string; 
     : <button className="chapter-title" title={hint} onClick={(event) => { event.stopPropagation(); setEditing(true) }}>{title}</button>
 }
 
-function tokenizeParagraph(text: string, knownPhrases: string[] = []) {
+function tokenizeParagraph(text: string, knownPhrases: string[] = [], language: Language = 'en') {
   if (!knownPhrases || knownPhrases.length === 0) {
     const tokens: { raw: string; isWhitespace: boolean; offset: number; isMultiWord?: boolean }[] = []
     let offset = 0
@@ -3066,20 +3075,37 @@ function tokenizeParagraph(text: string, knownPhrases: string[] = []) {
   const matches: Match[] = []
 
   for (const phrase of knownPhrases) {
-    const normPhrase = normalizeWord(phrase)
-    if (!normPhrase.includes(' ')) continue
-    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')
-    const regex = new RegExp(`(^|[^a-zà-ÿ0-9'-])(${escaped})([^a-zà-ÿ0-9'-]|$)`, 'gi')
-    let m: RegExpExecArray | null
-    while ((m = regex.exec(text)) !== null) {
-      const matchStart = m.index + m[1].length
-      const matchText = m[2]
-      const matchEnd = matchStart + matchText.length
-      const overlaps = matches.some((ex) => matchStart < ex.end && matchEnd > ex.start)
-      if (!overlaps) {
-        matches.push({ start: matchStart, end: matchEnd, phrase: matchText })
+    const regex = buildPhraseRegex(phrase, language)
+    if (regex) {
+      let m: RegExpExecArray | null
+      while ((m = regex.exec(text)) !== null) {
+        const fullMatch = m[0]
+        const captured = m[1]
+        const leadingOffset = fullMatch.indexOf(captured)
+        const matchStart = m.index + (leadingOffset >= 0 ? leadingOffset : 0)
+        const matchEnd = matchStart + captured.length
+        const overlaps = matches.some((ex) => matchStart < ex.end && matchEnd > ex.start)
+        if (!overlaps) {
+          matches.push({ start: matchStart, end: matchEnd, phrase: captured })
+        }
+        regex.lastIndex = matchStart + Math.max(1, captured.length)
       }
-      regex.lastIndex = matchStart + 1
+    } else {
+      const normPhrase = normalizeWord(phrase)
+      if (!normPhrase.includes(' ') && !normPhrase.includes('-')) continue
+      const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")
+      const fallbackRegex = new RegExp(`(^|[^\\p{L}\\p{N}'’‘-])(${escaped})([^\\p{L}\\p{N}'’‘-]|$)`, "giu")
+      let m: RegExpExecArray | null
+      while ((m = fallbackRegex.exec(text)) !== null) {
+        const matchStart = m.index + m[1].length
+        const matchText = m[2]
+        const matchEnd = matchStart + matchText.length
+        const overlaps = matches.some((ex) => matchStart < ex.end && matchEnd > ex.start)
+        if (!overlaps) {
+          matches.push({ start: matchStart, end: matchEnd, phrase: matchText })
+        }
+        fallbackRegex.lastIndex = matchStart + 1
+      }
     }
   }
 
@@ -3155,7 +3181,7 @@ function Paragraph({
   const dragStartRef = useRef<{ offset: number; length: number; raw: string } | null>(null)
   const isSelectingRef = useRef(false)
 
-  const tokens = useMemo(() => tokenizeParagraph(text, knownPhrases), [text, knownPhrases])
+  const tokens = useMemo(() => tokenizeParagraph(text, knownPhrases, language), [text, knownPhrases, language])
 
   const handleTokenMouseDown = (token: { offset: number; raw: string }) => {
     dragStartRef.current = { offset: token.offset, length: token.raw.length, raw: token.raw }
@@ -3266,14 +3292,68 @@ function Word({
   onContextMenu?: (raw: string, event: React.MouseEvent) => void
   onLetterClick: (raw: string, letterIndex: number) => void
 }) {
+  const touchTimerRef = useRef<number | null>(null)
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
+  const longPressFiredRef = useRef(false)
+
+  const handleWordTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY }
+    longPressFiredRef.current = false
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current)
+    touchTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true
+      if (onContextMenu) {
+        onContextMenu(raw, {
+          preventDefault: () => {},
+          stopPropagation: () => {},
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+        } as unknown as React.MouseEvent)
+      }
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try { (navigator as any).vibrate?.(40) } catch {}
+      }
+    }, 450)
+  }
+
+  const handleWordTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPosRef.current) return
+    const touch = e.touches[0]
+    const dx = Math.abs(touch.clientX - touchStartPosRef.current.x)
+    const dy = Math.abs(touch.clientY - touchStartPosRef.current.y)
+    if (dx > 10 || dy > 10) {
+      if (touchTimerRef.current) {
+        clearTimeout(touchTimerRef.current)
+        touchTimerRef.current = null
+      }
+    }
+  }
+
+  const handleWordTouchEnd = (e: React.TouchEvent) => {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current)
+      touchTimerRef.current = null
+    }
+    if (longPressFiredRef.current) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  }
+
   const normalized = normalizeWord(raw)
   const genericKey = markKey(language, normalized)
   const instKey = (resourceId && chapterIndex !== undefined && paragraphIndex !== undefined)
     ? `inst:${resourceId}:${chapterIndex}:${paragraphIndex}:${offset}`
     : undefined
-  const mark = (instKey ? state.wordMarks[instKey] : undefined) ?? state.wordMarks[genericKey]
-  const grayed = state.silentMarks[genericKey] ?? []
   const savedWord = findMatchingLearnedWord(state.words, raw, language)
+  const savedWordGenericKey = savedWord ? markKey(language, savedWord.normalized) : undefined
+  const mark = (instKey ? state.wordMarks[instKey] : undefined)
+    ?? state.wordMarks[genericKey]
+    ?? (savedWordGenericKey ? state.wordMarks[savedWordGenericKey] : undefined)
+  const grayed = state.silentMarks[genericKey]
+    ?? (savedWordGenericKey ? state.silentMarks[savedWordGenericKey] : undefined)
+    ?? []
 
   const letters = [...raw]
   let alphaIndex = -1
@@ -3313,6 +3393,9 @@ function Word({
       <span
         className={`word as-span ${markClass} ${deckClass} ${selectedClass}`}
         style={style}
+        onTouchStart={handleWordTouchStart}
+        onTouchMove={handleWordTouchMove}
+        onTouchEnd={handleWordTouchEnd}
         onContextMenu={(event) => { if (onContextMenu) { onContextMenu(raw, event) } }}
       >
         {spans}
@@ -3326,8 +3409,15 @@ function Word({
       style={style}
       onMouseDown={onMouseDown}
       onMouseEnter={onMouseEnter}
+      onTouchStart={handleWordTouchStart}
+      onTouchMove={handleWordTouchMove}
+      onTouchEnd={handleWordTouchEnd}
       onClick={(event) => {
         event.stopPropagation()
+        if (longPressFiredRef.current) {
+          longPressFiredRef.current = false
+          return
+        }
         if (Date.now() - lastMultiWordDragTimestamp < 500) {
           event.preventDefault()
           return

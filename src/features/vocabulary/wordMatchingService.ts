@@ -1,5 +1,6 @@
 import type { Language, LearnedWord } from '../../domain'
 import { cleanWordRaw, getInflectionVariants, normalizeWord } from '../../domain'
+import { matchesPhraseInflection } from './phraseMatchingService'
 
 export { cleanWordRaw }
 
@@ -28,7 +29,7 @@ export function matchesInflection(normA: string, normB: string): boolean {
 }
 
 /**
- * Trouve le mot enregistré dans le vocabulaire qui correspond le mieux à une forme
+ * Trouve le mot ou l'expression enregistré(e) dans le vocabulaire qui correspond le mieux à une forme
  * de surface cliquée ou affichée dans le texte.
  *
  * Résout :
@@ -36,7 +37,8 @@ export function matchesInflection(normA: string, normB: string): boolean {
  * 2. Correspondance exacte sur le mot brut nettoyé (casse insensible)
  * 3. Inflexions morphologiques (pluriel, conjugaison : "cats" / "walked" -> lemme "cat" / "walk")
  * 4. Rattachement au lemme parent (ex: mot dans le texte = "went", mot enregistré parent = "go")
- * 5. Recherche inverse (si un mot cliqué est la forme canonique d'une forme dérivée)
+ * 5. Inflexion étendue (suffixes verbaux courants en anglais et français)
+ * 6. Correspondance multi-mots et verbes à particule avec conjugaison (ex: "looking forward to" -> "look forward to")
  */
 export function findMatchingLearnedWord(
   words: LearnedWord[] | undefined,
@@ -60,7 +62,20 @@ export function findMatchingLearnedWord(
   const exactWord = langWords.find((w) => w.word.toLowerCase() === lowerCleaned)
   if (exactWord) return exactWord
 
-  // 3. Correspondance via variantes d'inflexion (pluriels réguliers, 3e personne, etc.)
+  // 3. Multi-word phrase matching with inflection resolution (e.g. "looking forward to" <-> "look forward to")
+  const isMultiWordQuery = norm.includes(' ') || norm.includes('-')
+  const phraseMatch = langWords.find((w) => {
+    const isWMultiWord = w.normalized.includes(' ') || w.normalized.includes('-')
+    if (isMultiWordQuery || isWMultiWord) {
+      if (matchesPhraseInflection(norm, w.normalized, language)) return true
+      if (w.word && matchesPhraseInflection(cleaned, w.word, language)) return true
+      if (w.parent && matchesPhraseInflection(norm, w.parent, language)) return true
+    }
+    return false
+  })
+  if (phraseMatch) return phraseMatch
+
+  // 4. Correspondance via variantes d'inflexion (pluriels réguliers, 3e personne, etc.)
   const variants = getInflectionVariants(norm)
   const inflectionMatch = langWords.find((w) => {
     if (variants.includes(w.normalized)) return true
@@ -69,7 +84,7 @@ export function findMatchingLearnedWord(
   })
   if (inflectionMatch) return inflectionMatch
 
-  // 4. Correspondance avec le lemme parent (ex: mot dans le texte = "went", mot enregistré parent = "go")
+  // 5. Correspondance avec le lemme parent (ex: mot dans le texte = "went", mot enregistré parent = "go")
   const parentMatch = langWords.find((w) => {
     if (!w.parent) return false
     const parentNorm = normalizeWord(w.parent)
@@ -77,7 +92,7 @@ export function findMatchingLearnedWord(
   })
   if (parentMatch) return parentMatch
 
-  // 5. Inflexion étendue (suffixes verbaux courants en anglais et français)
+  // 6. Inflexion étendue (suffixes verbaux courants en anglais et français)
   const suffixMatch = langWords.find((w) => matchesInflection(norm, w.normalized))
   if (suffixMatch) return suffixMatch
 

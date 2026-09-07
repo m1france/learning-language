@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { readFileSync, writeFileSync, existsSync, statSync, mkdirSync } from 'fs'
+import { renameSync, unlinkSync } from 'fs'
 import { resolve, extname, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import mysql from 'mysql2/promise'
@@ -29,6 +30,33 @@ if (!existsSync(DATA_DIR)) {
 }
 
 const LESSONS_FILE = resolve(DATA_DIR, 'shared_lessons.json')
+const SYNC_FILE = resolve(DATA_DIR, 'sync_state.json')
+
+function loadSyncState(): { payload: any; revision: number } {
+  try {
+    if (!existsSync(SYNC_FILE)) return { payload: null, revision: 0 }
+    const raw = readFileSync(SYNC_FILE, 'utf-8')
+    return JSON.parse(raw) || { payload: null, revision: 0 }
+  } catch (err) {
+    console.error('Erreur lecture sync_state.json:', err)
+    return { payload: null, revision: 0 }
+  }
+}
+
+function saveSyncState(payload: any): number {
+  try {
+    const current = loadSyncState()
+    const nextRevision = (current.revision || 0) + 1
+    const data = { payload, revision: nextRevision, lastModified: Date.now() }
+    const tmp = `${SYNC_FILE}.tmp.${Date.now()}`
+    writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8')
+    try { renameSync(tmp, SYNC_FILE) } catch { writeFileSync(SYNC_FILE, JSON.stringify(data, null, 2), 'utf-8') }
+    return nextRevision
+  } catch (err) {
+    console.error('Erreur écriture sync_state.json:', err)
+    return 1
+  }
+}
 
 // Structure de stockage des leçons partagées
 type SharedLesson = {
@@ -95,6 +123,42 @@ const mimeTypes: Record<string, string> = {
 app.use('/*', cors())
 
 // Healthcheck
+app.use('/api/*', cors())
+
+// ============================================================================
+// SYNCHRONISATION AUTOMATIQUE MAC ↔ IPHONE
+// ============================================================================
+app.get('/api/sync/status', (c) => {
+  const current = loadSyncState()
+  return c.json({
+    ok: true,
+    revision: current.revision || 0,
+    lastModified: current.payload?.lastModified || 0,
+    deviceName: current.payload?.deviceName || null,
+  })
+})
+
+app.get('/api/sync', (c) => {
+  const current = loadSyncState()
+  return c.json({
+    ok: true,
+    payload: current.payload,
+    revision: current.revision || 0,
+    serverTimestamp: Date.now(),
+  })
+})
+
+app.post('/api/sync', async (c) => {
+  try {
+    const body = await c.req.json()
+    const payload = body.payload || body
+    const revision = saveSyncState(payload)
+    return c.json({ ok: true, revision, serverTimestamp: Date.now() })
+  } catch (err) {
+    return c.json({ error: 'Données JSON invalides' }, 400)
+  }
+})
+
 app.get('/api/health', (c) => c.json({ status: 'ok', time: new Date().toISOString() }))
 
 // ============================================================================

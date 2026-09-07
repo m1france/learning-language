@@ -125,7 +125,7 @@ export function AddResourceModal({
         const title = pastedTitle.trim() || text.slice(0, 40).replace(/\n/g, ' ') + '...'
         const res = paragraphsToResource({
           title,
-          author: state.settings.name || 'Moi',
+          author: '',
           paragraphs: text.split(/\n+/).map((p) => p.trim()).filter(Boolean),
           language: state.settings.learningLanguage,
           type: category,

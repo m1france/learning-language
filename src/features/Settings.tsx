@@ -26,6 +26,7 @@ import {
   Sparkles,
   Keyboard,
   RotateCcw,
+  RefreshCw,
   Volume2,
   Play,
   Loader2,
@@ -35,6 +36,7 @@ import {
   Share2,
 } from 'lucide-react'
 import { MyLessonsSettingsTab } from './teacherExport/MyLessonsSettingsTab'
+import { syncService, type SyncStateInfo } from './sync/syncService'
 import type { ExportedLesson } from './teacherExport/teacherExportDomain'
 
 type SettingsProps = {
@@ -289,6 +291,19 @@ const DEFAULT_CATEGORIES: { id: string; label: string }[] = [
 
 export function Settings({ settings, state, onSave, onChangeState, onResetData, onOpenLesson }: SettingsProps) {
   const [draft, setDraft] = useState<UserSettings>(settings)
+  const [syncInfo, setSyncInfo] = useState<SyncStateInfo>(() => syncService.getInfo())
+
+  useEffect(() => {
+    return syncService.subscribe((info) => {
+      setSyncInfo(info)
+    })
+  }, [])
+
+  const handleManualSync = async () => {
+    await syncService.push(state)
+    const updated = await syncService.pull()
+    if (updated) onChangeState(updated)
+  }
   const [tab, setTab] = useState<Tab>('profile')
   const [saved, setSaved] = useState(false)
   const [confirmingReset, setConfirmingReset] = useState(false)
@@ -535,7 +550,29 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
 
   return <div className="page settings-page">
     <header className="page-header settings-header">
-      <div><p className="eyebrow">{t.eyebrow}</p><h1>{t.title}</h1><p className="subhead">{t.subhead}</p></div>
+      <div>
+        <p className="eyebrow">{t.eyebrow}</p>
+        <div className="settings-title-row">
+          <h1>{t.title}</h1>
+          <div
+            className={`settings-sync-badge status-${syncInfo.status}`}
+            title={`Synchronisation automatique : ${syncInfo.lastSyncedAt ? `Dernière synchro à ${syncInfo.lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Prêt'}`}
+            onClick={handleManualSync}
+          >
+            <RefreshCw size={12} className={syncInfo.status === 'syncing' ? 'spin' : ''} />
+            <span>
+              {syncInfo.status === 'syncing'
+                ? 'Synchronisation…'
+                : syncInfo.status === 'synced'
+                  ? 'Synchronisé'
+                  : syncInfo.status === 'offline'
+                    ? 'Hors ligne'
+                    : 'Synchronisé'}
+            </span>
+          </div>
+        </div>
+        <p className="subhead">{t.subhead}</p>
+      </div>
       <button className="primary" onClick={save}>{saved ? <><Check size={15} /> {t.saved}</> : t.save} <ArrowRight size={15} /></button>
     </header>
     <div className="settings-layout">
@@ -1477,6 +1514,39 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
 
         {tab === 'data' && <>
           <SettingHeading title={t.dataTitle} detail={t.dataDetail} />
+
+          <div className="data-card sync-card">
+            <div className="sync-card-header">
+              <div className="sync-card-icon">
+                <RefreshCw size={18} className={syncInfo.status === 'syncing' ? 'spin' : ''} />
+              </div>
+              <div className="sync-card-meta">
+                <h3>Synchronisation automatique Mac &amp; iPhone</h3>
+                <p>Vos ressources, votre progression de lecture, votre vocabulaire et vos clés API sont synchronisés automatiquement et en continu entre votre Mac et votre iPhone.</p>
+              </div>
+              <button
+                type="button"
+                className="outline sync-action-btn"
+                onClick={handleManualSync}
+                disabled={syncInfo.status === 'syncing'}
+              >
+                {syncInfo.status === 'syncing' ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
+                <span>{syncInfo.status === 'syncing' ? 'Synchronisation…' : 'Synchroniser maintenant'}</span>
+              </button>
+            </div>
+            <div className="sync-card-footer">
+              <span className="sync-status-indicator">
+                <span className={`sync-dot ${syncInfo.status === 'synced' ? 'online' : ''}`} />
+                {syncInfo.status === 'synced' ? 'Synchronisation active & à jour' : syncInfo.status === 'syncing' ? 'Synchronisation en cours…' : 'Mode local actif'}
+              </span>
+              {syncInfo.lastSyncedAt && (
+                <span className="sync-last-time">
+                  Dernier échange : {syncInfo.lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({syncInfo.lastDevice || 'Réseau'})
+                </span>
+              )}
+            </div>
+          </div>
+
           <div className="data-card"><h3>{t.localDefault}</h3><p>{t.localDefaultDesc}</p></div>
           <div className="danger-zone"><div><h3>{t.startFresh}</h3><p>{t.startFreshDesc}</p></div>{confirmingReset ? <div className="confirm-row"><button className="outline" onClick={() => setConfirmingReset(false)}>{t.cancel}</button><button className="danger" onClick={onResetData}>{t.deleteDataConfirm}</button></div> : <button className="outline" onClick={() => setConfirmingReset(true)}>{t.resetDataBtn}</button>}</div>
         </>}

@@ -87,6 +87,7 @@ MANDATORY WRITING RULES (you MUST follow these at all times):
 2. NEVER use em-dashes (—). Use commas (,) instead, or better yet restructure the sentence using line breaks (see rule 4).
 3. Include dialogues, emotional tension, suspense and emotion in the narrative. The reader must be able to vividly picture every scene in their mind. For dialogues, use line breaks and present them in a fluid, airy way (see rule 4).
 4. Do NOT compress all text into dense blocks. Create line breaks and paragraph variety: some paragraphs should be very long and immersive, others very short and punchy, following the rhythm of the narrative. This is especially important for dialogues but also for key information, revelations, or emotional beats. In the JSON paragraphs array, each dialogue line or short beat should be its own paragraph entry.
+5. NEVER include any character description header, protagonist summary, actor card, or user name introductory lines (such as "Acteur principal :", "Personnage principal :", "Protagoniste :", "Mathis"). Start directly with the narrative of the story or article. Never use the name "Mathis" or any learner name.
 
 Additional format rules:
 - Format: Return ONLY a valid JSON object (no markdown surrounding, no conversational intro).
@@ -156,7 +157,26 @@ JSON Schema:
     // AI-generated resources stay authorless: never persist an invented author name.
     const author = ''
     const paragraphs = Array.isArray(parsed.paragraphs)
-      ? (parsed.paragraphs as unknown[]).map((p) => String(p).trim()).filter((p: string) => p.length > 5)
+      ? (parsed.paragraphs as unknown[])
+          .map((p) => String(p).trim())
+          .filter((p: string) => {
+            if (p.length < 3) return false
+            const lower = p.toLowerCase()
+            if (
+              lower.startsWith("acteur principal") ||
+              lower.startsWith("personnage principal") ||
+              lower.startsWith("protagoniste") ||
+              lower.startsWith("main character") ||
+              lower.startsWith("acteur :") ||
+              lower.startsWith("protagonist :") ||
+              lower === "mathis"
+            ) {
+              return false
+            }
+            return true
+          })
+          .map((p: string) => p.replace(/^(?:Acteur|Personnage) principal\s*:[^\n]*\n+/i, "").trim())
+          .filter((p) => p.length > 5)
       : []
 
     if (paragraphs.length === 0) {

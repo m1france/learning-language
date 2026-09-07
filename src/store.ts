@@ -1,6 +1,7 @@
 import { type ApiSettings, type AppState, type Language, type LearnedWord, type MarkingDefinition, type Resource, type UserSettings, type WordMark, type WordRelationType, type WritingEntry, cleanWordRaw, id, normalizeWord, todayKey } from './domain'
 import { getResourceWordStats } from './features/readingProgressUtils'
 import { formatIpaPronunciation } from './features/vocabulary/phoneticUtils'
+import { matchesPhraseInflection } from './features/vocabulary/phraseMatchingService'
 
 const stateKey = 'vivre-la-langue:state:v2'
 
@@ -285,7 +286,16 @@ export const upsertWordDetails = (state: AppState, args: {
   const cleaned = cleanWordRaw(args.raw)
   if (!cleaned) return state
   const normalized = normalizeWord(cleaned)
-  const existing = state.words.find((word) => word.normalized === normalized && word.language === args.language)
+  const existing = state.words.find((word) => {
+    if (word.language !== args.language) return false
+    if (word.normalized === normalized) return true
+    if (word.word.toLowerCase() === cleaned.toLowerCase()) return true
+    if ((normalized.includes(' ') || word.normalized.includes(' ') || normalized.includes('-') || word.normalized.includes('-')) &&
+        matchesPhraseInflection(normalized, word.normalized, args.language)) {
+      return true
+    }
+    return false
+  })
   const cleanPhonetic = args.pronunciation ? formatIpaPronunciation(args.pronunciation) || undefined : undefined
 
   if (existing) {
@@ -361,7 +371,16 @@ export const batchUpsertWordDetails = (
     if (!cleaned) continue
     const normalized = normalizeWord(cleaned)
     const cleanPhonetic = args.pronunciation ? formatIpaPronunciation(args.pronunciation) || undefined : undefined
-    const existingIndex = nextWords.findIndex((w) => w.normalized === normalized && w.language === args.language)
+    const existingIndex = nextWords.findIndex((w) => {
+      if (w.language !== args.language) return false
+      if (w.normalized === normalized) return true
+      if (w.word.toLowerCase() === cleaned.toLowerCase()) return true
+      if ((normalized.includes(' ') || w.normalized.includes(' ') || normalized.includes('-') || w.normalized.includes('-')) &&
+          matchesPhraseInflection(normalized, w.normalized, args.language)) {
+        return true
+      }
+      return false
+    })
 
     if (existingIndex >= 0) {
       const existing = nextWords[existingIndex]

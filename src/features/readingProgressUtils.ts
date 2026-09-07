@@ -1,5 +1,7 @@
 import type { AppState, Language, LearnedWord, Resource } from '../domain'
 import { normalizeWord } from '../domain'
+import { findMatchingLearnedWord } from './vocabulary/wordMatchingService'
+import { buildPhraseRegex } from './vocabulary/phraseMatchingService'
 
 /**
  * Strips punctuation and returns clean word token.
@@ -11,11 +13,31 @@ export function cleanWordToken(raw: string): string {
 /**
  * Extracts all unique normalized words from a complete resource.
  */
-export function extractResourceUniqueWords(resource: Resource): string[] {
+export function extractResourceUniqueWords(
+  resource: Resource,
+  knownPhrases: string[] = [],
+  language: Language = 'en'
+): string[] {
   const set = new Set<string>()
+  const phraseRegexes = (knownPhrases || [])
+    .map((p) => ({ phrase: p, regex: buildPhraseRegex(p, language) }))
+    .filter((x) => x.regex !== null)
+
   for (const chapter of resource.chapters) {
     for (const p of chapter.paragraphs) {
-      const tokens = p.split(/\s+/)
+      let remaining = p
+      for (const { regex } of phraseRegexes) {
+        if (!regex) continue
+        regex.lastIndex = 0
+        let m: RegExpExecArray | null
+        while ((m = regex.exec(p)) !== null) {
+          const matched = m[1]
+          const norm = normalizeWord(matched)
+          if (norm) set.add(norm)
+          remaining = remaining.replace(matched, ' '.repeat(matched.length))
+        }
+      }
+      const tokens = remaining.split(/\s+/)
       for (const t of tokens) {
         const cleaned = cleanWordToken(t)
         if (cleaned && /[a-zà-ÿ0-9]/i.test(cleaned)) {
@@ -29,19 +51,24 @@ export function extractResourceUniqueWords(resource: Resource): string[] {
 }
 
 /**
- * Determines whether a normalized word is considered "known" in the learner's vocabulary.
+ * Determines whether a normalized word or expression is considered "known" in the learner's vocabulary.
+ * Accounts for inflections and multi-word phrases.
  * A word is known if:
  * - It has knowledge level 6 ("connu par cœur" / well known) OR >= 4
  * - Or status is 'learned' or 'mastered'
  */
 export function isWordKnown(words: LearnedWord[], language: Language, normalized: string): boolean {
   const norm = normalizeWord(normalized)
-  return words.some(
-    (w) =>
-      w.language === language &&
-      w.normalized === norm &&
-      (w.knowledge === 6 || (w.knowledge !== undefined && w.knowledge >= 4) || w.status === 'learned' || w.status === 'mastered')
-  )
+  const matched = findMatchingLearnedWord(words, norm, language)
+  if (matched) {
+    return (
+      matched.knowledge === 6 ||
+      (matched.knowledge !== undefined && matched.knowledge >= 4) ||
+      matched.status === 'learned' ||
+      matched.status === 'mastered'
+    )
+  }
+  return false
 }
 
 export type ResourceWordStats = {
@@ -54,7 +81,12 @@ export type ResourceWordStats = {
  * Computes the reading progress of a resource based on the ratio of known unique words to total unique words.
  */
 export function getResourceWordStats(state: AppState, resource: Resource): ResourceWordStats {
-  const uniqueWords = extractResourceUniqueWords(resource)
+  const knownPhrases = state.words
+    .filter((w) => w.language === resource.language && (w.word.includes(' ') || w.word.includes('-')))
+    .map((w) => w.word.trim())
+    .sort((a, b) => b.length - a.length)
+
+  const uniqueWords = extractResourceUniqueWords(resource, knownPhrases, resource.language)
   const totalUnique = uniqueWords.length
   if (totalUnique === 0) {
     return { totalUnique: 0, knownCount: 0, percentage: 0 }

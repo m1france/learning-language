@@ -387,7 +387,7 @@ export function VocabularyVaultModal({
         </header>
 
         <div className="vocab-vault-workspace layout-split">
-          <div className="vault-graph-panel">
+          <div className="vault-graph-panel desktop-only-graph">
             <div className="graph-embed-container">
               <ObsidianWordGraph
                 words={filteredWords}

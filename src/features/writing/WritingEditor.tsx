@@ -453,7 +453,7 @@ export function WritingEditor({
                   placeholder={t.editorPlaceholder}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  autoFocus
+                  autoFocus={typeof window !== 'undefined' ? window.innerWidth > 720 : false}
                 />
               )}
             </>
@@ -464,7 +464,7 @@ export function WritingEditor({
               placeholder={t.editorPlaceholder}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              autoFocus
+              autoFocus={typeof window !== 'undefined' ? window.innerWidth > 720 : false}
             />
           )}
 
@@ -523,7 +523,7 @@ export function WritingEditor({
           )}
 
           <footer className="editor-bottom-bar">
-            <div className="bottom-meta">
+            <div className="bottom-meta desktop-only-meta">
               <span>{stats.words} {t.wordsCount}</span>
               <span>·</span>
               <span>{stats.chars} caractères</span>
@@ -553,7 +553,7 @@ export function WritingEditor({
               )}
               <button
                 type="button"
-                className="text-btn"
+                className="text-btn desktop-only-copy"
                 onClick={handleCopy}
                 title={t.copyText}
               >

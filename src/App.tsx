@@ -21,6 +21,7 @@ import { doveWhite } from './assets/doveWhite'
 import { SharedLessonViewer } from './features/teacherExport/SharedLessonViewer'
 import { parseSharedLessonFromUrl, getExportedLesson, fetchSharedLesson, isShareSubdomain } from './features/teacherExport/teacherExportService'
 import type { ExportedLesson } from './features/teacherExport/teacherExportDomain'
+import { syncService } from './features/sync/syncService'
 import {
   Home,
   BookOpen,
@@ -81,7 +82,7 @@ const extraNavItems: NavItem[] = [
 export const isGenericImportedAuthor = (author?: string): boolean => {
   if (!author) return true
   const lower = author.trim().toLowerCase()
-  return lower === 'importé' || lower === 'importés' || lower === 'imported' || lower === 'texte importé' || lower === 'sans auteur'
+  return lower === 'importé' || lower === 'importés' || lower === 'imported' || lower === 'texte importé' || lower === 'sans auteur' || lower === 'mathis' || lower === 'moi'
 }
 
 export default function App() {
@@ -141,7 +142,26 @@ export default function App() {
     localStorage.setItem('vivre-side-collapsed', next ? '1' : '0')
   }
 
-  useEffect(() => { if (state) saveState(state) }, [state])
+  const isRemoteSyncUpdateRef = useRef(false)
+
+  // Synchronisation automatique continue Mac & iPhone
+  useEffect(() => {
+    syncService.init((remoteState) => {
+      isRemoteSyncUpdateRef.current = true
+      setState(remoteState)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (state) {
+      saveState(state)
+      if (isRemoteSyncUpdateRef.current) {
+        isRemoteSyncUpdateRef.current = false
+      } else {
+        syncService.schedulePush(state)
+      }
+    }
+  }, [state])
   useEffect(() => { if (state) document.documentElement.dataset.theme = state.settings.theme }, [state?.settings.theme]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Écran de chargement d'une leçon partagée distante
@@ -268,7 +288,20 @@ export default function App() {
           onToggleCollapse={toggleSide}
         />
         <section className="page-canvas">
-          <header className="mobile-header"><Brand /><button className="avatar">{state.settings.name.slice(0, 1).toUpperCase()}</button></header>
+          <header className="mobile-header">
+            <Brand onClick={() => { setReaderId(null); setPage('home') }} />
+            <button
+              className="avatar"
+              onClick={() => {
+                setReaderId(null)
+                setPage('settings')
+              }}
+              title="Paramètres"
+              aria-label="Accéder aux paramètres"
+            >
+              {state.settings.name.slice(0, 1).toUpperCase()}
+            </button>
+          </header>
           {reader ? (
             <Reader state={state} resource={reader} ui={ui}
               onBack={() => setReaderId(null)}
@@ -838,6 +871,48 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
   const [coverTargetResource, setCoverTargetResource] = useState<Resource | null>(null)
   const coverFileRef = useRef<HTMLInputElement>(null)
 
+  const touchTimerRef = useRef<number | null>(null)
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null)
+  const longPressFiredRef = useRef(false)
+
+  const onCardTouchStart = (res: Resource, e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY }
+    longPressFiredRef.current = false
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current)
+    touchTimerRef.current = window.setTimeout(() => {
+      longPressFiredRef.current = true
+      setMenuTarget({ resource: res, x: touch.clientX, y: touch.clientY })
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try { (navigator as any).vibrate?.(40) } catch {}
+      }
+    }, 450)
+  }
+
+  const onCardTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPosRef.current) return
+    const touch = e.touches[0]
+    const dx = Math.abs(touch.clientX - touchStartPosRef.current.x)
+    const dy = Math.abs(touch.clientY - touchStartPosRef.current.y)
+    if (dx > 10 || dy > 10) {
+      if (touchTimerRef.current) {
+        clearTimeout(touchTimerRef.current)
+        touchTimerRef.current = null
+      }
+    }
+  }
+
+  const onCardTouchEnd = (e: React.TouchEvent) => {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current)
+      touchTimerRef.current = null
+    }
+    if (longPressFiredRef.current) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  }
+
   const hasResources = state.resources.length > 0
   const hasArchived = useMemo(() => state.resources.some((r) => r.archived), [state.resources])
   const activeResources = useMemo(() => state.resources.filter((r) => !r.archived), [state.resources])
@@ -928,9 +1003,9 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
       <div>
         <h1>{t.library}</h1>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="library-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <button
-          className="outline"
+          className="outline library-vocab-btn"
           onClick={() => setVocabVaultOpen(true)}
           title="Consulter tout mon vocabulaire et le graphe Obsidian"
           style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -938,7 +1013,17 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
           <BookOpen size={15} />
           <span>Vocabulaire ({learningWordsCount})</span>
         </button>
-        {hasResources && <button className="outline" onClick={() => setAdding(true)}><Plus size={15} /> {t.add}</button>}
+        {hasResources && (
+          <button
+            className="outline library-add-btn"
+            onClick={() => setAdding(true)}
+            title={t.add}
+            aria-label={t.add}
+          >
+            <Plus size={16} />
+            <span className="library-add-label">{t.add}</span>
+          </button>
+        )}
       </div>
     </header>
     {hasResources && <section className="filter-row">
@@ -978,7 +1063,14 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
                 setDraggedId(null)
                 setTimeout(() => { isDraggingRef.current = false }, 50)
               }}
+              onTouchStart={(e) => onCardTouchStart(resource, e)}
+              onTouchMove={onCardTouchMove}
+              onTouchEnd={onCardTouchEnd}
               onClick={() => {
+                if (longPressFiredRef.current) {
+                  longPressFiredRef.current = false
+                  return
+                }
                 if (!isDraggingRef.current) {
                   onOpen(resource)
                 }

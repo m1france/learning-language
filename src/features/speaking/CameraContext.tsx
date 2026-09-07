@@ -26,6 +26,8 @@ type CameraContextType = {
   stopAllMedia: () => void
   toggleCameraTrack: () => void
   toggleMicTrack: () => void
+  facingMode: 'user' | 'environment'
+  flipCamera: () => Promise<void>
   
   // Countdown & Recording
   isCountingDown: boolean
@@ -77,6 +79,7 @@ export function CameraProvider({
   const [audioLevel, setAudioLevel] = useState(0)
   const [permissionError, setPermissionError] = useState<string | null>(null)
   const [overlayOpacity, setOverlayOpacity] = useState(0.1) // Default 10%
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
 
   // Countdown state
   const [isCountingDown, setIsCountingDown] = useState(false)
@@ -176,9 +179,10 @@ export function CameraProvider({
         return true
       }
       const media = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       })
+      streamRef.current = media
       setStream(media)
       setCameraActive(true)
       setCameraDisabled(false)
@@ -212,18 +216,49 @@ export function CameraProvider({
     }
   }, [])
 
+  const flipCamera = useCallback(async () => {
+    const nextFacing: 'user' | 'environment' = facingMode === 'user' ? 'environment' : 'user'
+    setFacingMode(nextFacing)
+    if (streamRef.current) {
+      const oldVideoTracks = streamRef.current.getVideoTracks()
+      try {
+        const newMedia = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: nextFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
+        })
+        const newVideoTrack = newMedia.getVideoTracks()[0]
+        if (newVideoTrack) {
+          oldVideoTracks.forEach((t) => t.stop())
+          const audioTracks = streamRef.current.getAudioTracks()
+          const combined = new MediaStream([...audioTracks, newVideoTrack])
+          streamRef.current = combined
+          setStream(combined)
+          setCameraActive(true)
+          setCameraDisabled(false)
+        }
+      } catch (err) {
+        console.error('Error flipping camera:', err)
+      }
+    }
+  }, [facingMode])
+
   const doStartRecordingNow = useCallback(() => {
     const currentStream = streamRef.current
     if (!currentStream) return
 
     try {
-      const mimeTypes = [
+      const mimeCandidates = [
+        'video/mp4;codecs=avc1,mp4a.40.2',
+        'video/mp4',
         'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus',
         'video/webm',
-        'video/mp4',
       ]
-      const supportedMime = mimeTypes.find((m) => MediaRecorder.isTypeSupported(m))
+      let supportedMime = ''
+      if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
+        supportedMime = mimeCandidates.find((m) => {
+          try { return MediaRecorder.isTypeSupported(m) } catch { return false }
+        }) || ''
+      }
       const recorder = supportedMime
         ? new MediaRecorder(currentStream, { mimeType: supportedMime })
         : new MediaRecorder(currentStream)
@@ -364,7 +399,16 @@ export function CameraProvider({
         setElapsed(Math.round((Date.now() - startTimeRef.current) / 1000))
       }, 500)
 
-      recorder.start(500)
+      const isIOS = typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+      if (isIOS) {
+        recorder.start()
+      } else {
+        try {
+          recorder.start(1000)
+        } catch {
+          recorder.start()
+        }
+      }
       setRecording(true)
       setIsPaused(false)
     } catch (err) {
@@ -570,6 +614,8 @@ export function CameraProvider({
         stopAllMedia,
         toggleCameraTrack,
         toggleMicTrack,
+        facingMode,
+        flipCamera,
         isCountingDown,
         countdownSeconds,
         startRecordingWithCountdown,
