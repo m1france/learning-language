@@ -1,5 +1,5 @@
 import type { AppState, Language, LearnedWord, Resource } from '../domain'
-import { normalizeWord } from '../domain'
+import { getInflectionVariants, normalizeWord } from '../domain'
 import { findMatchingLearnedWord } from './vocabulary/wordMatchingService'
 import { buildPhraseRegex } from './vocabulary/phraseMatchingService'
 
@@ -51,14 +51,44 @@ export function extractResourceUniqueWords(
 }
 
 /**
+ * Checks whether a word has been marked as known in the user's knownWords registry.
+ */
+export function isWordMarkedKnown(
+  knownWords: Record<string, boolean> | undefined,
+  language: Language,
+  normalized: string
+): boolean {
+  if (!knownWords || !normalized) return false
+  const norm = normalizeWord(normalized)
+  if (!norm) return false
+  if (knownWords[`${language}:${norm}`]) return true
+  for (const v of getInflectionVariants(norm)) {
+    if (knownWords[`${language}:${v}`]) return true
+  }
+  return false
+}
+
+/**
  * Determines whether a normalized word or expression is considered "known" in the learner's vocabulary.
  * Accounts for inflections and multi-word phrases.
  * A word is known if:
- * - It has knowledge level 6 ("connu par cœur" / well known) OR >= 4
+ * - It is recorded in state.knownWords
+ * - Or has knowledge level 6 ("connu par cœur" / well known) OR >= 4
  * - Or status is 'learned' or 'mastered'
  */
-export function isWordKnown(words: LearnedWord[], language: Language, normalized: string): boolean {
+export function isWordKnown(
+  words: LearnedWord[],
+  language: Language,
+  normalized: string,
+  knownWords?: Record<string, boolean>
+): boolean {
   const norm = normalizeWord(normalized)
+  if (!norm) return false
+
+  if (isWordMarkedKnown(knownWords, language, norm)) {
+    return true
+  }
+
   const matched = findMatchingLearnedWord(words, norm, language)
   if (matched) {
     return (
@@ -95,7 +125,7 @@ export function getResourceWordStats(state: AppState, resource: Resource): Resou
   const langWords = state.words.filter((w) => w.language === resource.language)
   let knownCount = 0
   for (const norm of uniqueWords) {
-    if (isWordKnown(langWords, resource.language, norm)) {
+    if (isWordKnown(langWords, resource.language, norm, state.knownWords)) {
       knownCount++
     }
   }

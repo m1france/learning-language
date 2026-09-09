@@ -164,9 +164,10 @@ export function smartMergeAppState(local: AppState, remote: AppState): AppState 
   const sessionMap = new Map((remote.sessions || []).map((s) => [s.id, s]))
   for (const s of local.sessions || []) sessionMap.set(s.id, s)
 
-  // 6. Marks
+  // 6. Marks & Known Words
   const mergedWordMarks = { ...(remote.wordMarks || {}), ...(local.wordMarks || {}) }
   const mergedSilentMarks = { ...(remote.silentMarks || {}), ...(local.silentMarks || {}) }
+  const mergedKnownWords = { ...(remote.knownWords || {}), ...(local.knownWords || {}) }
 
   return {
     version: 3,
@@ -179,6 +180,7 @@ export function smartMergeAppState(local: AppState, remote: AppState): AppState 
     completedScenarios: Array.from(new Set([...(remote.completedScenarios || []), ...(local.completedScenarios || [])])),
     wordMarks: mergedWordMarks,
     silentMarks: mergedSilentMarks,
+    knownWords: mergedKnownWords,
     markings: (local.markings && local.markings.length > 0) ? local.markings : (remote.markings || []),
     customTools: (local.customTools && local.customTools.length > 0) ? local.customTools : (remote.customTools || []),
     removedTools: Array.from(new Set([...(remote.removedTools || []), ...(local.removedTools || [])])),

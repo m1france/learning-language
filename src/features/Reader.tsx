@@ -44,7 +44,7 @@ import { speak } from '../ai'
 import { analyzeWordWithAi, extractAndAnalyzePageVocabularyWithAi, isUniversalProperNoun, selectBestSingleTag } from './speaking/wordAiService'
 import { formatIpaPronunciation, renderPhoneticFormatted, renderStyledMarkdown } from './vocabulary/phoneticUtils'
 import { RichInputField } from './vocabulary/RichInputField'
-import { getResourceWordStats, extractPageUniqueWords } from './readingProgressUtils'
+import { getResourceWordStats, extractPageUniqueWords, isWordMarkedKnown } from './readingProgressUtils'
 import { PageSavedWordsModal } from './vocabulary/PageSavedWordsModal'
 import { cleanWordRaw, findMatchingLearnedWord } from './vocabulary/wordMatchingService'
 import { buildPhraseRegex, matchesPhraseInflection } from './vocabulary/phraseMatchingService'
@@ -484,6 +484,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             // Check if this word, its parent, or any singular/plural/phrase inflection variant is already recorded
             const isAlreadyKnown =
               Boolean(findMatchingLearnedWord(state.words, raw, resource.language)) ||
+              isWordMarkedKnown(state.knownWords, resource.language, norm) ||
               variants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v)) ||
               (parentVariants.length > 0 && parentVariants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v))) ||
               Array.from(newlySavedSeen).some((seen) => {
@@ -551,6 +552,8 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         } else {
           // Fallback if AI call returned empty or offline: extract unique words, filtering out already known words
           const fallbackWords = extractPageUniqueWords(chunkEntries).filter((w) => {
+            if (findMatchingLearnedWord(state.words, w.raw, resource.language)) return false
+            if (isWordMarkedKnown(state.knownWords, resource.language, w.normalized)) return false
             const variants = getInflectionVariants(w.normalized)
             return !variants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v))
           })
@@ -1043,7 +1046,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     onBack()
   }
 
-  const wordStats = useMemo(() => getResourceWordStats(state, resource), [state.words, resource])
+  const wordStats = useMemo(() => getResourceWordStats(state, resource), [state.words, state.knownWords, resource])
   const progress = Math.round(((safePage + 1) / pages.length) * 100)
   const activeType = markMode && markMode !== 'silent' ? markMode : null
 
@@ -1201,7 +1204,8 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               title={resT.resourceCompletedTooltip || 'Ressource terminée'}
               aria-label={resT.resourceCompletedTooltip || 'Ressource terminée'}
             >
-              <Check size={22} className="check-icon" />
+              <Check size={20} className="check-icon" />
+              <span className="reader-resource-done-label">{resT.resourceDoneLabel || 'Terminé'}</span>
             </button>
           )}
         </div>
@@ -3496,9 +3500,24 @@ function Word({
   const markClass = mark ? `marked-${mark.style}` : ''
   const selectedClass = isSelected ? 'word-drag-selected' : ''
   const style = mark ? ({ ['--mark-color' as string]: mark.color } as React.CSSProperties) : undefined
-  const deckClass = !savedWord || savedWord.knowledge === 6
-    ? ''
-    : savedWord.knowledge ? `word-known kl-${savedWord.knowledge}` : 'word-known'
+  const isActualWord = Boolean(normalized && /[\p{L}\p{M}0-9]/u.test(normalized))
+  let deckClass = ''
+  if (isActualWord) {
+    if (savedWord) {
+      if (savedWord.knowledge && savedWord.knowledge >= 1 && savedWord.knowledge <= 5) {
+        deckClass = `word-known kl-${savedWord.knowledge}`
+      } else if (savedWord.knowledge === 6) {
+        deckClass = ''
+      } else {
+        deckClass = 'word-known'
+      }
+    } else {
+      const isKnown = isWordMarkedKnown(state.knownWords, language, normalized)
+      if (!isKnown) {
+        deckClass = 'word-unknown'
+      }
+    }
+  }
 
   if (markMode === 'silent') {
     return (

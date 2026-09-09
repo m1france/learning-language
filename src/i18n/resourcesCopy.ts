@@ -77,6 +77,7 @@ export type ResourcesCopy = {
   saveAllResourceWords: string
   markPageDone: string
   markResourceDone: string
+  resourceDoneLabel: string
   savedToastSingle: string
   savedToastMultiple: (count: number) => string
   savedToastSub: string
@@ -166,6 +167,7 @@ const frResources: ResourcesCopy = {
   saveAllResourceWords: 'Enregistrer tous les mots de la ressource',
   markPageDone: 'Marquer la page comme lue',
   markResourceDone: 'Marquer la ressource comme terminée',
+  resourceDoneLabel: 'Terminé',
   savedToastSingle: '1 mot enregistré avec succès',
   savedToastMultiple: (n: number) => `${n} mots enregistrés avec succès`,
   savedToastSub: 'Clique pour voir la liste complète et modifier',
@@ -255,6 +257,7 @@ const enResources: ResourcesCopy = {
   saveAllResourceWords: 'Save all words in resource',
   markPageDone: 'Mark page as read',
   markResourceDone: 'Mark resource as completed',
+  resourceDoneLabel: 'Completed',
   savedToastSingle: '1 word successfully saved',
   savedToastMultiple: (n: number) => `${n} words successfully saved`,
   savedToastSub: 'Click to view complete list and edit',
@@ -344,6 +347,7 @@ const esResources: ResourcesCopy = {
   saveAllResourceWords: 'Guardar todas las palabras del recurso',
   markPageDone: 'Marcar página como leída',
   markResourceDone: 'Marcar recurso como completado',
+  resourceDoneLabel: 'Terminado',
   savedToastSingle: '1 palabra guardada con éxito',
   savedToastMultiple: (n: number) => `${n} palabras guardadas con éxito`,
   savedToastSub: 'Haz clic para ver la lista completa y editar',
@@ -433,6 +437,7 @@ const zhResources: ResourcesCopy = {
   saveAllResourceWords: '保存整个资源的所有单词',
   markPageDone: '标记本页已读',
   markResourceDone: '将资源标记为已完成',
+  resourceDoneLabel: '已完成',
   savedToastSingle: '已成功记录 1 个新词',
   savedToastMultiple: (n: number) => `已成功记录 ${n} 个新词`,
   savedToastSub: '点击查看完整词表并编辑',
@@ -522,6 +527,7 @@ const ruResources: ResourcesCopy = {
   saveAllResourceWords: 'Сохранить все слова ресурса',
   markPageDone: 'Отметить страницу как прочитанную',
   markResourceDone: 'Отметить ресурс как завершённый',
+  resourceDoneLabel: 'Завершено',
   savedToastSingle: '1 слово успешно сохранено',
   savedToastMultiple: (n: number) => `Успешно сохранено слов: ${n}`,
   savedToastSub: 'Нажмите для просмотра полного списка и редактирования',
@@ -611,6 +617,7 @@ const ptResources: ResourcesCopy = {
   saveAllResourceWords: 'Guardar todas as palavras do recurso',
   markPageDone: 'Marcar página como lida',
   markResourceDone: 'Marcar recurso como concluído',
+  resourceDoneLabel: 'Concluído',
   savedToastSingle: '1 palavra guardada com sucesso',
   savedToastMultiple: (n: number) => `${n} palavras guardadas com sucesso`,
   savedToastSub: 'Clica para ver a lista completa e editar',

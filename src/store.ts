@@ -1,4 +1,4 @@
-import { type ApiSettings, type AppState, type Language, type LearnedWord, type MarkingDefinition, type Resource, type UserSettings, type WordMark, type WordRelationType, type WritingEntry, cleanWordRaw, id, normalizeWord, todayKey } from './domain'
+import { type ApiSettings, type AppState, type Language, type LearnedWord, type MarkingDefinition, type Resource, type UserSettings, type WordMark, type WordRelationType, type WritingEntry, cleanWordRaw, getInflectionVariants, id, normalizeWord, todayKey } from './domain'
 import { getResourceWordStats } from './features/readingProgressUtils'
 import { formatIpaPronunciation } from './features/vocabulary/phoneticUtils'
 import { matchesPhraseInflection } from './features/vocabulary/phraseMatchingService'
@@ -85,6 +85,7 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   completedScenarios: [],
   wordMarks: {},
   silentMarks: {},
+  knownWords: {},
   markings: DEFAULT_MARKINGS,
   customTools: [],
   removedTools: [],
@@ -103,6 +104,24 @@ export const loadState = (): AppState | null => {
     if (api && !api.ttsProvider) {
       api.ttsProvider = api.ttsModel === 'browser' ? 'browser' : api.ttsModel === 'openai/gpt-4o-audio-preview' ? 'openrouter' : 'google'
     }
+    const initialKnownWords: Record<string, boolean> = { ...(parsed.knownWords ?? {}) }
+    const cleanedWords: LearnedWord[] = []
+    for (const w of (parsed.words ?? [])) {
+      const isEmptyMastered =
+        w.knowledge === 6 &&
+        w.status === 'mastered' &&
+        (!w.definitions || w.definitions.length === 0) &&
+        !w.translation &&
+        !w.partOfSpeech &&
+        (!w.tags || w.tags.length === 0) &&
+        !w.phonetic &&
+        !w.parent
+      if (isEmptyMastered) {
+        initialKnownWords[`${w.language}:${w.normalized}`] = true
+      } else {
+        cleanedWords.push(w)
+      }
+    }
     return {
       ...createState(parsed.settings),
       ...parsed,
@@ -118,7 +137,8 @@ export const loadState = (): AppState | null => {
         api: { ...defaultSettings.api, ...api },
       },
       progress: parsed.progress ?? {},
-      words: parsed.words ?? [],
+      words: cleanedWords,
+      knownWords: initialKnownWords,
       writings: parsed.writings ?? [],
       sessions: parsed.sessions ?? [],
       completedScenarios: parsed.completedScenarios ?? [],
@@ -383,20 +403,8 @@ export const batchUpsertWordDetails = (
     })
 
     if (existingIndex >= 0) {
-      const existing = nextWords[existingIndex]
-      nextWords[existingIndex] = {
-        ...existing,
-        word: cleaned,
-        translation: args.translation,
-        parent: args.parent || undefined,
-        relationType: args.relationType ?? existing.relationType,
-        partOfSpeech: args.partOfSpeech ?? existing.partOfSpeech ?? '',
-        phonetic: cleanPhonetic ?? existing.phonetic,
-        knowledge: args.knowledge ?? existing.knowledge,
-        tags: args.tags ?? existing.tags ?? [],
-        definitions: args.translation ? [{ definition: '', translation: args.translation }] : existing.definitions,
-        status: (args.knowledge === 6 || existing.status === 'mastered') ? 'mastered' : existing.status,
-      }
+      // Never overwrite or modify existing registered words during batch save
+      continue
     } else {
       const defaultKl = args.knowledge ?? 1
       nextWords.push({
@@ -463,18 +471,32 @@ export const setWordAsReference = (
 /** Delete a word from the user's learned/annotated words. */
 export const deleteWord = (state: AppState, rawOrNormalized: string, language: Language): AppState => {
   const norm = normalizeWord(rawOrNormalized)
+  const nextKnownWords = { ...(state.knownWords || {}) }
+  delete nextKnownWords[`${language}:${norm}`]
+  for (const v of getInflectionVariants(norm)) {
+    delete nextKnownWords[`${language}:${v}`]
+  }
   return {
     ...state,
     words: state.words.filter((w) => !(w.normalized === norm && w.language === language)),
+    knownWords: nextKnownWords,
   }
 }
 
 /** Batch delete multiple words. */
 export const batchDeleteWords = (state: AppState, rawOrNormalizedList: string[], language: Language): AppState => {
   const normSet = new Set(rawOrNormalizedList.map((r) => normalizeWord(r)))
+  const nextKnownWords = { ...(state.knownWords || {}) }
+  for (const n of normSet) {
+    delete nextKnownWords[`${language}:${n}`]
+    for (const v of getInflectionVariants(n)) {
+      delete nextKnownWords[`${language}:${v}`]
+    }
+  }
   return {
     ...state,
     words: state.words.filter((w) => !(w.language === language && normSet.has(w.normalized))),
+    knownWords: nextKnownWords,
   }
 }
 
@@ -586,52 +608,28 @@ export const progressFor = (state: AppState, resource: Resource) => {
   return getResourceWordStats(state, resource).percentage
 }
 
-/** Mark an array of words as known (Knowledge 6 / Mastered) in bulk. */
+/** Mark an array of words as known in bulk without adding them to vocabulary cards. */
 export const batchMarkWordsKnown = (
   state: AppState,
-  wordsToMark: { raw: string; sentence?: string }[],
+  wordsToMark: { raw: string; normalized?: string; sentence?: string }[],
   language: Language,
 ): AppState => {
-  let nextWords = [...state.words]
-  const now = new Date().toISOString()
+  const nextKnownWords = { ...(state.knownWords || {}) }
 
   for (const item of wordsToMark) {
-    const cleaned = item.raw.replace(/^[.,!?;:()"“”«»'’\s]+|[.,!?;:()"“”«»'’\s]+$/g, '').replace(/\s+/g, ' ').trim()
+    const cleaned = cleanWordRaw(item.raw)
     if (!cleaned) continue
-    const normalized = normalizeWord(cleaned)
-    const existingIndex = nextWords.findIndex((w) => w.normalized === normalized && w.language === language)
+    const normalized = item.normalized || normalizeWord(cleaned)
+    if (!normalized) continue
 
-    if (existingIndex >= 0) {
-      const existing = nextWords[existingIndex]
-      nextWords[existingIndex] = {
-        ...existing,
-        word: cleaned,
-        knowledge: 6,
-        status: 'mastered',
-      }
-    } else {
-      nextWords.push({
-        id: id('word'),
-        word: cleaned,
-        normalized,
-        language,
-        knowledge: 6,
-        status: 'mastered',
-        partOfSpeech: '',
-        definitions: [],
-        contextSentence: item.sentence ?? '',
-        sourceSkill: 'reading',
-        intervalDays: 30,
-        nextReview: todayKey(),
-        easeFactor: 2.5,
-        reviewCount: 1,
-        tags: [],
-        createdAt: now,
-      })
+    nextKnownWords[`${language}:${normalized}`] = true
+
+    for (const variant of getInflectionVariants(normalized)) {
+      nextKnownWords[`${language}:${variant}`] = true
     }
   }
 
-  return { ...state, words: nextWords }
+  return { ...state, knownWords: nextKnownWords }
 }
 
 export const upsertResource = (state: AppState, resource: Resource): AppState => {

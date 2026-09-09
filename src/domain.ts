@@ -226,6 +226,8 @@ export type AppState = {
   wordMarks: Record<string, WordMark>
   /** User-grayed letters: `${language}:${normalized}` → indices of letters (alpha order) greyed by the user. */
   silentMarks: Record<string, number[]>
+  /** Words marked as known by the user without being saved as vocabulary cards: `${language}:${normalized}` → true */
+  knownWords?: Record<string, boolean>
   /** User-defined grammar and semantic markings in display order. */
   markings?: MarkingDefinition[]
   /** Legacy user-added tools from the former "Vivre" section. */
