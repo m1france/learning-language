@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  type AnchorRect,
+  computeAnchorPosition,
+  FloatingContextMenu,
+  toAnchorRect,
+} from './floatingPosition'
 import type { AppState, GrammarMarkStyle, GrammarMarkType, Language, LearnedWord, Resource, UiLanguage, WordMark, WordRelationType } from '../domain'
 import { normalizeWord, getInflectionVariants } from '../domain'
 import { DEFAULT_MARKINGS, knownParents, knownTags, resolveWordFamily, setWordAsReference, type WordFamily } from '../store'
@@ -63,7 +69,7 @@ type Entry = {
 
 type MarkMode = GrammarMarkType | 'silent' | null
 
-type SelectedWord = { raw: string; sentence: string; x: number; y: number }
+type SelectedWord = { raw: string; sentence: string; x: number; y: number; anchorRect?: AnchorRect }
 
 type WordDetails = {
   raw: string
@@ -291,8 +297,8 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [leftCollapsed, setLeftCollapsed] = useState(() => localStorage.getItem('vivre-reader-left-collapsed') === '1')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; markingId: string } | null>(null)
   const [pageContextMenu, setPageContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const [wordContextMenu, setWordContextMenu] = useState<{ x: number; y: number; raw: string; sentence: string; isSaved: boolean } | null>(null)
-  const [multiWordMenu, setMultiWordMenu] = useState<{ x: number; y: number; raw: string; sentence: string } | null>(null)
+  const [wordContextMenu, setWordContextMenu] = useState<{ x: number; y: number; raw: string; sentence: string; isSaved: boolean; anchorRect?: AnchorRect } | null>(null)
+  const [multiWordMenu, setMultiWordMenu] = useState<{ x: number; y: number; raw: string; sentence: string; anchorRect?: AnchorRect } | null>(null)
   const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
   const [editingMarkValue, setEditingMarkValue] = useState('')
   const [savingWordAi, setSavingWordAi] = useState<string | null>(null)
@@ -836,7 +842,20 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       return
     }
     const rect = target.getBoundingClientRect()
-    setSelected({ raw: cleaned, sentence: sentenceOf(cleaned, entry.text), x: rect.left + rect.width / 2, y: rect.bottom + 8 })
+    setSelected({
+      raw: cleaned,
+      sentence: sentenceOf(cleaned, entry.text),
+      x: rect.left + rect.width / 2,
+      y: rect.bottom + 8,
+      anchorRect: {
+        top: rect.top,
+        bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        height: rect.height,
+      },
+    })
     setWikiWord(wikiLookup(cleaned))
   }
 
@@ -872,12 +891,20 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       return
     }
 
-    const x = Math.min(window.innerWidth - 160, Math.max(160, 'clientX' in event ? event.clientX : window.innerWidth / 2))
-    const y = Math.min(window.innerHeight - 100, 'clientY' in event ? event.clientY + 12 : 200)
+    let anchorRect: AnchorRect | undefined
+    if ('currentTarget' in event && event.currentTarget instanceof HTMLElement) {
+      const r = event.currentTarget.getBoundingClientRect()
+      anchorRect = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }
+    } else if ('target' in event && event.target instanceof HTMLElement) {
+      const r = event.target.getBoundingClientRect()
+      anchorRect = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }
+    }
+    const x = 'clientX' in event ? event.clientX : window.innerWidth / 2
+    const y = 'clientY' in event ? event.clientY : 200
 
     // Multi-word: show a small contextual menu instead of opening WordPanel directly
     if (cleaned.includes(' ')) {
-      setMultiWordMenu({ raw: cleaned, sentence: sentenceOf(cleaned, entry.text), x, y })
+      setMultiWordMenu({ raw: cleaned, sentence: sentenceOf(cleaned, entry.text), x, y, anchorRect })
       return
     }
     setSelected({
@@ -885,6 +912,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       sentence: sentenceOf(cleaned, entry.text),
       x,
       y,
+      anchorRect,
     })
     setWikiWord(wikiLookup(cleaned))
   }
@@ -907,12 +935,21 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
       let x = e.clientX
       let y = e.clientY + 14
+      let anchorRect: AnchorRect | undefined
       try {
         const range = sel.getRangeAt(0)
         const rect = range.getBoundingClientRect()
         if (rect.width > 0) {
           x = rect.left + rect.width / 2
           y = rect.bottom + 8
+          anchorRect = {
+            top: rect.top,
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            width: rect.width,
+            height: rect.height,
+          }
         }
       } catch {}
 
@@ -931,7 +968,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       const parText = target.closest('.paragraph')?.textContent ?? cleaned
 
       // Multi-word drag: show contextual menu instead of opening WordPanel
-      setMultiWordMenu({ raw: cleaned, sentence: sentenceOf(cleaned, parText), x, y })
+      setMultiWordMenu({ raw: cleaned, sentence: sentenceOf(cleaned, parText), x, y, anchorRect })
     }
 
     document.addEventListener('mouseup', handleWindowSelection)
@@ -1017,12 +1054,22 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     setPageContextMenu(null)
     setResourceMenuTarget(null)
     const isSaved = Boolean(findMatchingLearnedWord(state.words, raw, resource.language))
+    const target = event.currentTarget as HTMLElement | null
+    const targetRect = target?.getBoundingClientRect()
     setWordContextMenu({
       x: event.clientX,
       y: event.clientY,
       raw,
       sentence: sentenceOf(raw, entry.text),
       isSaved,
+      anchorRect: targetRect ? {
+        top: targetRect.top,
+        bottom: targetRect.bottom,
+        left: targetRect.left,
+        right: targetRect.right,
+        width: targetRect.width,
+        height: targetRect.height,
+      } : undefined,
     })
   }
 
@@ -1233,9 +1280,9 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     </section>
 
     {contextMenu && (
-      <div
+      <FloatingContextMenu
+        anchor={{ x: contextMenu.x, y: contextMenu.y }}
         className="mark-context-menu"
-        style={{ left: Math.min(window.innerWidth - 150, contextMenu.x), top: Math.min(window.innerHeight - 100, contextMenu.y) }}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -1258,13 +1305,13 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         >
           <Trash2 size={13} /> {t.delete}
         </button>
-      </div>
+      </FloatingContextMenu>
     )}
 
     {pageContextMenu && (
-      <div
+      <FloatingContextMenu
+        anchor={{ x: pageContextMenu.x, y: pageContextMenu.y }}
         className="page-context-menu"
-        style={{ left: Math.min(window.innerWidth - 240, pageContextMenu.x), top: Math.min(window.innerHeight - 150, pageContextMenu.y) }}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -1289,7 +1336,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         >
           <i><ArrowLeft size={14} /></i> {t.backToLibrary}
         </button>
-      </div>
+      </FloatingContextMenu>
     )}
 
     {resourceMenuTarget && (
@@ -1344,7 +1391,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
 
     {selected && <WordPanel ui={ui} selected={selected} state={state} language={resource.language}
       onClose={() => setSelected(null)}
-      onOpenWord={(raw) => setSelected((current) => ({ raw, sentence: current?.sentence ?? '', x: current?.x ?? 80, y: current?.y ?? 120 }))}
+      onOpenWord={(raw) => setSelected((current) => ({ raw, sentence: current?.sentence ?? '', x: current?.x ?? 80, y: current?.y ?? 120, anchorRect: current?.anchorRect }))}
       onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })}
       onDeleteWord={(raw) => onDeleteWord?.(raw, resource.language)} />}
 
@@ -1352,9 +1399,9 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       const wordCount = multiWordMenu.raw.split(/\s+/).filter(Boolean).length
       const pronounceLabel = wordCount >= 4 ? 'Prononcer la phrase' : 'Prononcer les mots'
       return (
-        <div
+        <FloatingContextMenu
+          anchor={multiWordMenu.anchorRect || { x: multiWordMenu.x, y: multiWordMenu.y }}
           className="multi-word-menu"
-          style={{ left: multiWordMenu.x, top: multiWordMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -1376,6 +1423,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 sentence: multiWordMenu.sentence,
                 x: multiWordMenu.x,
                 y: multiWordMenu.y,
+                anchorRect: multiWordMenu.anchorRect,
               })
               setWikiWord(wikiLookup(multiWordMenu.raw))
               setMultiWordMenu(null)
@@ -1383,7 +1431,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           >
             <BookmarkPlus size={14} /> Enregistrer les mots
           </button>
-        </div>
+        </FloatingContextMenu>
       )
     })()}
 
@@ -1399,9 +1447,9 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     {markMode && markMode !== 'silent' && <p className="mark-hint">{t.markHintWord}</p>}
 
     {wordContextMenu && (
-      <div
+      <FloatingContextMenu
+        anchor={wordContextMenu.anchorRect || { x: wordContextMenu.x, y: wordContextMenu.y }}
         className="word-context-menu"
-        style={{ left: Math.min(window.innerWidth - 240, wordContextMenu.x), top: Math.min(window.innerHeight - 170, wordContextMenu.y) }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="word-context-head">
@@ -1456,6 +1504,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                   sentence: wordContextMenu.sentence,
                   x: wordContextMenu.x,
                   y: wordContextMenu.y,
+                  anchorRect: wordContextMenu.anchorRect,
                 })
                 setWikiWord(wikiLookup(wordContextMenu.raw))
                 setWordContextMenu(null)
@@ -1488,7 +1537,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             <i><Trash2 size={14} /></i> {resT.deleteSavedWordAction}
           </button>
         )}
-      </div>
+      </FloatingContextMenu>
     )}
 
     {pageValidationMenu && (
@@ -1775,12 +1824,9 @@ function WikiPanel({ word, language, initialTab, onClose }: {
       )}
 
       {tabContextMenu && (
-        <div
+        <FloatingContextMenu
+          anchor={{ x: tabContextMenu.x, y: tabContextMenu.y }}
           className="word-context-menu wiki-tab-context-menu"
-          style={{
-            left: Math.min(window.innerWidth - 230, tabContextMenu.x),
-            top: Math.min(window.innerHeight - 160, tabContextMenu.y),
-          }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -1811,7 +1857,7 @@ function WikiPanel({ word, language, initialTab, onClose }: {
             <i><ArrowRight size={14} /></i>
             <span>Déplacer vers la droite</span>
           </button>
-        </div>
+        </FloatingContextMenu>
       )}
     </div>
   )
@@ -1834,7 +1880,7 @@ function renderSimpleMarkdown(text?: string): React.ReactNode {
  */
 function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onDeleteWord, onOpenWord }: {
   ui: UiLanguage
-  selected: { raw: string; sentence: string; x?: number; y?: number }
+  selected: { raw: string; sentence: string; x?: number; y?: number; anchorRect?: AnchorRect }
   state: AppState
   language: Language
   docked?: boolean
@@ -2240,35 +2286,100 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
     </div>
   )
 
-  const panelWidth = 320
-  const panelMaxHeight = Math.min(540, window.innerHeight - 24)
-  const left = Math.max(12, Math.min((selected.x ?? 40) - 20, window.innerWidth - panelWidth - 12))
-  let top = selected.y ?? 80
-  if (top + panelMaxHeight > window.innerHeight - 12) top = Math.max(12, window.innerHeight - panelMaxHeight - 12)
+  const panelRef = useRef<HTMLElement>(null)
+  const [panelDims, setPanelDims] = useState<{ width: number; height: number }>({ width: 320, height: 420 })
 
-  const gap = 12
-  let companionLeft = left + panelWidth + gap
-  if (companionLeft + panelWidth > window.innerWidth - 12) {
-    companionLeft = left - panelWidth - gap
-  }
-  if (companionLeft < 12) {
-    companionLeft = Math.max(12, Math.min(window.innerWidth - panelWidth - 12, left + 40))
-  }
+  useLayoutEffect(() => {
+    if (docked || !panelRef.current) return
+    const r = panelRef.current.getBoundingClientRect()
+    if (r.width > 0 && r.height > 0) {
+      setPanelDims({ width: r.width, height: r.height })
+    }
+  }, [docked, viewing, accordionOpen, knowledge, parent, translation, pronunciation, tags, suggestions.length])
+
+  // Recalculate on window resize / scroll to track anchor perfectly
+  const [, setRerender] = useState(0)
+  useEffect(() => {
+    if (docked) return
+    const handleRecalc = () => setRerender((v) => v + 1)
+    window.addEventListener('resize', handleRecalc)
+    window.addEventListener('scroll', handleRecalc, true)
+    return () => {
+      window.removeEventListener('resize', handleRecalc)
+      window.removeEventListener('scroll', handleRecalc, true)
+    }
+  }, [docked])
+
+  const anchor = useMemo(() => {
+    return toAnchorRect(selected.anchorRect || (selected.x !== undefined && selected.y !== undefined ? { x: selected.x, y: selected.y } : null))
+  }, [selected.anchorRect, selected.x, selected.y])
+
+  const floatingPos = useMemo(() => {
+    if (docked) return null
+    if (!anchor) {
+      const defaultLeft = Math.max(12, Math.min(window.innerWidth - panelDims.width - 12, (selected.x ?? 40) - 20))
+      const defaultTop = Math.max(12, Math.min(window.innerHeight - panelDims.height - 12, selected.y ?? 80))
+      return { left: defaultLeft, top: defaultTop, maxHeight: window.innerHeight - 24, placement: 'bottom' as const }
+    }
+    return computeAnchorPosition(anchor, panelDims, {
+      placement: 'bottom',
+      align: 'center',
+      gap: 8,
+      padding: 12,
+      flip: true,
+    })
+  }, [docked, anchor, panelDims])
+
+  // Companion panel positioning side-by-side with WordPanel
+  const companionPos = useMemo(() => {
+    if (!creatingLinked || docked || !floatingPos) return null
+    const companionWidth = 320
+    const gap = 12
+    const padding = 12
+
+    let compLeft = floatingPos.left + panelDims.width + gap
+    if (compLeft + companionWidth > window.innerWidth - padding) {
+      compLeft = floatingPos.left - gap - companionWidth
+    }
+    if (compLeft < padding) {
+      compLeft = Math.max(padding, Math.min(window.innerWidth - companionWidth - padding, floatingPos.left + 30))
+    }
+
+    return {
+      left: compLeft,
+      top: floatingPos.top,
+      bottom: floatingPos.bottom,
+      maxHeight: floatingPos.maxHeight,
+    }
+  }, [creatingLinked, docked, floatingPos, panelDims.width])
 
   return (
     <>
-      <aside className="word-panel floating" style={{ left, top, maxHeight: panelMaxHeight }} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.stopPropagation()}>
+      <aside
+        ref={panelRef}
+        className="word-panel floating"
+        style={{
+          left: `${floatingPos?.left ?? 12}px`,
+          top: floatingPos?.top !== undefined ? `${floatingPos.top}px` : 'auto',
+          bottom: floatingPos?.bottom !== undefined ? `${floatingPos.bottom}px` : 'auto',
+          maxHeight: `${floatingPos?.maxHeight ?? 540}px`,
+        }}
+        onClick={(event) => event.stopPropagation()}
+        onContextMenu={(event) => event.stopPropagation()}
+      >
         {actions}
         {viewing ? view : form}
       </aside>
-      {creatingLinked && (
+      {creatingLinked && companionPos && (
         <CompanionWordPanel
           ui={ui}
           language={language}
           state={state}
           referenceWord={family.rootWord?.word ?? word}
-          left={companionLeft}
-          top={top}
+          left={companionPos.left}
+          top={companionPos.top}
+          bottom={companionPos.bottom}
+          maxHeight={companionPos.maxHeight}
           onClose={() => setCreatingLinked(false)}
           onSave={(details) => {
             onSave(details)
@@ -2293,6 +2404,8 @@ function CompanionWordPanel({
   docked,
   left,
   top,
+  bottom,
+  maxHeight,
   onClose,
   onSave,
   onSaveReverse,
@@ -2304,6 +2417,8 @@ function CompanionWordPanel({
   docked?: boolean
   left?: number
   top?: number
+  bottom?: number
+  maxHeight?: number
   onClose: () => void
   onSave: (details: WordDetails) => void
   onSaveReverse?: (newWordDetails: WordDetails, formerRootRaw: string, formerRelationType: WordRelationType) => void
@@ -2549,18 +2664,15 @@ function CompanionWordPanel({
     )
   }
 
-  const panelWidth = 320
-  const panelMaxHeight = Math.min(540, window.innerHeight - 24)
-  const companionLeft = left !== undefined ? left : Math.max(12, window.innerWidth - panelWidth - 24)
-  let companionTop = top !== undefined ? top : 80
-  if (companionTop + panelMaxHeight > window.innerHeight - 12) {
-    companionTop = Math.max(12, window.innerHeight - panelMaxHeight - 12)
-  }
-
   return (
     <aside
       className="word-panel floating wp-companion-panel"
-      style={{ left: companionLeft, top: companionTop, maxHeight: panelMaxHeight }}
+      style={{
+        left: `${left ?? 12}px`,
+        top: top !== undefined ? `${top}px` : 'auto',
+        bottom: bottom !== undefined ? `${bottom}px` : 'auto',
+        maxHeight: `${maxHeight ?? 540}px`,
+      }}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
     >
@@ -2805,9 +2917,9 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
       const wordCount = multiWordMenu.raw.split(/\s+/).filter(Boolean).length
       const pronounceLabel = wordCount >= 4 ? 'Prononcer la phrase' : 'Prononcer les mots'
       return (
-        <div
+        <FloatingContextMenu
+          anchor={{ x: multiWordMenu.x, y: multiWordMenu.y }}
           className="multi-word-menu"
-          style={{ left: multiWordMenu.x, top: multiWordMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -2836,7 +2948,7 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
           >
             <BookmarkPlus size={14} /> Enregistrer les mots
           </button>
-        </div>
+        </FloatingContextMenu>
       )
     })()}
 
