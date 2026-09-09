@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   Headphones,
+  Target,
   EyeOff,
   GraduationCap,
   ChevronLeft,
@@ -1085,7 +1086,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     <header className="reader-top">
       <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}><ArrowLeft size={16} /> {t.back.replace('←', '').trim()}</button>
       <div className="reader-controls">
-        <button className="control control-learning-focus" onClick={(event) => { event.stopPropagation(); startFocus() }}><Headphones size={14} /> {t.focus}</button>
+        <button className="control control-learning-focus" onClick={(event) => { event.stopPropagation(); startFocus() }}><Target size={14} /> {t.focus}</button>
         <button className="control control-focus desktop-reader-control" onClick={(event) => { event.stopPropagation(); onOpenFocus(resource) }}><GraduationCap size={14} /> {t.teacherMode}</button>
         <button className="control desktop-reader-control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.min(26, fontSize + 1)) }}>A+</button>
         <button className="control desktop-reader-control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.max(15, fontSize - 1)) }}>A−</button>
@@ -1204,7 +1205,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               title={resT.resourceCompletedTooltip || 'Ressource terminée'}
               aria-label={resT.resourceCompletedTooltip || 'Ressource terminée'}
             >
-              <Check size={20} className="check-icon" />
+              <Check size={22} className="check-icon" />
               <span className="reader-resource-done-label">{resT.resourceDoneLabel || 'Terminé'}</span>
             </button>
           )}
@@ -1670,7 +1671,18 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={toggleWiki} />
     {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} initialTab={wikiDefaultTab} onClose={() => setWikiOpen(false)} />}
 
-    {focusOpen && <FocusReader state={state} resource={resource} ui={ui} onClose={closeFocus} onSaveWord={onSaveWord} onDeleteWord={onDeleteWord} />}
+    {focusOpen && (
+      <FocusReader
+        state={state}
+        resource={resource}
+        ui={ui}
+        onClose={closeFocus}
+        onSaveWord={onSaveWord}
+        onDeleteWord={onDeleteWord}
+        onSaveWordWithAi={handleSaveWordWithAi}
+        savingWordAi={savingWordAi}
+      />
+    )}
   </div>
 }
 
@@ -2790,21 +2802,42 @@ function TagInput({ allTags, existingTags, onAdd, onRemove, label }: {
  * the Wiktionary embed on the right. The browser is forced into fullscreen by
  * the button that opens this overlay (user gesture).
  */
-function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }: {
+function FocusReader({
+  state,
+  resource,
+  ui,
+  onClose,
+  onSaveWord,
+  onDeleteWord,
+  onSaveWordWithAi,
+  savingWordAi,
+}: {
   state: AppState
   resource: Resource
   ui: UiLanguage
   onClose: () => void
   onSaveWord: (args: WordDetails) => void
   onDeleteWord?: (raw: string, language: Language) => void
+  onSaveWordWithAi?: (rawWord: string, sentence: string) => Promise<void>
+  savingWordAi?: string | null
 }) {
   const t = readerCopy[ui]
+  const resT = resourcesCopy[ui] || resourcesCopy.fr
   const settings = state.settings
-  const [selected, setSelected] = useState<{ raw: string; sentence: string; x?: number; y?: number } | null>(null)
+  const [selected, setSelected] = useState<{ raw: string; sentence: string; x?: number; y?: number; anchorRect?: AnchorRect } | null>(null)
   const [multiWordMenu, setMultiWordMenu] = useState<{ x: number; y: number; raw: string; sentence: string } | null>(null)
+  const [wordContextMenu, setWordContextMenu] = useState<{
+    x: number
+    y: number
+    raw: string
+    sentence: string
+    isSaved: boolean
+    anchorRect?: AnchorRect
+  } | null>(null)
   const [wikiWord, setWikiWord] = useState('')
   const [wikiOpen, setWikiOpen] = useState(false)
   const [wikiArmed, setWikiArmed] = useState(false)
+  const [wikiDefaultTab, setWikiDefaultTab] = useState<DictionaryTabId>(getSavedDefaultTab)
 
   // The whole story renders in one continuous scroll — no pagination.
   const entries = useMemo(() => flatten(resource), [resource])
@@ -2820,7 +2853,32 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
     return all.sort((a, b) => b.length - a.length)
   }, [state.words, state.wordMarks, resource.language])
 
+  const handleWordContextMenu = (raw: string, entry: Entry, event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setMultiWordMenu(null)
+    const isSaved = Boolean(findMatchingLearnedWord(state.words, raw, resource.language))
+    const target = event.currentTarget as HTMLElement | null
+    const targetRect = target?.getBoundingClientRect()
+    setWordContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      raw,
+      sentence: sentenceOf(raw, entry.text),
+      isSaved,
+      anchorRect: targetRect ? {
+        top: targetRect.top,
+        bottom: targetRect.bottom,
+        left: targetRect.left,
+        right: targetRect.right,
+        width: targetRect.width,
+        height: targetRect.height,
+      } : undefined,
+    })
+  }
+
   const clickWord = (raw: string, text: string, _isInstance = false, _offset = 0) => {
+    setWordContextMenu(null)
     const cleaned = cleanRaw(raw)
     if (!cleaned) return
     if (wikiArmed) {
@@ -2833,6 +2891,7 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
   }
 
   const handleMultiWordSelect = (phrase: string, _startOffset: number, _endOffset: number, text: string) => {
+    setWordContextMenu(null)
     const cleaned = cleanRaw(phrase)
     if (!cleaned) return
     if (wikiArmed) {
@@ -2855,6 +2914,36 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
   }
 
   useEffect(() => {
+    const handleGlobalPointerDown = (e: Event) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('.word-context-menu, .multi-word-menu')) {
+        return
+      }
+      setWordContextMenu(null)
+      setMultiWordMenu(null)
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setWordContextMenu(null)
+        setMultiWordMenu(null)
+      }
+    }
+
+    window.addEventListener('mousedown', handleGlobalPointerDown, true)
+    window.addEventListener('touchstart', handleGlobalPointerDown, true)
+    window.addEventListener('scroll', handleGlobalPointerDown, true)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('mousedown', handleGlobalPointerDown, true)
+      window.removeEventListener('touchstart', handleGlobalPointerDown, true)
+      window.removeEventListener('scroll', handleGlobalPointerDown, true)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = Boolean(target?.closest('input, textarea, [contenteditable="true"]'))
@@ -2870,11 +2959,11 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
 
   return <div className="focus-reader" onClick={() => {
     if (Date.now() - lastMultiWordDragTimestamp < 500) return
-    setSelected(null); setMultiWordMenu(null); if (wikiArmed) setWikiArmed(false)
+    setSelected(null); setMultiWordMenu(null); setWordContextMenu(null); if (wikiArmed) setWikiArmed(false)
   }}>
     <header className="focus-top">
       <strong className="focus-title">{resource.title}</strong>
-      <button className="focus-exit" onClick={onClose}><Minimize2 size={15} /> {t.focusExit}</button>
+      <button className="focus-exit" onClick={onClose}><Minimize2 size={15} /> <span>{t.focusExit}</span></button>
     </header>
 
     <div className="focus-body">
@@ -2903,6 +2992,7 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
                 knownPhrases={knownPhrases}
                 onWordClick={(raw, _target, isInstance, offset) => clickWord(raw, entry.text, isInstance, offset)}
                 onMultiWordSelect={(phrase, startOffset, endOffset) => handleMultiWordSelect(phrase, startOffset, endOffset, entry.text)}
+                onWordContextMenu={(raw, event) => handleWordContextMenu(raw, entry, event)}
                 onLetterClick={() => { }}
               />
             </div>
@@ -2916,6 +3006,100 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
       onOpenWord={(raw) => setSelected((current) => ({ raw, sentence: current?.sentence ?? '', x: current?.x ?? 80, y: current?.y ?? 120 }))}
       onSave={(details) => onSaveWord({ ...details, sentence: selected.sentence, language: resource.language, sourceResourceId: resource.id })}
       onDeleteWord={(raw) => onDeleteWord?.(raw, resource.language)} />}
+
+    {wordContextMenu && (
+      <FloatingContextMenu
+        anchor={wordContextMenu.anchorRect || { x: wordContextMenu.x, y: wordContextMenu.y }}
+        className="word-context-menu"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="word-context-head">
+          <strong>{cleanRaw(wordContextMenu.raw)}</strong>
+        </div>
+        <div className="word-context-sep" />
+        <button
+          type="button"
+          className="word-context-item"
+          onClick={() => {
+            setWikiWord(wikiLookup(wordContextMenu.raw))
+            setWikiDefaultTab('wiktionary')
+            setWikiOpen(true)
+            setWordContextMenu(null)
+          }}
+        >
+          <i><BookOpen size={14} /></i> Voir sur Wiktionary
+        </button>
+        <button
+          type="button"
+          className="word-context-item"
+          onClick={() => {
+            setWikiWord(wikiLookup(wordContextMenu.raw))
+            setWikiDefaultTab('linguee')
+            setWikiOpen(true)
+            setWordContextMenu(null)
+          }}
+        >
+          <i><Globe size={14} /></i> Voir sur Linguee
+        </button>
+        <button
+          type="button"
+          className="word-context-item"
+          onClick={() => {
+            setWikiWord(wikiLookup(wordContextMenu.raw))
+            setWikiDefaultTab('cambridge')
+            setWikiOpen(true)
+            setWordContextMenu(null)
+          }}
+        >
+          <i><Volume2 size={14} /></i> Voir sur Cambridge
+        </button>
+        <div className="word-context-sep" />
+        {!wordContextMenu.isSaved ? (
+          <>
+            <button
+              type="button"
+              className="word-context-item save-item"
+              onClick={() => {
+                setSelected({
+                  raw: wordContextMenu.raw,
+                  sentence: wordContextMenu.sentence,
+                  x: wordContextMenu.x,
+                  y: wordContextMenu.y,
+                  anchorRect: wordContextMenu.anchorRect,
+                })
+                setWikiWord(wikiLookup(wordContextMenu.raw))
+                setWordContextMenu(null)
+              }}
+            >
+              <i><BookmarkPlus size={14} /></i> {resT.saveWordAction}
+            </button>
+            <button
+              type="button"
+              className="word-context-item ai-save-item"
+              onClick={() => {
+                const raw = wordContextMenu.raw
+                const sent = wordContextMenu.sentence
+                setWordContextMenu(null)
+                void onSaveWordWithAi?.(raw, sent)
+              }}
+            >
+              <i>{savingWordAi === cleanRaw(wordContextMenu.raw) ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}</i> {resT.saveWordWithAiAction}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="word-context-item danger"
+            onClick={() => {
+              onDeleteWord?.(cleanRaw(wordContextMenu.raw), resource.language)
+              setWordContextMenu(null)
+            }}
+          >
+            <i><Trash2 size={14} /></i> {resT.deleteSavedWordAction}
+          </button>
+        )}
+      </FloatingContextMenu>
+    )}
 
     {multiWordMenu && (() => {
       const wordCount = multiWordMenu.raw.split(/\s+/).filter(Boolean).length
@@ -2957,7 +3141,7 @@ function FocusReader({ state, resource, ui, onClose, onSaveWord, onDeleteWord }:
     })()}
 
     <WikiFab label={t.wikiOpen} armed={wikiArmed} onToggle={toggleWiki} />
-    {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} onClose={() => setWikiOpen(false)} />}
+    {wikiOpen && wikiWord && <WikiPanel word={wikiWord} language={resource.language} initialTab={wikiDefaultTab} onClose={() => setWikiOpen(false)} />}
   </div>
 }
 

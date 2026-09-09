@@ -126,23 +126,50 @@ export function VocabularyVaultModal({
 
   const getWordKey = (w: LearnedWord) => w.normalized || w.word.toLowerCase().trim()
 
+  const lastCheckedIndexRef = React.useRef<number | null>(null)
+
+  useEffect(() => {
+    lastCheckedIndexRef.current = null
+  }, [searchQuery, selectedTag])
+
   const toggleMultiSelectMode = () => {
     if (isMultiSelectActive) {
       setIsMultiSelectActive(false)
       setSelectedWordIds(new Set())
+      lastCheckedIndexRef.current = null
     } else {
       setIsMultiSelectActive(true)
     }
   }
 
-  const toggleWordSelection = (word: LearnedWord) => {
+  const toggleWordSelection = (word: LearnedWord, index?: number, isShift?: boolean) => {
+    const wordIndex = index ?? filteredWords.findIndex((item) => getWordKey(item) === getWordKey(word))
     const key = getWordKey(word)
+
     setSelectedWordIds((prev) => {
       const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+
+      if (isShift && lastCheckedIndexRef.current !== null && wordIndex >= 0) {
+        const start = Math.min(lastCheckedIndexRef.current, wordIndex)
+        const end = Math.max(lastCheckedIndexRef.current, wordIndex)
+        for (let i = start; i <= end; i++) {
+          if (filteredWords[i]) {
+            next.add(getWordKey(filteredWords[i]))
+          }
+        }
+      } else {
+        if (next.has(key)) {
+          next.delete(key)
+        } else {
+          next.add(key)
+        }
+      }
       return next
     })
+
+    if (wordIndex >= 0) {
+      lastCheckedIndexRef.current = wordIndex
+    }
   }
 
   const getSelectedWordsList = () => {
@@ -416,7 +443,7 @@ export function VocabularyVaultModal({
                   </div>
                 ) : (
                   <div className="words-cards-list">
-                    {filteredWords.map((w) => {
+                    {filteredWords.map((w, index) => {
                       const isSelected = selectedWord?.id === w.id
                       const key = getWordKey(w)
                       const isMultiSelected = selectedWordIds.has(key)
@@ -427,9 +454,13 @@ export function VocabularyVaultModal({
                           key={w.id || w.word}
                           id={`vocab-item-${w.id}`}
                           className={`vocab-word-item ${isSelected && !isMultiSelectActive ? 'selected' : ''} ${isMultiSelectActive ? 'in-select-mode' : ''} ${isMultiSelected ? 'multi-selected' : ''}`}
-                          onClick={() => {
-                            if (isMultiSelectActive) {
-                              toggleWordSelection(w)
+                          onMouseDown={(e) => {
+                            if (e.shiftKey) e.preventDefault()
+                          }}
+                          onClick={(e) => {
+                            if (isMultiSelectActive || e.shiftKey) {
+                              if (!isMultiSelectActive) setIsMultiSelectActive(true)
+                              toggleWordSelection(w, index, e.shiftKey)
                             } else {
                               setSelectedWord(w)
                             }

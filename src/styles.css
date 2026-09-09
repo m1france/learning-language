@@ -12144,7 +12144,7 @@ h2 {
 
 .word-known,
 .word-unknown {
-  border-bottom: 1px dotted color-mix(in srgb, var(--ink) 38%, transparent);
+  border-bottom: 2px dotted color-mix(in srgb, var(--ink) 38%, transparent);
 }
 
 .word-known.kl-1 {
@@ -12855,12 +12855,17 @@ h2 {
 }
 
 .focus-exit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 1px solid var(--line);
   background: var(--white);
   color: var(--muted);
   border-radius: 8px;
   padding: 6px 13px;
   font-size: 11px;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -19479,24 +19484,15 @@ h2 {
 }
 
 .reader-resource-done-btn {
-  border-radius: 9999px !important;
-  padding: 5px 12px 5px 8px !important;
-  gap: 6px;
+  border-radius: 0 !important;
+  padding: 4px 6px !important;
+  gap: 5px;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent) !important;
-  background: color-mix(in srgb, var(--paper) 60%, transparent) !important;
-  opacity: 0.65;
-  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-
-.reader-resource-done-btn:hover {
-  opacity: 1 !important;
-  color: #16a34a !important;
-  border-color: color-mix(in srgb, #16a34a 45%, var(--line)) !important;
-  transform: scale(1.04) !important;
-  background: color-mix(in srgb, var(--paper) 90%, transparent) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .reader-resource-done-label {
