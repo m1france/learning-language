@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, Difficulty, Language, Resource, UiLanguage } from './domain'
 import { BUILTIN_CATEGORIES, id } from './domain'
-import { addMarking, batchDeleteWords, batchMarkWordsKnown, batchUpdateWordKnowledge, batchUpdateWordTags, batchUpsertWordDetails, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
+import { addMarking, batchDeleteWords, batchMarkWordsKnown, batchUpdateWordKnowledge, batchUpdateWordTags, batchUpsertWordDetails, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, togglePageRead, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
 import { getResourceWordStats } from './features/readingProgressUtils'
 import { importFromFile, importFromUrl, paragraphsToResource } from './importer'
 import { Reader, Cover } from './features/Reader'
@@ -314,6 +314,7 @@ export default function App() {
               onSaveWord={(args) => change((prev) => upsertWordDetails(prev, args))}
               onBatchSaveWords={(items) => change((prev) => batchUpsertWordDetails(prev, items))}
               onBatchMarkKnown={(words, language) => change((prev) => batchMarkWordsKnown(prev, words, language))}
+              onTogglePageRead={(resourceId, pageIndex) => change((prev) => togglePageRead(prev, resourceId, pageIndex))}
               onDeleteWord={(raw, language) => change((prev) => deleteWord(prev, raw, language))}
               onOpenFocus={(resource) => setFocusId(resource.id)}
               onPageSize={(size) => change((prev) => ({ ...prev, settings: { ...prev.settings, readerPageSize: size } }))}

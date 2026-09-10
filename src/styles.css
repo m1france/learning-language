@@ -19483,6 +19483,11 @@ h2 {
   transform: scale(0.95);
 }
 
+.reader-page-check-btn.is-page-read {
+  opacity: 0.95;
+  color: var(--accent, #16a34a);
+}
+
 .reader-resource-done-btn {
   border-radius: 0 !important;
   padding: 4px 6px !important;

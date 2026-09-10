@@ -228,6 +228,10 @@ export type AppState = {
   silentMarks: Record<string, number[]>
   /** Words marked as known by the user without being saved as vocabulary cards: `${language}:${normalized}` → true */
   knownWords?: Record<string, boolean>
+  /** Tombstones for deleted words: `${language}:${normalized}` → timestamp of deletion (ms). Prevents deleted words from being revived by sync. */
+  deletedWordKeys?: Record<string, number>
+  /** Resource pages marked as read by the user: `${resourceId}:p${pageIndex}` → true */
+  readPages?: Record<string, boolean>
   /** User-defined grammar and semantic markings in display order. */
   markings?: MarkingDefinition[]
   /** Legacy user-added tools from the former "Vivre" section. */

@@ -118,12 +118,31 @@ export function smartMergeAppState(local: AppState, remote: AppState): AppState 
     }
   }
 
-  // 3. Learned Words (union by language:normalized)
+  // 0. Deleted Word Keys (tombstones): merge taking maximum timestamp
+  const mergedDeletedKeys: Record<string, number> = { ...(remote.deletedWordKeys || {}) }
+  for (const [k, ts] of Object.entries(local.deletedWordKeys || {})) {
+    mergedDeletedKeys[k] = Math.max(mergedDeletedKeys[k] || 0, ts)
+  }
+
+  // 3. Learned Words (union by language:normalized, respecting tombstones)
   const wordMap = new Map<string, LearnedWord>()
   const wordKey = (w: LearnedWord) => `${w.language}:${w.normalized}`
-  for (const w of remote.words || []) wordMap.set(wordKey(w), w)
+  for (const w of remote.words || []) {
+    const key = wordKey(w)
+    const delTs = mergedDeletedKeys[key]
+    if (delTs) {
+      const wCreated = w.createdAt ? new Date(w.createdAt).getTime() : 0
+      if (wCreated <= delTs) continue
+    }
+    wordMap.set(key, w)
+  }
   for (const w of local.words || []) {
     const key = wordKey(w)
+    const delTs = mergedDeletedKeys[key]
+    if (delTs) {
+      const wCreated = w.createdAt ? new Date(w.createdAt).getTime() : 0
+      if (wCreated <= delTs) continue
+    }
     const existing = wordMap.get(key)
     if (!existing) {
       wordMap.set(key, w)
@@ -164,10 +183,18 @@ export function smartMergeAppState(local: AppState, remote: AppState): AppState 
   const sessionMap = new Map((remote.sessions || []).map((s) => [s.id, s]))
   for (const s of local.sessions || []) sessionMap.set(s.id, s)
 
-  // 6. Marks & Known Words
+  // 6. Marks & Known Words (purging any known words that were deleted)
   const mergedWordMarks = { ...(remote.wordMarks || {}), ...(local.wordMarks || {}) }
   const mergedSilentMarks = { ...(remote.silentMarks || {}), ...(local.silentMarks || {}) }
-  const mergedKnownWords = { ...(remote.knownWords || {}), ...(local.knownWords || {}) }
+  const mergedKnownWords: Record<string, boolean> = {}
+  for (const [k, v] of Object.entries({ ...(remote.knownWords || {}), ...(local.knownWords || {}) })) {
+    if (v && !mergedDeletedKeys[k]) {
+      mergedKnownWords[k] = true
+    }
+  }
+
+  // 7. Read Pages
+  const mergedReadPages = { ...(remote.readPages || {}), ...(local.readPages || {}) }
 
   return {
     version: 3,
@@ -181,6 +208,8 @@ export function smartMergeAppState(local: AppState, remote: AppState): AppState 
     wordMarks: mergedWordMarks,
     silentMarks: mergedSilentMarks,
     knownWords: mergedKnownWords,
+    deletedWordKeys: mergedDeletedKeys,
+    readPages: mergedReadPages,
     markings: (local.markings && local.markings.length > 0) ? local.markings : (remote.markings || []),
     customTools: (local.customTools && local.customTools.length > 0) ? local.customTools : (remote.customTools || []),
     removedTools: Array.from(new Set([...(remote.removedTools || []), ...(local.removedTools || [])])),

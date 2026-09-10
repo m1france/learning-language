@@ -86,6 +86,8 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   wordMarks: {},
   silentMarks: {},
   knownWords: {},
+  deletedWordKeys: {},
+  readPages: {},
   markings: DEFAULT_MARKINGS,
   customTools: [],
   removedTools: [],
@@ -104,24 +106,35 @@ export const loadState = (): AppState | null => {
     if (api && !api.ttsProvider) {
       api.ttsProvider = api.ttsModel === 'browser' ? 'browser' : api.ttsModel === 'openai/gpt-4o-audio-preview' ? 'openrouter' : 'google'
     }
-    const initialKnownWords: Record<string, boolean> = { ...(parsed.knownWords ?? {}) }
+    const initialDeletedKeys: Record<string, number> = { ...(parsed.deletedWordKeys ?? {}) }
     const cleanedWords: LearnedWord[] = []
     for (const w of (parsed.words ?? [])) {
-      const isEmptyMastered =
-        w.knowledge === 6 &&
-        w.status === 'mastered' &&
-        (!w.definitions || w.definitions.length === 0) &&
-        !w.translation &&
-        !w.partOfSpeech &&
-        (!w.tags || w.tags.length === 0) &&
-        !w.phonetic &&
-        !w.parent
-      if (isEmptyMastered) {
-        initialKnownWords[`${w.language}:${w.normalized}`] = true
-      } else {
-        cleanedWords.push(w)
+      const key = `${w.language}:${w.normalized}`
+      // Drop any word previously deleted via tombstone unless updated/created after deletion
+      if (initialDeletedKeys[key]) {
+        const wCreated = w.createdAt ? new Date(w.createdAt).getTime() : 0
+        if (wCreated <= initialDeletedKeys[key]) {
+          continue
+        }
+      }
+      cleanedWords.push(w)
+    }
+
+    const cleanedWordsKeySet = new Set(cleanedWords.map((w) => `${w.language}:${w.normalized}`))
+    const initialKnownWords: Record<string, boolean> = {}
+    for (const [k, v] of Object.entries(parsed.knownWords ?? {})) {
+      if (!v) continue
+      // If a word is in knownWords but not in cleanedWords, it was deleted from the UI or is an old ghost.
+      // Purge it and tombstone it so it will never be resurrected by remote sync.
+      if (!cleanedWordsKeySet.has(k)) {
+        if (!initialDeletedKeys[k]) {
+          initialDeletedKeys[k] = Date.now()
+        }
+      } else if (!initialDeletedKeys[k]) {
+        initialKnownWords[k] = true
       }
     }
+
     return {
       ...createState(parsed.settings),
       ...parsed,
@@ -139,6 +152,8 @@ export const loadState = (): AppState | null => {
       progress: parsed.progress ?? {},
       words: cleanedWords,
       knownWords: initialKnownWords,
+      deletedWordKeys: initialDeletedKeys,
+      readPages: parsed.readPages ?? {},
       writings: parsed.writings ?? [],
       sessions: parsed.sessions ?? [],
       completedScenarios: parsed.completedScenarios ?? [],
@@ -318,9 +333,16 @@ export const upsertWordDetails = (state: AppState, args: {
   })
   const cleanPhonetic = args.pronunciation ? formatIpaPronunciation(args.pronunciation) || undefined : undefined
 
+  const nextDeleted = { ...(state.deletedWordKeys || {}) }
+  delete nextDeleted[`${args.language}:${normalized}`]
+  for (const v of getInflectionVariants(normalized)) {
+    delete nextDeleted[`${args.language}:${v}`]
+  }
+
   if (existing) {
     return {
       ...state,
+      deletedWordKeys: nextDeleted,
       words: state.words.map((word) => word.id === existing.id
         ? {
             ...word,
@@ -340,6 +362,7 @@ export const upsertWordDetails = (state: AppState, args: {
   const now = new Date().toISOString()
   return {
     ...state,
+    deletedWordKeys: nextDeleted,
     words: [...state.words, {
       id: id('word'),
       word: cleaned,
@@ -384,12 +407,17 @@ export const batchUpsertWordDetails = (
   }[],
 ): AppState => {
   let nextWords = [...state.words]
+  const nextDeleted = { ...(state.deletedWordKeys || {}) }
   const now = new Date().toISOString()
 
   for (const args of items) {
     const cleaned = cleanWordRaw(args.raw)
     if (!cleaned) continue
     const normalized = normalizeWord(cleaned)
+    delete nextDeleted[`${args.language}:${normalized}`]
+    for (const v of getInflectionVariants(normalized)) {
+      delete nextDeleted[`${args.language}:${v}`]
+    }
     const cleanPhonetic = args.pronunciation ? formatIpaPronunciation(args.pronunciation) || undefined : undefined
     const existingIndex = nextWords.findIndex((w) => {
       if (w.language !== args.language) return false
@@ -433,7 +461,7 @@ export const batchUpsertWordDetails = (
     }
   }
 
-  return { ...state, words: nextWords }
+  return { ...state, deletedWordKeys: nextDeleted, words: nextWords }
 }
 
 /** Reverse / reassign reference word for a word family */
@@ -471,32 +499,51 @@ export const setWordAsReference = (
 /** Delete a word from the user's learned/annotated words. */
 export const deleteWord = (state: AppState, rawOrNormalized: string, language: Language): AppState => {
   const norm = normalizeWord(rawOrNormalized)
+  const now = Date.now()
   const nextKnownWords = { ...(state.knownWords || {}) }
-  delete nextKnownWords[`${language}:${norm}`]
+  const nextDeleted = { ...(state.deletedWordKeys || {}) }
+
+  const key = `${language}:${norm}`
+  delete nextKnownWords[key]
+  nextDeleted[key] = now
+
   for (const v of getInflectionVariants(norm)) {
-    delete nextKnownWords[`${language}:${v}`]
+    const vKey = `${language}:${v}`
+    delete nextKnownWords[vKey]
+    nextDeleted[vKey] = now
   }
+
   return {
     ...state,
     words: state.words.filter((w) => !(w.normalized === norm && w.language === language)),
     knownWords: nextKnownWords,
+    deletedWordKeys: nextDeleted,
   }
 }
 
 /** Batch delete multiple words. */
 export const batchDeleteWords = (state: AppState, rawOrNormalizedList: string[], language: Language): AppState => {
   const normSet = new Set(rawOrNormalizedList.map((r) => normalizeWord(r)))
+  const now = Date.now()
   const nextKnownWords = { ...(state.knownWords || {}) }
+  const nextDeleted = { ...(state.deletedWordKeys || {}) }
+
   for (const n of normSet) {
-    delete nextKnownWords[`${language}:${n}`]
+    const key = `${language}:${n}`
+    delete nextKnownWords[key]
+    nextDeleted[key] = now
     for (const v of getInflectionVariants(n)) {
-      delete nextKnownWords[`${language}:${v}`]
+      const vKey = `${language}:${v}`
+      delete nextKnownWords[vKey]
+      nextDeleted[vKey] = now
     }
   }
+
   return {
     ...state,
     words: state.words.filter((w) => !(w.language === language && normSet.has(w.normalized))),
     knownWords: nextKnownWords,
+    deletedWordKeys: nextDeleted,
   }
 }
 
@@ -630,6 +677,25 @@ export const batchMarkWordsKnown = (
   }
 
   return { ...state, knownWords: nextKnownWords }
+}
+
+/** Toggle whether a specific resource page is marked as read. */
+export const togglePageRead = (state: AppState, resourceId: string, pageIndex: number): AppState => {
+  const readPages = { ...(state.readPages || {}) }
+  const key = `${resourceId}:p${pageIndex}`
+  if (readPages[key]) {
+    delete readPages[key]
+  } else {
+    readPages[key] = true
+  }
+  return { ...state, readPages }
+}
+
+/** Mark a specific resource page as read. */
+export const markPageAsRead = (state: AppState, resourceId: string, pageIndex: number): AppState => {
+  const readPages = { ...(state.readPages || {}) }
+  readPages[`${resourceId}:p${pageIndex}`] = true
+  return { ...state, readPages }
 }
 
 export const upsertResource = (state: AppState, resource: Resource): AppState => {

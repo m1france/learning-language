@@ -256,7 +256,7 @@ export function Cover({
   )
 }
 
-export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProgress, onSaveWord, onBatchSaveWords, onBatchMarkKnown, onDeleteWord, onOpenFocus, onPageSize, onWordMark, onSilentMark, onMarkColor, onAddMarking, onRenameMarking, onDeleteMarking, onResetMarks, onAiTaskChange }: {
+export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProgress, onSaveWord, onBatchSaveWords, onBatchMarkKnown, onTogglePageRead, onDeleteWord, onOpenFocus, onPageSize, onWordMark, onSilentMark, onMarkColor, onAddMarking, onRenameMarking, onDeleteMarking, onResetMarks, onAiTaskChange }: {
   state: AppState
   resource: Resource
   ui: UiLanguage
@@ -267,6 +267,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   onSaveWord: (args: WordDetails) => void
   onBatchSaveWords?: (items: WordDetails[]) => void
   onBatchMarkKnown?: (words: { raw: string; sentence?: string }[], language: Language) => void
+  onTogglePageRead?: (resourceId: string, pageIndex: number) => void
   onDeleteWord?: (raw: string, language: Language) => void
   onOpenFocus: (resource: Resource) => void
   onPageSize: (size: number) => void
@@ -375,10 +376,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   }
 
   const handleMarkPageAsDone = () => {
-    const pageWords = extractPageUniqueWords(page)
-    if (pageWords.length > 0) {
-      onBatchMarkKnown?.(pageWords, resource.language)
-    }
+    onTogglePageRead?.(resource.id, safePage)
     setPageValidationMenu(null)
   }
 
@@ -485,7 +483,6 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
             // Check if this word, its parent, or any singular/plural/phrase inflection variant is already recorded
             const isAlreadyKnown =
               Boolean(findMatchingLearnedWord(state.words, raw, resource.language)) ||
-              isWordMarkedKnown(state.knownWords, resource.language, norm) ||
               variants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v)) ||
               (parentVariants.length > 0 && parentVariants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v))) ||
               Array.from(newlySavedSeen).some((seen) => {
@@ -554,7 +551,6 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
           // Fallback if AI call returned empty or offline: extract unique words, filtering out already known words
           const fallbackWords = extractPageUniqueWords(chunkEntries).filter((w) => {
             if (findMatchingLearnedWord(state.words, w.raw, resource.language)) return false
-            if (isWordMarkedKnown(state.knownWords, resource.language, w.normalized)) return false
             const variants = getInflectionVariants(w.normalized)
             return !variants.some((v) => existingNormalizedSet.has(v) || newlySavedSeen.has(v))
           })
@@ -1174,6 +1170,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
                 markMode={markMode}
                 green={greenChars}
                 resourceId={resource.id}
+                pageIndex={safePage}
                 chapterIndex={entry.chapterIndex}
                 paragraphIndex={entry.paragraphIndex}
                 knownPhrases={knownPhrases}
@@ -1190,7 +1187,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         <div className="reader-page-validation-row">
           <button
             type="button"
-            className="reader-page-check-btn"
+            className={`reader-page-check-btn ${Boolean(state.readPages?.[`${resource.id}:p${safePage}`]) ? 'is-page-read' : ''}`}
             onClick={handleOpenValidationMenu}
             title={resT.validatePageTooltip}
             aria-label={resT.validatePageAria}
@@ -1577,7 +1574,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               className="page-context-item"
               onClick={handleMarkPageAsDone}
             >
-              <i><Check size={15} /></i> {resT.markPageDone}
+              <i><Check size={15} /></i> {Boolean(state.readPages?.[`${resource.id}:p${safePage}`]) ? (ui === 'fr' ? 'Démarquer la page' : 'Unmark page as read') : resT.markPageDone}
             </button>
           </>
         ) : (
@@ -1595,7 +1592,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
               className="page-context-item"
               onClick={handleMarkPageAsDone}
             >
-              <i><Check size={15} /></i> {resT.markPageDone}
+              <i><Check size={15} /></i> {Boolean(state.readPages?.[`${resource.id}:p${safePage}`]) ? (ui === 'fr' ? 'Démarquer la page' : 'Unmark page as read') : resT.markPageDone}
             </button>
           </>
         )}
@@ -3453,6 +3450,7 @@ function Paragraph({
   markMode,
   green,
   resourceId,
+  pageIndex,
   chapterIndex,
   paragraphIndex,
   knownPhrases,
@@ -3468,6 +3466,7 @@ function Paragraph({
   markMode: MarkMode
   green?: Set<number>
   resourceId?: string
+  pageIndex?: number
   chapterIndex?: number
   paragraphIndex?: number
   knownPhrases?: string[]
@@ -3544,6 +3543,7 @@ function Paragraph({
             green={green}
             offset={token.offset}
             resourceId={resourceId}
+            pageIndex={pageIndex}
             chapterIndex={chapterIndex}
             paragraphIndex={paragraphIndex}
             isSelected={isSelected}
@@ -3567,6 +3567,7 @@ function Word({
   green,
   offset = 0,
   resourceId,
+  pageIndex,
   chapterIndex,
   paragraphIndex,
   isSelected,
@@ -3583,6 +3584,7 @@ function Word({
   green?: Set<number>
   offset?: number
   resourceId?: string
+  pageIndex?: number
   chapterIndex?: number
   paragraphIndex?: number
   isSelected?: boolean
@@ -3696,7 +3698,8 @@ function Word({
         deckClass = 'word-known'
       }
     } else {
-      const isKnown = isWordMarkedKnown(state.knownWords, language, normalized)
+      const isPageRead = Boolean(resourceId && pageIndex !== undefined && state.readPages?.[`${resourceId}:p${pageIndex}`])
+      const isKnown = isPageRead || isWordMarkedKnown(state.knownWords, language, normalized)
       if (!isKnown) {
         deckClass = 'word-unknown'
       }
