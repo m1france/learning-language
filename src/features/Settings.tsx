@@ -34,6 +34,7 @@ import {
   AlertCircle,
   Layers,
   Share2,
+  ShieldCheck,
 } from 'lucide-react'
 import { MyLessonsSettingsTab } from './teacherExport/MyLessonsSettingsTab'
 import { syncService, type SyncStateInfo } from './sync/syncService'
@@ -555,20 +556,11 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
         <div className="settings-title-row">
           <h1>{t.title}</h1>
           <div
-            className={`settings-sync-badge status-${syncInfo.status}`}
-            title={`Synchronisation automatique : ${syncInfo.lastSyncedAt ? `Dernière synchro à ${syncInfo.lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Prêt'}`}
-            onClick={handleManualSync}
+            className="settings-sync-badge status-synced"
+            title="Stockage individuel par appareil : vos données restent strictement confinées dans ce navigateur."
           >
-            <RefreshCw size={12} className={syncInfo.status === 'syncing' ? 'spin' : ''} />
-            <span>
-              {syncInfo.status === 'syncing'
-                ? 'Synchronisation…'
-                : syncInfo.status === 'synced'
-                  ? 'Synchronisé'
-                  : syncInfo.status === 'offline'
-                    ? 'Hors ligne'
-                    : 'Synchronisé'}
-            </span>
+            <ShieldCheck size={12} />
+            <span>Stockage local individuel</span>
           </div>
         </div>
         <p className="subhead">{t.subhead}</p>
@@ -1517,33 +1509,19 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
 
           <div className="data-card sync-card">
             <div className="sync-card-header">
-              <div className="sync-card-icon">
-                <RefreshCw size={18} className={syncInfo.status === 'syncing' ? 'spin' : ''} />
+              <div className="sync-card-icon" style={{ color: "#16a34a" }}>
+                <ShieldCheck size={20} />
               </div>
               <div className="sync-card-meta">
-                <h3>Synchronisation automatique Mac &amp; iPhone</h3>
-                <p>Vos ressources, votre progression de lecture, votre vocabulaire et vos clés API sont synchronisés automatiquement et en continu entre votre Mac et votre iPhone.</p>
+                <h3>Stockage individuel par appareil (100% Local &amp; Confidentiel)</h3>
+                <p>Toutes vos ressources, vos entrées de journal écrit, votre vocabulaire et vos données personnelles sont stockés exclusivement dans ce navigateur. Aucune donnée n'est partagée avec les personnes ayant accès au lien de l'application.</p>
               </div>
-              <button
-                type="button"
-                className="outline sync-action-btn"
-                onClick={handleManualSync}
-                disabled={syncInfo.status === 'syncing'}
-              >
-                {syncInfo.status === 'syncing' ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
-                <span>{syncInfo.status === 'syncing' ? 'Synchronisation…' : 'Synchroniser maintenant'}</span>
-              </button>
             </div>
             <div className="sync-card-footer">
               <span className="sync-status-indicator">
-                <span className={`sync-dot ${syncInfo.status === 'synced' ? 'online' : ''}`} />
-                {syncInfo.status === 'synced' ? 'Synchronisation active & à jour' : syncInfo.status === 'syncing' ? 'Synchronisation en cours…' : 'Mode local actif'}
+                <span className="sync-dot online" />
+                Stockage local individuel actif &amp; sécurisé
               </span>
-              {syncInfo.lastSyncedAt && (
-                <span className="sync-last-time">
-                  Dernier échange : {syncInfo.lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({syncInfo.lastDevice || 'Réseau'})
-                </span>
-              )}
             </div>
           </div>
 

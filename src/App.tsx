@@ -21,7 +21,6 @@ import { doveWhite } from './assets/doveWhite'
 import { SharedLessonViewer } from './features/teacherExport/SharedLessonViewer'
 import { parseSharedLessonFromUrl, getExportedLesson, fetchSharedLesson, isShareSubdomain } from './features/teacherExport/teacherExportService'
 import type { ExportedLesson } from './features/teacherExport/teacherExportDomain'
-import { syncService } from './features/sync/syncService'
 import {
   Home,
   BookOpen,
@@ -142,24 +141,10 @@ export default function App() {
     localStorage.setItem('vivre-side-collapsed', next ? '1' : '0')
   }
 
-  const isRemoteSyncUpdateRef = useRef(false)
-
-  // Synchronisation automatique continue Mac & iPhone
-  useEffect(() => {
-    syncService.init((remoteState) => {
-      isRemoteSyncUpdateRef.current = true
-      setState(remoteState)
-    })
-  }, [])
-
+  // Stockage individuel par appareil (100% local dans ce navigateur)
   useEffect(() => {
     if (state) {
       saveState(state)
-      if (isRemoteSyncUpdateRef.current) {
-        isRemoteSyncUpdateRef.current = false
-      } else {
-        syncService.schedulePush(state)
-      }
     }
   }, [state])
   useEffect(() => { if (state) document.documentElement.dataset.theme = state.settings.theme }, [state?.settings.theme]) // eslint-disable-line react-hooks/exhaustive-deps

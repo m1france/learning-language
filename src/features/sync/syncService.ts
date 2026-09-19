@@ -279,9 +279,7 @@ class SyncManager {
           void this.pull()
         }
       })
-      window.addEventListener('focus', () => {
-        void this.pull()
-      })
+      // focus sync disabled for device isolation
     }
   }
 
@@ -321,159 +319,37 @@ class SyncManager {
    */
   public init(onRemoteUpdate: (state: AppState) => void): void {
     this.onRemoteUpdateCallback = onRemoteUpdate
-
-    // Initial pull immediately
-    void this.pull()
-
-    // Heartbeat check every 15 seconds
-    if (!this.heartbeatTimer && typeof window !== 'undefined') {
-      this.heartbeatTimer = setInterval(() => {
-        void this.checkStatusAndPullIfNeeded()
-      }, 15000)
-    }
+    this.status = 'synced'
+    this.notify('synced')
   }
 
   /**
    * Schedules a debounced push of local state to the server (1.5s debounce).
    */
-  public schedulePush(state: AppState): void {
-    if (this.pushTimer) clearTimeout(this.pushTimer)
-    this.pushTimer = setTimeout(() => {
-      void this.push(state)
-    }, 1500)
+  public schedulePush(_state: AppState): void {
+    // Stockage individuel par appareil : aucune synchronisation distante automatique
   }
 
   /**
-   * Pushes the current local state to the synchronization endpoint.
+   * Stockage individuel par appareil : aucune opération distante.
    */
-  public async push(state: AppState): Promise<boolean> {
-    if (this.isPushing) return false
-    this.isPushing = true
-    this.notify('syncing')
-
-    try {
-      const base = getSyncApiBaseUrl()
-      const payload: SyncPayload = {
-        version: 3,
-        state,
-        extraStorage: getExtraStorageSnapshot(),
-        lastModified: Date.now(),
-        deviceId: getDeviceId(),
-        deviceName: getDeviceName(),
-      }
-
-      const res = await fetch(`${base}/api/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload }),
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        this.lastSyncedAt = new Date()
-        this.lastDevice = getDeviceName()
-        if (data.revision) {
-          this.localRevision = data.revision
-        }
-        this.notify('synced')
-
-        try {
-          this.broadcastChannel?.postMessage({ type: 'SYNC_PUSHED', deviceId: getDeviceId() })
-        } catch {}
-
-        return true
-      } else {
-        this.notify('error', `Erreur HTTP ${res.status}`)
-        return false
-      }
-    } catch (err) {
-      this.notify('offline', 'Serveur inaccessible pour le moment')
-      return false
-    } finally {
-      this.isPushing = false
-    }
+  public async push(_state: AppState): Promise<boolean> {
+    this.status = "synced"
+    this.lastSyncedAt = new Date()
+    this.notify("synced")
+    return true
   }
 
   /**
-   * Pulls the latest synchronized state from the server.
+   * Récupère uniquement le stockage local de cet appareil.
    */
   public async pull(): Promise<AppState | null> {
-    if (this.isPulling) return null
-    this.isPulling = true
-    this.notify('syncing')
-
-    try {
-      const base = getSyncApiBaseUrl()
-      const res = await fetch(`${base}/api/sync`)
-      if (!res.ok) {
-        this.notify('offline', `Erreur HTTP ${res.status}`)
-        return null
-      }
-
-      const data = await res.json()
-      if (!data.payload || !data.payload.state) {
-        // No remote state on server yet: push local state to seed the server
-        const local = loadState()
-        if (local && (local.resources.length > 0 || local.words.length > 0 || local.settings.api.openRouterKey)) {
-          void this.push(local)
-        }
-        this.notify('synced')
-        return null
-      }
-
-      const remotePayload = data.payload as SyncPayload
-      const remoteState = remotePayload.state
-
-      // Restore extra bookmarks/annotations
-      restoreExtraStorageSnapshot(remotePayload.extraStorage)
-
-      const localState = loadState()
-      let finalState: AppState
-
-      if (!localState) {
-        finalState = remoteState
-      } else {
-        // Smart bidirectional merge
-        finalState = smartMergeAppState(localState, remoteState)
-      }
-
-      saveState(finalState)
-      this.lastSyncedAt = new Date(remotePayload.lastModified || Date.now())
-      this.lastDevice = remotePayload.deviceName || 'Distant'
-      if (data.revision) {
-        this.localRevision = data.revision
-      }
-
-      this.notify('synced')
-
-      if (this.onRemoteUpdateCallback) {
-        this.onRemoteUpdateCallback(finalState)
-      }
-
-      return finalState
-    } catch (err) {
-      this.notify('offline', 'Serveur local hors ligne')
-      return null
-    } finally {
-      this.isPulling = false
-    }
+    this.status = "synced"
+    this.notify("synced")
+    return loadState()
   }
 
-  /**
-   * Lightweight heartbeat revision check.
-   * If remote revision > localRevision, triggers full pull.
-   */
-  private async checkStatusAndPullIfNeeded(): Promise<void> {
-    try {
-      const base = getSyncApiBaseUrl()
-      const res = await fetch(`${base}/api/sync/status`)
-      if (!res.ok) return
-      const statusData = await res.json()
-      if (statusData && statusData.revision && statusData.revision > this.localRevision) {
-        void this.pull()
-      }
-    } catch {}
-  }
+  private async checkStatusAndPullIfNeeded(): Promise<void> {}
 }
 
 export const syncService = new SyncManager()
