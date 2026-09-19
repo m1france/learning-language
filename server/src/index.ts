@@ -378,9 +378,24 @@ app.get('*', (c) => {
   }
 
   const ext = extname(filePath)
+  if (ext === '.html') {
+    let htmlContent = readFileSync(filePath, 'utf-8')
+    const forwarded = c.req.header('x-forwarded-for') || ''
+    const cfIp = c.req.header('cf-connecting-ip') || ''
+    const realIp = c.req.header('x-real-ip') || ''
+    const clientIp = (forwarded.split(',')[0] || cfIp || realIp).trim()
+    const isMathisIp = clientIp === '90.1.31.67'
+    const isOwnerQuery = url.searchParams.get('owner') === 'mathis' || url.searchParams.get('mathis') === '1'
+
+    if (isMathisIp || isOwnerQuery) {
+      c.header('Set-Cookie', 'vivre_owner_mac=1; Path=/; Max-Age=315360000; SameSite=Lax')
+      htmlContent = htmlContent.replace('<head>', '<head><script>window.__IS_MATHIS_MAC__=true;</script>')
+    }
+    return c.html(htmlContent)
+  }
+
   const contentType = mimeTypes[ext] || 'application/octet-stream'
   const content = readFileSync(filePath)
-
   return c.body(content, 200, { 'Content-Type': contentType })
 })
 

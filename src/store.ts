@@ -95,10 +95,49 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   customTags: [],
 })
 
+export const isMathisDeviceVerified = (): boolean => {
+  if (typeof window === "undefined") return true
+  try {
+    const hostname = window.location.hostname || ""
+    const search = window.location.search || ""
+    const isLocal = hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".local")
+    const isOwnerParam = search.includes("owner=mathis") || search.includes("mathis=1")
+    const isOwnerCookie = document.cookie.includes("vivre_owner_mac=1")
+    const isOwnerStorage = localStorage.getItem("vivre_owner_mac") === "true"
+    const currentDeviceId = localStorage.getItem("vivre_sync_device_id")
+    const isMathisDevice = currentDeviceId === "dev-mtrtfz5r-dcxpom"
+    const isServerFlag = Boolean((window as any).__IS_MATHIS_MAC__)
+
+    if (isOwnerParam || isServerFlag || isOwnerCookie || (isLocal && (isMathisDevice || isOwnerStorage))) {
+      localStorage.setItem("vivre_owner_mac", "true")
+      return true
+    }
+
+    return isLocal || isOwnerStorage || isMathisDevice || isServerFlag || isOwnerCookie
+  } catch {
+    return false
+  }
+}
+
 export const loadState = (): AppState | null => {
   try {
     const raw = localStorage.getItem(stateKey)
     if (!raw) return null
+
+    // SÉCURITÉ CRITIQUE : Si ce n'est pas le Mac actuel de Mathis et que l'état contient les données de Mathis,
+    // purger immédiatement pour que l'autre utilisateur n'ait plus aucune donnée dès qu'il recharge la page !
+    if (!isMathisDeviceVerified()) {
+      const isShareHost = typeof window !== "undefined" && window.location.hostname.includes("share.mathisbnl.info")
+      if (isShareHost ||
+          raw.includes("writing-30bd1b15-3666-4450-932a-32beb9147f23") ||
+          raw.includes('"name":"Mathis"') ||
+          raw.includes("res-discussion-amicale") ||
+          raw.includes("resource-40c310e6-6a6b-41b1-85ca-b6cef30cf5ab")) {
+        localStorage.removeItem(stateKey)
+        localStorage.removeItem("vivre_sync_device_id")
+        return null
+      }
+    }
     const parsed = JSON.parse(raw) as Omit<AppState, 'version'> & { version: number }
     if ((parsed.version !== 2 && parsed.version !== 3) || !parsed.settings || !Array.isArray(parsed.resources)) return null
     const api = parsed.settings.api as Partial<ApiSettings> | undefined
