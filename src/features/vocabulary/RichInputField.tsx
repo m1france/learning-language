@@ -202,3 +202,8 @@ export function RichInputField({
     />
   )
 }
+
+/** Read-only inline rendering of a markdown field (bold, italic, underline) without its markers. */
+export function MarkdownText({ text, className }: { text: string; className?: string }) {
+  return <span className={className} dangerouslySetInnerHTML={{ __html: markdownToHtml(text) }} />
+}

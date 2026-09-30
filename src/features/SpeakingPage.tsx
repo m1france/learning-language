@@ -3,7 +3,9 @@ import type { Language, ApiSettings, UiLanguage } from '../domain'
 import { GLOBAL_CATEGORIES, GlobalTopicCategory, NicheTopic, getPromptText } from './speaking/speakingTopics'
 import { useCamera } from './speaking/CameraContext'
 import { TeleprompterOverlay } from './speaking/TeleprompterOverlay'
-import { SpeakingWorkspace } from './speaking/SpeakingWorkspace'
+import { SessionReview } from './speaking/review/SessionReview'
+import { countWords, notesPlainText } from './speaking/review/notesMarkdown'
+import { reviewCopy } from '../i18n/reviewCopy'
 import { QuickWordLookup, StageWordRequest } from './speaking/QuickWordLookup'
 import { StagedWord, analyzeWordWithAi } from './speaking/wordAiService'
 import { StagedWordsReviewModal } from './speaking/StagedWordsReviewModal'
@@ -20,7 +22,6 @@ import {
   Pause,
   Trash2,
   Download,
-  FileText,
   Video,
   Maximize2,
   Minimize2,
@@ -38,6 +39,7 @@ type SpeakingPageProps = {
   onConsumePrompterText?: () => void
   existingTags?: string[]
   onAiTaskChange?: (running: boolean) => void
+  onOpenSettings?: () => void
   onSaveWord?: (args: {
     raw: string
     sentence: string
@@ -57,9 +59,11 @@ export function SpeakingPage({
   onConsumePrompterText,
   existingTags = [],
   onAiTaskChange,
+  onOpenSettings,
   onSaveWord,
 }: SpeakingPageProps) {
   const t = speakingCopy[ui] || speakingCopy.fr
+  const rc = reviewCopy(ui)
   const {
     stream,
     cameraActive,
@@ -92,8 +96,9 @@ export function SpeakingPage({
     sessions,
     activeReviewSession,
     setActiveReviewSession,
-    handleUpdateSession,
     handleDeleteSession,
+    liveCaption,
+    liveCaptionsOn,
   } = useCamera()
 
   const [showTopicPicker, setShowTopicPicker] = useState(false)
@@ -267,20 +272,18 @@ export function SpeakingPage({
     setInPickerCategory(null)
   }
 
-  // If a session is open in the notes workspace, render the full workspace view!
+  // A recorded take is open: full review (player, transcript, coach, notes).
   if (activeReviewSession) {
     return (
-      <div className="page speaking-page">
-        <SpeakingWorkspace
-          ui={ui}
-          language={language}
-          api={api}
-          session={activeReviewSession}
-          onUpdate={handleUpdateSession}
-          onDelete={handleDeleteSession}
-          onBack={() => setActiveReviewSession(null)}
-        />
-      </div>
+      <SessionReview
+        key={activeReviewSession.id}
+        ui={ui}
+        language={language}
+        api={api}
+        session={activeReviewSession}
+        onBack={() => setActiveReviewSession(null)}
+        onOpenSettings={onOpenSettings}
+      />
     )
   }
 
@@ -620,6 +623,12 @@ export function SpeakingPage({
               )}
 
 
+              {recording && liveCaptionsOn && !showPrompter && (
+                <div className="studio-live-caption" aria-live="polite" title={rc.liveCaptions}>
+                  {liveCaption || <span className="studio-live-caption-idle">{rc.liveCaptions}…</span>}
+                </div>
+              )}
+
               {/* Quick Word & Phrase Lookup Drawer (Minimalist / Bottom-Left) */}
               <QuickWordLookup
                 isOpen={showQuickLookup}
@@ -650,8 +659,8 @@ export function SpeakingPage({
         ) : (
           <div className="sessions-cards-grid">
             {sessions.map((take) => (
-              <article key={take.id} className="session-grid-card">
-                <div className="card-video-preview" onClick={() => setActiveReviewSession(take)}>
+              <article key={take.id} className="session-grid-card" onClick={() => setActiveReviewSession(take)}>
+                <div className="card-video-preview">
                   {take.mediaUrl ? (
                     <video src={take.mediaUrl} preload="metadata" playsInline />
                   ) : (
@@ -667,31 +676,26 @@ export function SpeakingPage({
 
                 <div className="card-content-area">
                   <div className="card-top-meta">
-                    <span className="card-mode-chip">
-                      {take.mode === 'guided'
-                        ? ui === 'fr'
-                          ? 'Guidé'
-                          : 'Guided'
-                        : ui === 'fr'
-                        ? 'Libre'
-                        : 'Free'}
-                    </span>
+                    {take.mode === 'guided' && <span className="card-mode-chip">{ui === 'fr' ? 'Guidé' : 'Guided'}</span>}
                     <span className="card-date">{new Date(take.createdAt).toLocaleDateString()}</span>
                   </div>
 
-                  <h3 className="card-session-title" onClick={() => setActiveReviewSession(take)}>
-                    {take.title}
-                  </h3>
+                  <h3 className="card-session-title">{take.title}</h3>
 
                   <div className="card-footer-actions">
-                    <button
-                      className="card-review-link"
-                      onClick={() => setActiveReviewSession(take)}
-                    >
-                      <FileText size={14} /> {t.openReview}
-                    </button>
+                    <span className="card-notes-count">
+                      {take.transcriptStatus === 'transcribing'
+                        ? rc.cardTranscribing
+                        : take.analysisStatus === 'analyzing'
+                        ? rc.cardAnalyzing
+                        : [
+                            take.transcript?.segments.length ? rc.cardWords(take.transcript.segments.reduce((sum, seg) => sum + countWords(seg.text), 0)) : null,
+                            take.analysis?.overallScore !== undefined ? `${take.analysis.overallScore}/100` : null,
+                            countWords(notesPlainText(take.notes)) ? `${rc.notesTitle} · ${countWords(notesPlainText(take.notes))}` : null,
+                          ].filter(Boolean).join(' · ')}
+                    </span>
 
-                    <div className="card-icon-buttons">
+                    <div className="card-icon-buttons" onClick={(event) => event.stopPropagation()}>
                       {take.mediaUrl && (
                         <a
                           href={take.mediaUrl}

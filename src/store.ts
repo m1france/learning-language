@@ -45,14 +45,14 @@ export const defaultSettings: UserSettings = {
     agentProvider: 'openrouter',
     agentModel: 'nvidia/nemotron-3-ultra-550b-a55b:free',
     openRouterKey: '',
-    openRouterModel: 'meta-llama/llama-3.3-70b-instruct:free',
+    openRouterModel: '',
     openAiKey: '',
     nvidiaKey: '',
     kimiKey: '',
     googleKey: '',
     ttsVoice: 'alloy',
     ttsProvider: 'google',
-    ttsModel: 'openai/gpt-4o-mini-tts-2025-12-15',
+    ttsModel: '',
     elevenLabsKey: '',
     elevenLabsVoice: '21m00Tcm4TlvDq8ikWAM',
     fishKey: '',
@@ -62,7 +62,7 @@ export const defaultSettings: UserSettings = {
     youtubeTranscriptApiKey: '',
     speakingTranslationProvider: 'deepl',
     taskModelSpeakingTranslation: '',
-    taskModelSpeakingAnalysis: 'google/gemini-2.0-flash-exp:free',
+    taskModelSpeakingAnalysis: '',
     taskModelResourceGeneration: '',
     googleImageModel: '',
     taskModelWordAnalysis: '',
@@ -71,7 +71,32 @@ export const defaultSettings: UserSettings = {
     writingCorrectionAdvancedFormatting: false,
     taskModelExerciseBuilder: '',
     taskModelTeacherAlignment: '',
+    groqKey: '',
+    transcriptionProvider: 'auto',
+    transcriptionModel: '',
+    taskModelAssistant: '',
   },
+}
+
+/** Chat model ids that were defaults once and are gone from OpenRouter's catalogue (checked 2026-09-30). */
+const RETIRED_MODELS = new Set([
+  'google/gemini-2.0-flash-exp:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+  'anthropic/claude-3.5-sonnet',
+  'anthropic/claude-3.5-haiku',
+  'mistralai/mistral-large-2411',
+  'openai/gpt-4o-audio-preview',
+])
+
+/** Clears retired model ids so each task falls back to a model that answers. */
+export function withoutRetiredModels(api: ApiSettings): ApiSettings {
+  const next = { ...api }
+  for (const [field, value] of Object.entries(next)) {
+    if (typeof value === 'string' && RETIRED_MODELS.has(value.trim())) (next as Record<string, unknown>)[field] = ''
+  }
+  return next
 }
 
 export const createState = (settings: Partial<UserSettings> = {}): AppState => ({
@@ -189,7 +214,7 @@ export const loadState = (): AppState | null => {
         readerToolbarStyle: parsed.settings.readerToolbarStyle ?? 'liquid',
         markColors: parsed.settings.markColors ?? {},
         teacherShortcuts: { ...DEFAULT_TEACHER_SHORTCUTS, ...(parsed.settings.teacherShortcuts ?? {}) },
-        api: { ...defaultSettings.api, ...api },
+        api: withoutRetiredModels({ ...defaultSettings.api, ...api }),
       },
       progress: parsed.progress ?? {},
       words: cleanedWords,

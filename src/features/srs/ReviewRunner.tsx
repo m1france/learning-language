@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Check, Ear, Eye, Headphones, PenLine, Undo2, Volume2, X } from 'lucide-react'
+import { MarkdownText } from '../vocabulary/RichInputField'
 import type { AppState, LearnedWord, ReviewMode, UiLanguage } from '../../domain'
 import { speak } from '../../ai'
 import { learnCopy } from '../../i18n'
@@ -69,7 +70,7 @@ export function ReviewRunner({
   const [revealed, setRevealed] = useState(false)
   const [typed, setTyped] = useState('')
   const [check, setCheck] = useState<AnswerCheck | null>(null)
-  const [editing, setEditing] = useState<string | null>(null)
+  const [showPhonetic, setShowPhonetic] = useState(false)
   const [summary, setSummary] = useState<ReviewSummary>(EMPTY_SUMMARY)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [presentation, setPresentation] = useState(0)
@@ -124,7 +125,7 @@ export function ReviewRunner({
     setRevealed(false)
     setTyped('')
     setCheck(null)
-    setEditing(null)
+    setShowPhonetic(false)
     setPresentation((value) => value + 1)
     cardStartedAt.current = Date.now()
     ;(document.activeElement as HTMLElement | null)?.blur?.()
@@ -190,18 +191,11 @@ export function ReviewRunner({
     nextCard()
   }
 
-  const saveTranslation = () => {
-    if (!word || editing === null) return
-    const translation = editing.trim()
-    onChange((prev) => updateWordFields(prev, word.id, { translation }))
-    setEditing(null)
-  }
-
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const inField = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
-      if (inField || editing !== null) return
+      if (inField) return
       const key = event.key.toLowerCase()
       if ((event.metaKey || event.ctrlKey) && key === 'z') { event.preventDefault(); undoLast(); return }
       if (event.metaKey || event.ctrlKey || event.altKey) return
@@ -209,7 +203,7 @@ export function ReviewRunner({
       if (revealed && ['1', '2', '3', '4'].includes(key)) { event.preventDefault(); grade(Number(key) as Rating); return }
       if (revealed && (key === ' ' || key === 'enter')) { event.preventDefault(); grade(suggested); return }
       if (key === 'z') undoLast()
-      else if (key === 'p') playWord()
+      else if (key === 'p') { playWord(); setShowPhonetic(true) }
       else if (key === 'escape') onExit(withSeconds(summary))
     }
     window.addEventListener('keydown', onKey)
@@ -239,32 +233,34 @@ export function ReviewRunner({
     </p>
   )
 
-  const translationBlock = (
-    <div className="rv-meaning-row">
-      {editing !== null ? (
-        <form className="rv-edit" onSubmit={(event) => { event.preventDefault(); saveTranslation() }}>
-          <input autoFocus value={editing} onChange={(event) => setEditing(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setEditing(null) } }} />
-          <button type="submit" className="primary small">{c.save}</button>
-          <button type="button" className="text-button" onClick={() => setEditing(null)}>{c.cancel}</button>
-        </form>
-      ) : (
-        <>
-          <p className={meaning ? 'rv-translation' : 'rv-translation empty'}>{meaning || c.noTranslation}</p>
-          <button type="button" className="rv-icon-btn small" title={c.editTranslation} aria-label={c.editTranslation} onClick={() => setEditing(meaning)}>
-            <PenLine size={14} />
-          </button>
-        </>
-      )}
-    </div>
-  )
+  const meaningText = (className: string) => meaning
+    ? <MarkdownText text={meaning} className={className} />
+    : <span className={`${className} empty`}>{c.noTranslation}</span>
 
   const wordHeading = (
     <div className="rv-word-row">
       <h2 className="rv-word">{word.word}</h2>
-      <button type="button" className="rv-icon-btn" onClick={playWord} title={c.play} aria-label={c.play}><Volume2 size={18} /></button>
+      <div className="rv-pron">
+        <button type="button" className="rv-audio-btn" onClick={() => { playWord(); setShowPhonetic(true) }} title={c.play} aria-label={c.play}>
+          <Volume2 size={19} />
+        </button>
+        {showPhonetic && word.phonetic && <span className="rv-phonetic">{renderPhoneticFormatted(word.phonetic)}</span>}
+      </div>
     </div>
   )
+
+  const cardMeta = (
+    <div className="rv-card-meta">
+      <span className={`rv-chip state-${cardState}`}>{c.states[cardState]}</span>
+      <span className="rv-mode">{MODE_ICONS[mode]} {c.modes[mode]}</span>
+    </div>
+  )
+
+  // Clicking the card's empty space flips it, like turning a paper card.
+  const flipOnClick = (event: React.MouseEvent) => {
+    if ((event.target as HTMLElement).closest('button, input, a, form')) return
+    reveal()
+  }
 
   return (
     <div className="rv-runner">
@@ -283,79 +279,73 @@ export function ReviewRunner({
 
       {practice && <p className="rv-practice-badge">{c.practiceBadge}</p>}
 
-      <article className={`rv-card mode-${mode}${revealed ? ' revealed' : ''}`} key={presentation}>
-        <div className="rv-card-meta">
-          <span className={`rv-chip state-${cardState}`}>{c.states[cardState]}</span>
-          <span className="rv-mode">{MODE_ICONS[mode]} {c.modes[mode]}</span>
-        </div>
-
-        <div className="rv-front">
-          <p className="rv-prompt">{prompt}</p>
-          {mode === 'recognition' && <>{wordHeading}{hasTarget ? sentence(false) : null}</>}
-          {mode === 'recall' && <>
-            <div className="rv-word-row">
-              <h2 className="rv-word rv-meaning-front">{meaning}</h2>
-              {revealed && editing === null && (
-                <button type="button" className="rv-icon-btn small" title={c.editTranslation} aria-label={c.editTranslation} onClick={() => setEditing(meaning)}>
-                  <PenLine size={14} />
-                </button>
+      <div className={`rv-flip mode-${mode}${revealed ? ' flipped' : ''}`} key={presentation}>
+        <div className="rv-flip-inner">
+          <article className="rv-card rv-face rv-face-front" aria-hidden={revealed} onClick={revealed ? undefined : flipOnClick}>
+            {cardMeta}
+            <div className="rv-front">
+              <p className="rv-prompt">{prompt}</p>
+              {mode === 'recognition' && <>{wordHeading}{hasTarget ? sentence(false) : null}</>}
+              {mode === 'recall' && <>
+                <h2 className="rv-word rv-meaning-front">{meaningText('rv-meaning-text')}</h2>
+                {sentence(true)}
+              </>}
+              {mode === 'listening' && (
+                <button type="button" className="rv-listen-btn" onClick={playWord} aria-label={c.play}><Headphones size={30} /></button>
+              )}
+              {wantsTyping && (
+                <form className="rv-type" onSubmit={(event) => { event.preventDefault(); reveal() }}>
+                  <input
+                    ref={inputRef}
+                    value={typed}
+                    readOnly={revealed}
+                    onChange={(event) => setTyped(event.target.value)}
+                    placeholder={c.typePlaceholder}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    aria-label={c.typePlaceholder}
+                  />
+                </form>
               )}
             </div>
-            {!revealed && sentence(true)}
-          </>}
-          {mode === 'listening' && !revealed && (
-            <button type="button" className="rv-listen-btn" onClick={playWord} aria-label={c.play}><Headphones size={30} /></button>
-          )}
-          {wantsTyping && (
-            <form className="rv-type" onSubmit={(event) => { event.preventDefault(); reveal() }}>
-              <input
-                ref={inputRef}
-                value={typed}
-                readOnly={revealed}
-                onChange={(event) => setTyped(event.target.value)}
-                placeholder={c.typePlaceholder}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                className={check ? `check-${check}` : undefined}
-                aria-label={c.typePlaceholder}
-              />
-            </form>
-          )}
-        </div>
+          </article>
 
-        {revealed && (
-          <div className="rv-back">
-            {check && (
-              <p className={`rv-check check-${check}`}>
-                {check === 'correct' ? <Check size={15} /> : null}
-                {c.answer[check]}
-                {check !== 'correct' && typed.trim() && <span> · {c.youTyped} : <s>{typed.trim()}</s></span>}
-              </p>
-            )}
-            {mode !== 'recognition' && wordHeading}
-            {word.phonetic && <p className="rv-phonetic">{renderPhoneticFormatted(word.phonetic)}</p>}
-            {mode !== 'recall' && translationBlock}
-            {mode === 'recall' && editing !== null && translationBlock}
-            <div className="rv-details">
-              {word.partOfSpeech && <span className="rv-tag">{word.partOfSpeech}</span>}
-              {word.tags?.filter((tag) => tag !== word.partOfSpeech).slice(0, 2).map((tag) => <span className="rv-tag" key={tag}>{tag}</span>)}
-              {word.parent && <span className="rv-parent">{c.referenceWord} : <b>{word.parent}</b></span>}
-            </div>
-            {parts.length > 0 && (mode !== 'recognition' || !hasTarget) && (
-              <div className="rv-sentence-row">
-                {sentence(false)}
-                <button type="button" className="rv-icon-btn small" onClick={playSentence} title={c.playSentence} aria-label={c.playSentence}><Volume2 size={14} /></button>
+          <article className="rv-card rv-face rv-face-back" aria-hidden={!revealed}>
+            {cardMeta}
+            {revealed && (
+              <div className="rv-back">
+                {check && (
+                  <p className={`rv-check check-${check}`}>
+                    {check === 'correct' ? <Check size={15} /> : null}
+                    {c.answer[check]}
+                    {check !== 'correct' && typed.trim() && <span> · {c.youTyped} : <s>{typed.trim()}</s></span>}
+                  </p>
+                )}
+                {wordHeading}
+                {meaningText('rv-translation')}
+                <div className="rv-details">
+                  {word.partOfSpeech && <span className="rv-tag">{word.partOfSpeech}</span>}
+                  {word.tags?.filter((tag) => tag !== word.partOfSpeech).slice(0, 2).map((tag) => <span className="rv-tag" key={tag}>{tag}</span>)}
+                  {word.parent && <span className="rv-parent">{c.referenceWord} : <b>{word.parent}</b></span>}
+                </div>
+                {parts.length > 0 && (
+                  <div className="rv-sentence-row">
+                    {sentence(false)}
+                  </div>
+                )}
+                <div className="rv-back-links">
+                  {parts.length > 0 && (
+                    <button type="button" className="text-button rv-play-sentence" onClick={playSentence}><Volume2 size={13} /> {c.playSentence}</button>
+                  )}
+                  {source && <span className="rv-source"><BookOpen size={12} /> {source.title}</span>}
+                </div>
               </div>
             )}
-            {mode === 'recognition' && hasTarget && (
-              <button type="button" className="text-button rv-play-sentence" onClick={playSentence}><Volume2 size={13} /> {c.playSentence}</button>
-            )}
-            {source && <p className="rv-source"><BookOpen size={12} /> {source.title}</p>}
-          </div>
-        )}
-      </article>
+          </article>
+        </div>
+      </div>
 
       <footer className="rv-actions">
         {!revealed ? (

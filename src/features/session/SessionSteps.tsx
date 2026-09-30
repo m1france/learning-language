@@ -9,7 +9,9 @@ import { upsertWriting } from '../../store'
 import { getResourceWordStats } from '../readingProgressUtils'
 import { Cover } from '../Reader'
 import { getAgentConfig } from '../speaking/wordAiService'
-import { analyzeWritingWithAi, type WritingCorrectionResult } from '../writing/writingCorrectionAiService'
+import { analyzeWritingWithAi, type CorrectionItem, type WritingCorrectionResult } from '../writing/writingCorrectionAiService'
+import { WritingCorrectionOverlay } from '../writing/WritingCorrectionOverlay'
+import { MarkdownText } from '../vocabulary/RichInputField'
 import { isWordInText } from '../writing/wordMatcher'
 import { dayKey } from '../srs/fsrs'
 import { compareSpoken } from '../srs/reviewHelpers'
@@ -121,6 +123,7 @@ export function WritingStep({ state, session, ui, onChange }: StepProps) {
   const draftKey = `vivre-session-draft:${session.day}`
   const [text, setText] = useState(() => { try { return localStorage.getItem(draftKey) ?? '' } catch { return '' } })
   const [correction, setCorrection] = useState<WritingCorrectionResult | null>(null)
+  const [rawView, setRawView] = useState(false)
   const [correcting, setCorrecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const startedAt = useRef(Date.now())
@@ -136,9 +139,24 @@ export function WritingStep({ state, session, ui, onChange }: StepProps) {
     setError(null)
     const result = await analyzeWritingWithAi({ text, learningLanguage: state.settings.learningLanguage, uiLanguage: ui, api: state.settings.api })
     setCorrecting(false)
-    if (result.ok) setCorrection(result.result)
+    if (result.ok) { setCorrection(result.result); setRawView(false) }
     else setError(result.error)
   }
+
+  // Same behaviour as the Écrire page: accepting a suggestion edits the text in place.
+  const applyOne = (item: CorrectionItem) => {
+    const index = text.indexOf(item.original)
+    if (!item.original || index === -1) return
+    const next = text.slice(0, index) + item.corrected + text.slice(index + item.original.length)
+    setText(next)
+    setCorrection((current) => current && { ...current, originalText: next, corrections: current.corrections.filter((entry) => entry.id !== item.id) })
+  }
+  const applyAll = (next: string) => {
+    setText(next)
+    setCorrection((current) => current && { ...current, originalText: next, corrections: [] })
+  }
+  const dismissOne = (correctionId: string) =>
+    setCorrection((current) => current && { ...current, corrections: current.corrections.filter((entry) => entry.id !== correctionId) })
 
   const validate = () => {
     const content = text.trim()
@@ -183,21 +201,37 @@ export function WritingStep({ state, session, ui, onChange }: StepProps) {
               <li key={word.id} className={isUsed ? 'used' : undefined}>
                 {isUsed && <Check size={13} />}
                 <b>{word.word}</b>
-                {meaningOf(word) && <span>{meaningOf(word)}</span>}
+                {meaningOf(word) && <MarkdownText text={meaningOf(word)} />}
               </li>
             )
           })}
         </ul>
       )}
-      <textarea
-        className="ss-textarea"
-        value={text}
-        onChange={(event) => { setText(event.target.value); setCorrection(null) }}
-        placeholder={c.writingPlaceholder}
-        lang={state.settings.learningLanguage}
-        rows={6}
-        autoFocus
-      />
+      {correction && (
+        <div className="ss-correction-overlay">
+          <WritingCorrectionOverlay
+            correctionResult={correction}
+            onApplyAll={applyAll}
+            onApplySingle={applyOne}
+            onDismissSingle={dismissOne}
+            onClose={() => setCorrection(null)}
+            isEditorView={rawView}
+            onToggleEditorView={() => setRawView((value) => !value)}
+            ui={ui}
+          />
+        </div>
+      )}
+      {(!correction || rawView) && (
+        <textarea
+          className="ss-textarea"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={c.writingPlaceholder}
+          lang={state.settings.learningLanguage}
+          rows={6}
+          autoFocus
+        />
+      )}
       <div className="ss-writing-bar">
         <span className={sentences >= WRITING_SENTENCES ? 'ss-goal done' : 'ss-goal'}>{c.sentencesProgress(Math.min(sentences, WRITING_SENTENCES), WRITING_SENTENCES)}</span>
         <div className="ss-actions">
@@ -209,30 +243,6 @@ export function WritingStep({ state, session, ui, onChange }: StepProps) {
       </div>
       {!hasAi && <p className="ss-note">{c.aiMissing}</p>}
       {error && <p className="ss-error">{error}</p>}
-      {correction && (
-        <div className="ss-correction">
-          <p className="ss-correction-head">
-            {correction.score !== undefined && <span className="ss-score">{c.aiScore} {correction.score}/100</span>}
-            {correction.overallFeedback}
-          </p>
-          {correction.corrections.length > 0 && (
-            <ul>
-              {correction.corrections.map((item) => (
-                <li key={item.id}>
-                  <span><s>{item.original}</s> → <b>{item.corrected}</b></span>
-                  <small>{item.explanation}</small>
-                </li>
-              ))}
-            </ul>
-          )}
-          {correction.correctedFullText && correction.correctedFullText.trim() !== text.trim() && (
-            <div className="ss-corrected">
-              <small>{c.correctedVersion}</small>
-              <p>{correction.correctedFullText}</p>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

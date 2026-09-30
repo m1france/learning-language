@@ -8,8 +8,7 @@ import {
 import type { AppState, GrammarMarkStyle, GrammarMarkType, Language, LearnedWord, Resource, UiLanguage, WordMark, WordRelationType } from '../domain'
 import { normalizeWord, getInflectionVariants } from '../domain'
 import { DEFAULT_MARKINGS, knownParents, knownTags, resolveWordFamily, setWordAsReference, type WordFamily } from '../store'
-import { copy, learnCopy, readerCopy } from '../i18n'
-import { dayKey, daysBetween, formatInterval } from './srs/fsrs'
+import { copy, readerCopy } from '../i18n'
 import { loadOriginals, modifiedCharIndices } from './LearningFocus'
 import { isGenericImportedAuthor } from '../App'
 import {
@@ -89,16 +88,6 @@ type WordDetails = {
 
 /** Couleurs du niveau de connaissance 1 → 5 (rouge → vert clair). */
 const KNOWLEDGE_COLORS = ['#dc2626', '#ea580c', '#d97706', '#65a30d', '#16a34a']
-
-/** "Révision dans 4 jours" under the level dots, once the word is in the spaced-repetition cycle. */
-function NextReviewLabel({ word, ui }: { word?: LearnedWord; ui: UiLanguage }) {
-  if (!word?.srs || word.srs.state === 'new') return null
-  const c = learnCopy(ui)
-  const days = daysBetween(dayKey(), word.srs.due)
-  const lang = ui === 'fr' ? 'fr' : 'en'
-  const label = days <= 0 ? c.reviewToday : c.reviewIn(days === 1 ? c.tomorrow : `${lang === 'fr' ? 'dans' : 'in'} ${formatInterval(days, lang)}`)
-  return <span className="wp-next-review">{label}</span>
-}
 
 const PAGE_SIZE_OPTIONS = [120, 220, 350, 500] as const
 
@@ -2049,7 +2038,6 @@ function WordPanel({ ui, selected, state, language, docked, onClose, onSave, onD
         ? <span className="wp-known-check"><Check size={14} /> {t.knownByHeart}</span>
         : <span className="wp-dots" title={`${knowledge} / 5`}>{[1, 2, 3, 4, 5].map((n) => <i key={n}
           style={n <= knowledge ? { background: KNOWLEDGE_COLORS[knowledge - 1] } : undefined} />)}</span>}
-      {knowledge !== 6 && <NextReviewLabel word={findExisting()} ui={ui} />}
     </div>}
     {pronunciation && (
       <div className="wp-view-field">

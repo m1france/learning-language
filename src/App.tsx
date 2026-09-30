@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, Difficulty, Language, Resource, UiLanguage } from './domain'
 import { BUILTIN_CATEGORIES, id } from './domain'
 import { addMarking, batchDeleteWords, batchMarkWordsKnown, batchUpdateWordKnowledge, batchUpdateWordTags, batchUpsertWordDetails, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, togglePageRead, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
@@ -9,10 +9,9 @@ import { Reader, Cover } from './features/Reader'
 import { LearningFocus } from './features/LearningFocus'
 import { SpeakingPage } from './features/SpeakingPage'
 import { WritingPage } from './features/writing/WritingPage'
-import { ExercisesPage } from './features/exercises/ExercisesPage'
 import { ReviewPage } from './features/srs/ReviewPage'
 import { SessionPage } from './features/session/SessionPage'
-import { SessionDock, SessionHero } from './features/session/SessionHero'
+import { SessionDock, SessionDonePill, SessionHero } from './features/session/SessionHero'
 import { currentStepId, finishReading, startSession } from './features/session/sessionPlan'
 import { buildReviewQueue } from './features/srs/srsStore'
 import { dayKey } from './features/srs/fsrs'
@@ -23,7 +22,8 @@ import { Settings } from './features/Settings'
 import { VocabularyVaultModal } from './features/vocabulary/VocabularyVaultModal'
 import { AddResourceModal } from './components/AddResourceModal'
 import { prompts } from './data'
-import { baseUi, copy, detectUiLanguage, learnCopy, UI_LANGUAGES, writeCopy } from './i18n'
+import { copy, detectUiLanguage, learnCopy, UI_LANGUAGES, writeCopy } from './i18n'
+import { assistantCopy } from './i18n/assistantCopy'
 import { TOP_LEARNING_LANGUAGES } from './languages'
 import { doveWhite } from './assets/doveWhite'
 import { SharedLessonViewer } from './features/teacherExport/SharedLessonViewer'
@@ -38,7 +38,6 @@ import {
   Settings as SettingsIcon,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Sun,
   Moon,
   Plus,
@@ -67,16 +66,20 @@ import {
   type ResourceContextTarget,
 } from './components/ResourceModals'
 
-type Page = 'home' | 'review' | 'session' | 'reading' | 'speaking' | 'writing' | 'exercises' | 'settings'
+// Loaded on demand: the assistant (markdown engine, blocks, voice mode) is a sizeable chunk.
+const AssistantPage = lazy(() => import('./features/assistant/AssistantPage').then((module) => ({ default: module.AssistantPage })))
+
+type Page = 'home' | 'review' | 'session' | 'reading' | 'speaking' | 'writing' | 'assistant' | 'settings'
 
 type UI = (typeof copy)[keyof typeof copy]
 type NavItem = {
   id: Page
-  label: 'home' | 'review' | 'reading' | 'speaking' | 'writing' | 'exercises'
+  label: 'home' | 'review' | 'reading' | 'speaking' | 'writing' | 'assistant'
   icon: React.ReactNode
 }
 
-const navLabel = (item: NavItem, t: UI, ui: UiLanguage) => (item.label === 'review' ? learnCopy(ui).navReview : t[item.label])
+const navLabel = (item: NavItem, t: UI, ui: UiLanguage) =>
+  item.label === 'review' ? learnCopy(ui).navReview : item.label === 'assistant' ? assistantCopy(ui).navLabel : t[item.label]
 
 const navItems: NavItem[] = [
   { id: 'home', label: 'home', icon: <Home size={18} /> },
@@ -84,10 +87,7 @@ const navItems: NavItem[] = [
   { id: 'reading', label: 'reading', icon: <BookOpen size={18} /> },
   { id: 'speaking', label: 'speaking', icon: <Mic size={18} /> },
   { id: 'writing', label: 'writing', icon: <PenLine size={18} /> },
-]
-
-const extraNavItems: NavItem[] = [
-  { id: 'exercises', label: 'exercises', icon: <Sparkles size={18} /> },
+  { id: 'assistant', label: 'assistant', icon: <Sparkles size={18} /> },
 ]
 
 export const isGenericImportedAuthor = (author?: string): boolean => {
@@ -250,7 +250,6 @@ export default function App() {
   const reader = state.resources.find((resource) => resource.id === readerId) ?? null
   const change = (next: AppState | ((prev: AppState) => AppState)) =>
     setState((prev) => (typeof next === 'function' ? (prev ? next(prev) : prev) : next))
-  const setUiLanguage = (uiLanguage: UiLanguage) => change((prev) => ({ ...prev, settings: { ...prev.settings, uiLanguage } }))
 
   const go = (next: Page) => {
     if (page === 'writing' && next !== 'writing' && writingDraftGuardRef.current?.hasDraftMoreThan10Words) {
@@ -343,7 +342,7 @@ export default function App() {
               onAiTaskChange={handleAiTaskChange} />
           ) : (
             <>
-              {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onNavigate={go} onContinue={(resourceId) => setReaderId(resourceId)} onStartSession={openSession} t={t} />}
+              {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onWrite={() => go('writing')} onNavigate={go} onContinue={(resourceId) => setReaderId(resourceId)} onStartSession={openSession} t={t} />}
               {page === 'review' && <ReviewPage state={state} ui={ui} onChange={change} onGoRead={() => go('reading')} />}
               {page === 'session' && (
                 <SessionPage
@@ -366,6 +365,7 @@ export default function App() {
                   onConsumePrompterText={() => setSpeakingPrompterText(null)}
                   existingTags={Array.from(new Set(state.words.flatMap((w) => w.tags || [])))}
                   onAiTaskChange={setIsAiTaskRunning}
+                  onOpenSettings={() => go('settings')}
                   onSaveWord={(args) => change((prev) => upsertWordDetails(prev, args))}
                 />
               )}
@@ -383,13 +383,16 @@ export default function App() {
                   }}
                 />
               )}
-              {page === 'exercises' && (
-                <ExercisesPage
-                  state={state}
-                  onChange={change}
-                  ui={ui}
-                  onAiTaskChange={setIsAiTaskRunning}
-                />
+              {page === 'assistant' && (
+                <Suspense fallback={<div className="page-loading"><Loader2 size={20} className="spin" /></div>}>
+                  <AssistantPage
+                    state={state}
+                    onChange={change}
+                    ui={ui}
+                    onAiTaskChange={setIsAiTaskRunning}
+                    onOpenSettings={() => go('settings')}
+                  />
+                </Suspense>
               )}
               {page === 'settings' && (
                 <Settings
@@ -412,7 +415,7 @@ export default function App() {
           )}
         </section>
         <nav className="mobile-nav">
-          {navItems.slice(1).concat(extraNavItems).map((item) => (
+          {navItems.slice(1).map((item) => (
             <button className={page === item.id ? 'active' : ''} onClick={() => go(item.id)} key={item.id}>
               <b>{item.icon}{item.id === 'review' && reviewDue > 0 && <i className="nav-badge">{reviewDue > 99 ? '99+' : reviewDue}</i>}</b>
               <span>{navLabel(item, t, ui)}</span>
@@ -555,14 +558,6 @@ function Sidebar({
   aiTaskLabel?: string
   onToggleCollapse: () => void
 }) {
-  const [isSeeMoreOpen, setIsSeeMoreOpen] = useState(page === 'exercises')
-
-  useEffect(() => {
-    if (page === 'exercises') {
-      setIsSeeMoreOpen(true)
-    }
-  }, [page])
-
   return (
     <aside className="sidebar">
       <Brand onClick={() => setPage('home')} />
@@ -580,39 +575,6 @@ function Sidebar({
           </button>
         ))}
 
-        {/* Separator Line with "Voir plus" accordion */}
-        <div className="sidebar-accordion-section">
-          <button
-            type="button"
-            className="sidebar-see-more-toggle"
-            onClick={() => setIsSeeMoreOpen(!isSeeMoreOpen)}
-            title={isSeeMoreOpen ? t.seeLess : t.seeMore}
-          >
-            <span className="see-more-line" />
-            <span className="see-more-label-wrap">
-              <span className="side-label">{isSeeMoreOpen ? t.seeLess : t.seeMore}</span>
-              <ChevronDown
-                size={12}
-                className={`see-more-chevron ${isSeeMoreOpen ? 'open' : ''}`}
-              />
-            </span>
-            <span className="see-more-line" />
-          </button>
-
-          <div className={`sidebar-accordion-body ${isSeeMoreOpen ? 'open' : ''}`}>
-            {extraNavItems.map((item) => (
-              <button
-                className={page === item.id ? 'active' : ''}
-                onClick={() => setPage(item.id)}
-                key={item.id}
-                title={collapsed ? navLabel(item, t, ui) : undefined}
-              >
-                <b>{item.icon}</b>
-                <span className="side-label">{navLabel(item, t, ui)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
       </nav>
       <div className="side-bottom">
         {isAiTaskRunning && (
@@ -655,21 +617,10 @@ function Sidebar({
   )
 }
 
-/** Discreet round flag icons — switch the whole interface language. */
-function LanguageFlags({ ui, onUiLanguage }: { ui: UiLanguage; onUiLanguage: (language: UiLanguage) => void }) {
-  return <div className="lang-flags">
-    {UI_LANGUAGES.map((language) => <button key={language.id}
-      className={ui === language.id ? 'lang-flag active' : 'lang-flag'}
-      title={language.name}
-      onClick={() => onUiLanguage(language.id)}>{language.flag}</button>)}
-  </div>
-}
-
 function Dashboard({
   name,
   state,
   ui,
-  onUiLanguage,
   onWrite,
   onNavigate,
   onContinue,
@@ -679,7 +630,6 @@ function Dashboard({
   name: string
   state: AppState
   ui: UiLanguage
-  onUiLanguage: (language: UiLanguage) => void
   onWrite: () => void
   onNavigate: (page: Page) => void
   onContinue: (resourceId: string) => void
@@ -711,7 +661,7 @@ function Dashboard({
         <div>
           <h1>{t.welcome}, {name || 'Salut'}.</h1>
         </div>
-        <LanguageFlags ui={ui} onUiLanguage={onUiLanguage} />
+        <SessionDonePill state={state} ui={ui} onOpen={onStartSession} />
       </header>
 
       <SessionHero state={state} ui={ui} onStart={onStartSession} />

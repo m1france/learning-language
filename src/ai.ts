@@ -17,6 +17,14 @@ const voiceScore = (voice: SpeechSynthesisVoice, lang: Language, preferredName?:
 let audioElement: HTMLAudioElement | null = null
 /** Playback speed of the current `speak` call (1 = normal). */
 let playbackRate = 1
+/** Called once when the current `speak` call finishes (or is interrupted). */
+let endCallback: (() => void) | null = null
+
+function finishSpeaking() {
+  const callback = endCallback
+  endCallback = null
+  callback?.()
+}
 
 /**
  * TTS helpers:
@@ -50,9 +58,14 @@ export type SpeakResult = { engine: SpeakEngine; error?: string }
 
 async function playBlob(blob: Blob): Promise<void> {
   audioElement?.pause()
-  audioElement = new Audio(URL.createObjectURL(blob))
-  audioElement.playbackRate = playbackRate
-  await audioElement.play()
+  const url = URL.createObjectURL(blob)
+  const element = new Audio(url)
+  element.playbackRate = playbackRate
+  const done = () => { URL.revokeObjectURL(url); if (audioElement === element) finishSpeaking() }
+  element.onended = done
+  element.onerror = done
+  audioElement = element
+  await element.play()
 }
 
 async function speakWithElevenLabs(text: string, api: ApiSettings): Promise<{ ok: boolean; error?: string }> {
@@ -94,7 +107,7 @@ async function speakWithOpenRouter(
 ): Promise<{ ok: boolean; error?: string }> {
   const key = (api.openRouterKey || '').trim()
   if (!key) return { ok: false, error: 'Pas de clé OpenRouter renseignée' }
-  const model = (api.ttsModel || '').trim() || 'openai/gpt-4o-mini-tts-2025-12-15'
+  const model = (api.ttsModel || '').trim() || 'openai/gpt-audio-mini'
   const voice = (api.ttsVoice || '').trim() || 'alloy'
 
   const headers: Record<string, string> = {
@@ -104,7 +117,7 @@ async function speakWithOpenRouter(
     'X-Title': 'Language Learning App',
   }
 
-  const isChatAudio = /audio-preview|omni|chat/i.test(model)
+  const isChatAudio = /gpt-audio|audio-preview|omni|chat/i.test(model)
 
   const callSpeechEndpoint = async (): Promise<{ ok: boolean; error?: string }> => {
     try {
@@ -175,8 +188,12 @@ async function speakWithOpenRouter(
           : undefined)
       if (!base64) return { ok: false, error: 'Le modèle Chat OpenRouter n’a pas renvoyé de données audio' }
       audioElement?.pause()
-      audioElement = new Audio(`data:audio/mp3;base64,${base64}`)
-      await audioElement.play()
+      const element = new Audio(`data:audio/mp3;base64,${base64}`)
+      const done = () => { if (audioElement === element) finishSpeaking() }
+      element.onended = done
+      element.onerror = done
+      audioElement = element
+      await element.play()
       return { ok: true }
     } catch (caught) {
       return { ok: false, error: caught instanceof Error ? caught.message : 'Erreur réseau OpenRouter Chat' }
@@ -213,6 +230,7 @@ export function stopSpeaking() {
   googleQueue?.element.pause()
   googleQueue = null
   if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel()
+  finishSpeaking()
 }
 
 // ---------------------------------------------------------------------------
@@ -252,24 +270,25 @@ function speakWithGoogle(text: string, lang: Language): Promise<boolean> {
     let settled = false
     const ok = (value: boolean) => { if (!settled) { settled = true; resolve(value) } }
     const playNext = () => {
-      if (index >= chunks.length) { googleQueue = null; return }
+      if (index >= chunks.length) { googleQueue = null; finishSpeaking(); return }
       const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${tl}&q=${encodeURIComponent(chunks[index])}`
       const element = new Audio(url)
       element.playbackRate = playbackRate
       googleQueue = { element, chunks }
       element.onplaying = () => ok(true)
       element.onended = () => { index += 1; playNext() }
-      element.onerror = () => { googleQueue = null; ok(false) }
-      element.play().catch(() => { googleQueue = null; ok(false) })
+      element.onerror = () => { googleQueue = null; if (settled) finishSpeaking(); ok(false) }
+      element.play().catch(() => { googleQueue = null; if (settled) finishSpeaking(); ok(false) })
     }
     playNext()
   })
 }
 
 /** Speak text via the provider chosen in Settings, with sensible fallbacks. */
-export async function speak(text: string, lang: Language, api: ApiSettings, options: { rate?: number } = {}): Promise<SpeakResult> {
+export async function speak(text: string, lang: Language, api: ApiSettings, options: { rate?: number; onEnd?: () => void } = {}): Promise<SpeakResult> {
   stopSpeaking()
   playbackRate = options.rate ?? 1
+  endCallback = options.onEnd ?? null
   const errors: string[] = []
   if (api.ttsProvider === 'openrouter') {
     const attempt = await speakWithOpenRouter(text, api, lang)
@@ -290,13 +309,15 @@ export async function speak(text: string, lang: Language, api: ApiSettings, opti
 
   // If the user explicitly chose browser TTS, use SpeechSynthesis directly
   if (api.ttsProvider === 'browser') {
-    if (typeof speechSynthesis === 'undefined') return { engine: 'none', error: 'Synthèse vocale du navigateur indisponible' }
+    if (typeof speechSynthesis === 'undefined') { finishSpeaking(); return { engine: 'none', error: 'Synthèse vocale du navigateur indisponible' } }
     const utterance = new SpeechSynthesisUtterance(text)
     const voice = bestVoice(lang, api.ttsVoice || undefined)
     if (voice) utterance.voice = voice
     utterance.lang = getLanguageBcp47(lang)
     utterance.rate = 0.92 * playbackRate
     utterance.pitch = 1
+    utterance.onend = finishSpeaking
+    utterance.onerror = finishSpeaking
     speechSynthesis.speak(utterance)
     return { engine: 'browser' }
   }
@@ -308,13 +329,50 @@ export async function speak(text: string, lang: Language, api: ApiSettings, opti
   errors.push('voix Google indisponible')
 
   // Final fallback to browser SpeechSynthesis
-  if (typeof speechSynthesis === 'undefined') return { engine: 'none', error: errors.join(' · ') }
+  if (typeof speechSynthesis === 'undefined') { finishSpeaking(); return { engine: 'none', error: errors.join(' · ') } }
   const utterance = new SpeechSynthesisUtterance(text)
   const voice = bestVoice(lang, api.ttsVoice || undefined)
   if (voice) utterance.voice = voice
   utterance.lang = getLanguageBcp47(lang)
   utterance.rate = 0.92 * playbackRate
   utterance.pitch = 1
+  utterance.onend = finishSpeaking
+  utterance.onerror = finishSpeaking
   speechSynthesis.speak(utterance)
   return { engine: 'browser', error: errors.filter(Boolean).join(' · ') }
+}
+
+/**
+ * Speaks and resolves once playback has finished (or was interrupted).
+ * A generous timeout guards against engines that never report the end.
+ */
+export function speakAndWait(text: string, lang: Language, api: ApiSettings, options: { rate?: number } = {}): Promise<SpeakResult> {
+  return new Promise((resolve) => {
+    let result: SpeakResult = { engine: 'none' }
+    let ended = false
+    let returned = false
+    let done = false
+    const finish = () => { if (!done) { done = true; window.clearTimeout(guard); resolve(result) } }
+    const settle = () => { if (ended && returned) finish() }
+    const guard = window.setTimeout(finish, 4000 + text.length * 110 / (options.rate ?? 1))
+    void speak(text, lang, api, { ...options, onEnd: () => { ended = true; settle() } }).then((value) => {
+      result = value
+      returned = true
+      if (value.engine === 'none') ended = true
+      settle()
+    })
+  })
+}
+
+/**
+ * Call from a click handler before speech that will start later (after a
+ * network round-trip): Safari only lets audio play once a gesture unlocked it.
+ */
+export function unlockAudio() {
+  try {
+    const silent = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=')
+    silent.volume = 0
+    void silent.play().catch(() => undefined)
+    if (typeof speechSynthesis !== 'undefined') speechSynthesis.speak(new SpeechSynthesisUtterance(''))
+  } catch { /* nothing to unlock */ }
 }

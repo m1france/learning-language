@@ -247,7 +247,19 @@ export type ApiSettings = {
   writingCorrectionAdvancedFormatting?: boolean
   /** Gemini model for cover image generation via Google AI Studio (e.g. gemini-2.5-flash-image) */
   googleImageModel?: string
+  /** Groq API key — free Whisper transcription (console.groq.com). */
+  groqKey?: string
+  /** Speech-to-text engine for recorded sessions ('auto' picks the best available key). */
+  transcriptionProvider?: TranscriptionProvider
+  /** Model override for the chosen transcription engine. */
+  transcriptionModel?: string
+  /** Custom AI model override for the AI assistant (chat, lessons, voice). */
+  taskModelAssistant?: string
 }
+
+export type TranscriptionProvider = 'auto' | 'browser' | 'groq' | 'openai' | 'google' | 'openrouter'
+
+export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'
 
 export type CustomTool = {
   id: string
@@ -296,6 +308,8 @@ export type UserSettings = {
   teacherShortcuts?: Record<string, string>
   /** Spaced repetition & daily session preferences (defaults in srsStore). */
   learning?: Partial<LearningSettings>
+  /** Learner level used by the AI assistant to pitch explanations. */
+  assistantLevel?: CefrLevel
   api: ApiSettings
 }
 

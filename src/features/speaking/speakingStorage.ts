@@ -40,6 +40,28 @@ export type SpeakingVideoAnalysis = {
   analyzedAt: string
 }
 
+export type TranscriptWord = { text: string; start: number; end: number }
+
+export type TranscriptSegment = {
+  id: string
+  start: number // seconds
+  end: number // seconds
+  text: string
+  words?: TranscriptWord[]
+}
+
+export type TranscriptEngine = 'browser' | 'groq' | 'openai' | 'google' | 'openrouter'
+
+export type SessionTranscript = {
+  segments: TranscriptSegment[]
+  engine: TranscriptEngine
+  model?: string
+  language: string
+  createdAt: string
+  /** The learner corrected some segments by hand. */
+  edited?: boolean
+}
+
 export type SpeakingSessionRecord = {
   id: string
   title: string
@@ -58,7 +80,19 @@ export type SpeakingSessionRecord = {
   analysis?: SpeakingVideoAnalysis
   analysisStatus?: 'idle' | 'analyzing' | 'completed' | 'error' | 'too_long'
   analysisError?: string
+  /** Learning language when the take was recorded. */
+  language?: string
+  transcript?: SessionTranscript
+  transcriptStatus?: 'idle' | 'transcribing' | 'done' | 'error'
+  transcriptError?: string
+  /** 0 → 1 while a long recording is transcribed chunk by chunk. */
+  transcriptProgress?: number
+  /** Cached waveform (0–1 values) so the review page draws instantly. */
+  peaks?: number[]
 }
+
+/** Fields that live in IndexedDB (everything except the blob and its object URL). */
+export type SpeakingSessionPatch = Partial<Omit<SpeakingSessionRecord, 'id' | 'blob' | 'mediaUrl'>>
 
 const DB_NAME = 'vivre_parler_db'
 const DB_VERSION = 1
@@ -118,8 +152,10 @@ export async function getAllSpeakingSessions(): Promise<SpeakingSessionRecord[]>
             tags: item.tags || [],
             ratings: item.ratings || { fluency: 4, pronunciation: 4, confidence: 4 },
             analysis: item.analysis,
-            analysisStatus: item.analysisStatus || (item.analysis ? 'completed' : 'idle'),
+            // A reload interrupts background work: don't leave a spinner forever.
+            analysisStatus: item.analysisStatus === 'analyzing' ? (item.analysis ? 'completed' : 'idle') : item.analysisStatus || (item.analysis ? 'completed' : 'idle'),
             analysisError: item.analysisError,
+            transcriptStatus: item.transcriptStatus === 'transcribing' ? (item.transcript ? 'done' : 'idle') : item.transcriptStatus,
           }
         })
         resolve(formatted)
@@ -132,10 +168,7 @@ export async function getAllSpeakingSessions(): Promise<SpeakingSessionRecord[]>
   }
 }
 
-export async function updateSpeakingSession(
-  id: string,
-  updates: Partial<Omit<SpeakingSessionRecord, 'id' | 'blob' | 'mediaUrl'>>,
-): Promise<void> {
+export async function updateSpeakingSession(id: string, updates: SpeakingSessionPatch): Promise<void> {
   const db = await openDB()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
@@ -165,4 +198,30 @@ export async function deleteSpeakingSession(id: string): Promise<void> {
     req.onsuccess = () => resolve()
     req.onerror = () => reject(req.error)
   })
+}
+
+/** Transcripts only (no blobs, no object URLs) — for the assistant's context. */
+export async function listSpeakingTranscripts(limit = 5): Promise<{ id: string; title: string; createdAt: string; duration: number; text: string; notes: string }[]> {
+  try {
+    const db = await openDB()
+    const all = await new Promise<SpeakingSessionRecord[]>((resolve, reject) => {
+      const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
+      req.onsuccess = () => resolve(req.result as SpeakingSessionRecord[])
+      req.onerror = () => reject(req.error)
+    })
+    return all
+      .filter((session) => session.transcript?.segments.length || session.notes?.trim())
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map((session) => ({
+        id: session.id,
+        title: session.title,
+        createdAt: session.createdAt,
+        duration: session.duration,
+        text: session.transcript?.segments.map((segment) => segment.text).join(' ') ?? '',
+        notes: session.notes ?? '',
+      }))
+  } catch {
+    return []
+  }
 }

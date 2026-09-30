@@ -89,7 +89,7 @@ const AGENT_PROVIDERS: {
     keyPlaceholder: 'sk-or-v1-…',
     keyLabel: 'Clé API OpenRouter',
     keyHint: 'Permet d’accéder à de nombreux modèles gratuits ou payants avec une seule clé (openrouter.ai).',
-    examples: 'nvidia/nemotron-3-ultra-550b-a55b:free, meta-llama/llama-3.3-70b-instruct:free, anthropic/claude-3.5-sonnet',
+    examples: 'nvidia/nemotron-3-ultra-550b-a55b:free, google/gemma-4-31b-it:free, google/gemini-3.5-flash',
   },
   {
     id: 'nvidia',
@@ -146,11 +146,8 @@ const TTS_PROVIDERS: { id: UserSettings['api']['ttsProvider']; name: string; det
 ]
 
 const OPENROUTER_TTS_PRESETS = [
-  { id: 'openai/gpt-4o-mini-tts-2025-12-15', label: 'GPT-4o Mini TTS (Recommandé)', desc: 'Ultra-rapide, naturel & économique' },
-  { id: 'openai/tts-1', label: 'OpenAI TTS-1', desc: 'Modèle standard OpenAI' },
-  { id: 'openai/tts-1-hd', label: 'OpenAI TTS-1 HD', desc: 'Haute fidélité sonore' },
-  { id: 'deepgram/flux-tts', label: 'Deepgram Flux TTS', desc: 'Voix expressive' },
-  { id: 'openai/gpt-4o-audio-preview', label: 'GPT-4o Audio Preview', desc: 'Modèle multimodal audio' },
+  { id: 'openai/gpt-audio-mini', label: 'GPT Audio Mini (Recommandé)', desc: 'Rapide, naturel & économique' },
+  { id: 'openai/gpt-audio', label: 'GPT Audio', desc: 'Voix la plus expressive' },
 ]
 
 const OPENROUTER_VOICES = [
@@ -165,18 +162,17 @@ const OPENROUTER_VOICES = [
 const PROVIDER_MODEL_PRESETS: Record<string, string[]> = {
   openrouter: [
     'nvidia/nemotron-3-ultra-550b-a55b:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'google/gemini-2.0-flash-exp:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
+    'google/gemma-4-31b-it:free',
+    'qwen/qwen3.8-27b:free',
+    'thinkingmachines/inkling:free',
+    'google/gemini-3.5-flash',
+    'google/gemini-3.1-flash-lite',
     'google/gemini-2.5-flash',
     'google/gemini-2.5-pro',
-    'anthropic/claude-3.5-sonnet',
-    'anthropic/claude-3.5-haiku',
     'deepseek/deepseek-chat',
-    'deepseek/deepseek-r1:free',
     'openai/gpt-4o-mini',
     'openai/gpt-4o',
-    'qwen/qwen-2.5-72b-instruct:free',
-    'mistralai/mistral-large-2411',
   ],
   nvidia: [
     'meta/llama-3.3-70b-instruct',
@@ -408,7 +404,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
         if (res.ok) {
           setTtsTestStatus({
             ok: true,
-            message: `Voix OpenRouter opérationnelle (${draft.api.ttsModel || 'openai/gpt-4o-mini-tts-2025-12-15'} - ${draft.api.ttsVoice || 'alloy'}) !`,
+            message: `Voix OpenRouter opérationnelle (${draft.api.ttsModel || 'openai/gpt-audio-mini'} - ${draft.api.ttsVoice || 'alloy'}) !`,
           })
         } else {
           setTtsTestStatus({ ok: false, message: `Erreur OpenRouter : ${res.error || 'Échec de synthèse'}` })
@@ -1222,6 +1218,37 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                 </div>
               )}
 
+              {/* Clé Groq : transcription Whisper gratuite des prises orales */}
+              <div className="conn-key-row">
+                <label>
+                  <span>{t.groqKeyLabel}</span>
+                  <input
+                    type="password"
+                    value={draft.api.groqKey || ''}
+                    onChange={(e) => updateApi('groqKey', e.target.value)}
+                    placeholder="gsk_…"
+                    autoComplete="off"
+                  />
+                </label>
+                <small className="conn-key-hint">{t.groqKeyHint}</small>
+              </div>
+
+              {/* Clé OpenAI (Whisper) si OpenAI n'est pas le fournisseur principal */}
+              {(draft.api.agentProvider || 'openrouter') !== 'openai' && (
+                <div className="conn-key-row">
+                  <label>
+                    <span>{t.openAiKeyLabel}</span>
+                    <input
+                      type="password"
+                      value={draft.api.openAiKey || ''}
+                      onChange={(e) => updateApi('openAiKey', e.target.value)}
+                      placeholder="sk-proj-…"
+                      autoComplete="off"
+                    />
+                  </label>
+                </div>
+              )}
+
               {/* Clé ElevenLabs (si sélectionné en TTS) */}
               {draft.api.ttsProvider === 'elevenlabs' && (
                 <div className="conn-key-row">
@@ -1382,6 +1409,20 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                 }
               />
 
+              {/* Assistant IA */}
+              <AiTaskRow
+                title={t.taskAssistant}
+                description={t.taskAssistantDesc}
+                value={draft.api.taskModelAssistant}
+                placeholder={t.useMainModelDefault}
+                onChange={(val) => updateApi('taskModelAssistant', val)}
+                onReset={() => updateApi('taskModelAssistant', '')}
+                datalistId="task-model-suggestions"
+                badgeDefault={t.defaultModelBadge}
+                badgeCustom={t.customModelBadge}
+                resetTitle={t.resetToDefault}
+              />
+
               {/* Exercices Builder */}
               <AiTaskRow
                 title={t.taskExerciseBuilder}
@@ -1450,12 +1491,40 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                 </div>
               </div>
 
+              {/* Transcription des prises orales */}
+              <div className="conn-task-row">
+                <div className="conn-task-info">
+                  <strong>{t.taskTranscription}</strong>
+                  <small>{t.taskTranscriptionDesc}</small>
+                </div>
+                <div className="conn-task-input-wrap dual">
+                  <select
+                    value={draft.api.transcriptionProvider || 'auto'}
+                    onChange={(e) => updateApi('transcriptionProvider', e.target.value as NonNullable<UserSettings['api']['transcriptionProvider']>)}
+                  >
+                    <option value="auto">{t.transcriptionAuto}</option>
+                    <option value="groq">Groq Whisper</option>
+                    <option value="openai">OpenAI Whisper</option>
+                    <option value="google">Google Gemini</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="browser">{t.transcriptionBrowser}</option>
+                  </select>
+                  {draft.api.transcriptionProvider && !['auto', 'browser'].includes(draft.api.transcriptionProvider) && (
+                    <input
+                      value={draft.api.transcriptionModel || ''}
+                      onChange={(e) => updateApi('transcriptionModel', e.target.value)}
+                      placeholder={{ groq: 'whisper-large-v3-turbo', openai: 'whisper-1', google: 'gemini-2.5-flash', openrouter: 'google/gemini-2.5-flash-lite' }[draft.api.transcriptionProvider as 'groq']}
+                    />
+                  )}
+                </div>
+              </div>
+
               {/* Analyse vidéo & élocution Speaking */}
               <AiTaskRow
                 title={t.taskSpeakingAnalysis}
                 description={t.taskSpeakingAnalysisDesc}
                 value={draft.api.taskModelSpeakingAnalysis}
-                placeholder="google/gemini-2.0-flash-exp:free (par défaut)"
+                placeholder={t.useMainModelDefault}
                 onChange={(val) => updateApi('taskModelSpeakingAnalysis', val)}
                 onReset={() => updateApi('taskModelSpeakingAnalysis', '')}
                 datalistId="task-model-suggestions"
@@ -1490,7 +1559,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
                       <input
                         value={draft.api.ttsModel || ''}
                         onChange={(e) => updateApi('ttsModel', e.target.value)}
-                        placeholder="openai/gpt-4o-mini-tts-2025-12-15"
+                        placeholder="openai/gpt-audio-mini"
                         list="tts-openrouter-model-suggestions"
                       />
                       <select

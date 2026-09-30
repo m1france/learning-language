@@ -3,6 +3,7 @@ import type { ExerciseDefinition, ExerciseMode } from './exercisesDomain'
 import { getLanguageName } from '../../languages'
 import { buildGuaranteedCrossword } from './crosswordUtils'
 import { extractAiContent, extractCleanJson, isReasoningModel } from '../aiResponseUtils'
+import { resolveLlm } from '../../lib/llm'
 
 const UI_LANG_NAMES: Record<string, string> = {
   fr: 'Français',
@@ -30,94 +31,7 @@ type ResolvedAiConfig = {
 }
 
 function resolveAiConfig(api: ApiSettings, customModelOverride?: string): ResolvedAiConfig | null {
-  const customModel = customModelOverride?.trim()
-  const provider = api.agentProvider || 'openrouter'
-
-  // 1. Try explicit configured provider
-  if (provider === 'openrouter' && api.openRouterKey?.trim()) {
-    return {
-      endpoint: 'https://openrouter.ai/api/v1/chat/completions',
-      key: api.openRouterKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'google/gemini-2.0-flash-exp:free',
-      provider: 'openrouter',
-    }
-  }
-  if (provider === 'google' && api.googleKey?.trim()) {
-    return {
-      endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-      key: api.googleKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'gemini-2.0-flash',
-      provider: 'google',
-    }
-  }
-  if (provider === 'openai' && api.openAiKey?.trim()) {
-    return {
-      endpoint: 'https://api.openai.com/v1/chat/completions',
-      key: api.openAiKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'gpt-4o-mini',
-      provider: 'openai',
-    }
-  }
-  if (provider === 'nvidia' && api.nvidiaKey?.trim()) {
-    return {
-      endpoint: 'https://integrate.api.nvidia.com/v1/chat/completions',
-      key: api.nvidiaKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'meta/llama-3.3-70b-instruct',
-      provider: 'nvidia',
-    }
-  }
-  if (provider === 'kimi' && api.kimiKey?.trim()) {
-    return {
-      endpoint: 'https://api.moonshot.cn/v1/chat/completions',
-      key: api.kimiKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'moonshot-v1-8k',
-      provider: 'kimi',
-    }
-  }
-
-  // 2. Fallback to any configured key in order
-  if (api.openRouterKey?.trim()) {
-    return {
-      endpoint: 'https://openrouter.ai/api/v1/chat/completions',
-      key: api.openRouterKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'google/gemini-2.0-flash-exp:free',
-      provider: 'openrouter',
-    }
-  }
-  if (api.googleKey?.trim()) {
-    return {
-      endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-      key: api.googleKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'gemini-2.0-flash',
-      provider: 'google',
-    }
-  }
-  if (api.openAiKey?.trim()) {
-    return {
-      endpoint: 'https://api.openai.com/v1/chat/completions',
-      key: api.openAiKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'gpt-4o-mini',
-      provider: 'openai',
-    }
-  }
-  if (api.nvidiaKey?.trim()) {
-    return {
-      endpoint: 'https://integrate.api.nvidia.com/v1/chat/completions',
-      key: api.nvidiaKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'meta/llama-3.3-70b-instruct',
-      provider: 'nvidia',
-    }
-  }
-  if (api.kimiKey?.trim()) {
-    return {
-      endpoint: 'https://api.moonshot.cn/v1/chat/completions',
-      key: api.kimiKey.trim(),
-      model: customModel || api.agentModel?.trim() || 'moonshot-v1-8k',
-      provider: 'kimi',
-    }
-  }
-
-  return null
+  return resolveLlm(api, customModelOverride)
 }
 
 export async function generateExerciseWithAi(
@@ -130,7 +44,7 @@ export async function generateExerciseWithAi(
     return { ok: false, error: 'Indique ce que tu souhaites travailler.' }
   }
 
-  const aiConfig = resolveAiConfig(api, api.taskModelExerciseBuilder)
+  const aiConfig = resolveAiConfig(api, api.taskModelExerciseBuilder || api.taskModelAssistant)
   if (!aiConfig) {
     return {
       ok: false,
