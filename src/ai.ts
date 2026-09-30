@@ -15,6 +15,8 @@ const voiceScore = (voice: SpeechSynthesisVoice, lang: Language, preferredName?:
 
 /** Single shared audio element for remote TTS playback. */
 let audioElement: HTMLAudioElement | null = null
+/** Playback speed of the current `speak` call (1 = normal). */
+let playbackRate = 1
 
 /**
  * TTS helpers:
@@ -49,6 +51,7 @@ export type SpeakResult = { engine: SpeakEngine; error?: string }
 async function playBlob(blob: Blob): Promise<void> {
   audioElement?.pause()
   audioElement = new Audio(URL.createObjectURL(blob))
+  audioElement.playbackRate = playbackRate
   await audioElement.play()
 }
 
@@ -252,6 +255,7 @@ function speakWithGoogle(text: string, lang: Language): Promise<boolean> {
       if (index >= chunks.length) { googleQueue = null; return }
       const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${tl}&q=${encodeURIComponent(chunks[index])}`
       const element = new Audio(url)
+      element.playbackRate = playbackRate
       googleQueue = { element, chunks }
       element.onplaying = () => ok(true)
       element.onended = () => { index += 1; playNext() }
@@ -263,8 +267,9 @@ function speakWithGoogle(text: string, lang: Language): Promise<boolean> {
 }
 
 /** Speak text via the provider chosen in Settings, with sensible fallbacks. */
-export async function speak(text: string, lang: Language, api: ApiSettings): Promise<SpeakResult> {
+export async function speak(text: string, lang: Language, api: ApiSettings, options: { rate?: number } = {}): Promise<SpeakResult> {
   stopSpeaking()
+  playbackRate = options.rate ?? 1
   const errors: string[] = []
   if (api.ttsProvider === 'openrouter') {
     const attempt = await speakWithOpenRouter(text, api, lang)
@@ -290,7 +295,7 @@ export async function speak(text: string, lang: Language, api: ApiSettings): Pro
     const voice = bestVoice(lang, api.ttsVoice || undefined)
     if (voice) utterance.voice = voice
     utterance.lang = getLanguageBcp47(lang)
-    utterance.rate = 0.92
+    utterance.rate = 0.92 * playbackRate
     utterance.pitch = 1
     speechSynthesis.speak(utterance)
     return { engine: 'browser' }
@@ -308,7 +313,7 @@ export async function speak(text: string, lang: Language, api: ApiSettings): Pro
   const voice = bestVoice(lang, api.ttsVoice || undefined)
   if (voice) utterance.voice = voice
   utterance.lang = getLanguageBcp47(lang)
-  utterance.rate = 0.92
+  utterance.rate = 0.92 * playbackRate
   utterance.pitch = 1
   speechSynthesis.speak(utterance)
   return { engine: 'browser', error: errors.filter(Boolean).join(' · ') }

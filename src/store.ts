@@ -2,6 +2,7 @@ import { type ApiSettings, type AppState, type Language, type LearnedWord, type 
 import { getResourceWordStats } from './features/readingProgressUtils'
 import { formatIpaPronunciation } from './features/vocabulary/phoneticUtils'
 import { matchesPhraseInflection } from './features/vocabulary/phraseMatchingService'
+import { recordWritingRecall } from './features/srs/srsStore'
 
 const stateKey = 'vivre-la-langue:state:v2'
 
@@ -93,6 +94,8 @@ export const createState = (settings: Partial<UserSettings> = {}): AppState => (
   removedTools: [],
   customCategories: [],
   customTags: [],
+  reviewLog: [],
+  activity: {},
 })
 
 export const isMathisDeviceVerified = (): boolean => {
@@ -884,31 +887,12 @@ export const deleteWriting = (state: AppState, entryId: string): AppState => {
   return { ...state, writings }
 }
 
-/** Record active usage of words during a writing session to boost SRS/knowledge */
+/** Record active usage of words during a writing session: counts as a successful recall for the SRS. */
 export const recordWordUsageInWriting = (state: AppState, usedWords: string[], language: Language): AppState => {
   if (!usedWords.length) return state
   const normalizedSet = new Set(usedWords.map((w) => normalizeWord(w)))
-  const now = new Date()
-  
-  const updatedWords = (state.words ?? []).map((word) => {
-    if (word.language !== language || !normalizedSet.has(word.normalized)) return word
-    
-    // Boost knowledge level towards active mastery (max 5 from writing, 6 is fully mastered)
-    const currentKnowledge = word.knowledge ?? 1
-    const nextKnowledge = Math.min(5, currentKnowledge + 1)
-    const nextReviewCount = (word.reviewCount ?? 0) + 1
-    const nextInterval = Math.max(1, Math.round((word.intervalDays ?? 1) * 1.6))
-    const nextDate = new Date(now.getTime() + nextInterval * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    
-    return {
-      ...word,
-      knowledge: nextKnowledge,
-      reviewCount: nextReviewCount,
-      intervalDays: nextInterval,
-      nextReview: nextDate,
-      status: nextKnowledge >= 4 ? ('learned' as const) : ('learning' as const),
-    }
-  })
-  
-  return { ...state, words: updatedWords }
+  const ids = (state.words ?? [])
+    .filter((word) => word.language === language && normalizedSet.has(word.normalized))
+    .map((word) => word.id)
+  return recordWritingRecall(state, ids)
 }

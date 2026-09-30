@@ -3,19 +3,27 @@ import type { AppState, Difficulty, Language, Resource, UiLanguage } from './dom
 import { BUILTIN_CATEGORIES, id } from './domain'
 import { addMarking, batchDeleteWords, batchMarkWordsKnown, batchUpdateWordKnowledge, batchUpdateWordTags, batchUpsertWordDetails, createState, deleteMarking, deleteResource, deleteWord, loadState, progressFor, renameMarking, resetResourceMarks, resetState, saveState, setWordMark, togglePageRead, toggleSilentMark, upsertResource, upsertWordDetails } from './store'
 import { getResourceWordStats } from './features/readingProgressUtils'
+import { addActivitySeconds } from './features/srs/srsStore'
 import { importFromFile, importFromUrl, paragraphsToResource } from './importer'
 import { Reader, Cover } from './features/Reader'
 import { LearningFocus } from './features/LearningFocus'
 import { SpeakingPage } from './features/SpeakingPage'
 import { WritingPage } from './features/writing/WritingPage'
 import { ExercisesPage } from './features/exercises/ExercisesPage'
+import { ReviewPage } from './features/srs/ReviewPage'
+import { SessionPage } from './features/session/SessionPage'
+import { SessionDock, SessionHero } from './features/session/SessionHero'
+import { currentStepId, finishReading, startSession } from './features/session/sessionPlan'
+import { buildReviewQueue } from './features/srs/srsStore'
+import { dayKey } from './features/srs/fsrs'
+import { useActivityTimer } from './features/srs/useActivityTimer'
 import { CameraProvider, useCamera } from './features/speaking/CameraContext'
 import { FloatingMiniCam } from './features/speaking/FloatingMiniCam'
 import { Settings } from './features/Settings'
 import { VocabularyVaultModal } from './features/vocabulary/VocabularyVaultModal'
 import { AddResourceModal } from './components/AddResourceModal'
 import { prompts } from './data'
-import { baseUi, copy, detectUiLanguage, UI_LANGUAGES, writeCopy } from './i18n'
+import { baseUi, copy, detectUiLanguage, learnCopy, UI_LANGUAGES, writeCopy } from './i18n'
 import { TOP_LEARNING_LANGUAGES } from './languages'
 import { doveWhite } from './assets/doveWhite'
 import { SharedLessonViewer } from './features/teacherExport/SharedLessonViewer'
@@ -48,6 +56,7 @@ import {
   Play,
   AlertCircle,
   GraduationCap,
+  Layers,
 } from 'lucide-react'
 import {
   ResourceContextMenu,
@@ -58,17 +67,20 @@ import {
   type ResourceContextTarget,
 } from './components/ResourceModals'
 
-type Page = 'home' | 'reading' | 'speaking' | 'writing' | 'exercises' | 'settings'
+type Page = 'home' | 'review' | 'session' | 'reading' | 'speaking' | 'writing' | 'exercises' | 'settings'
 
 type UI = (typeof copy)[keyof typeof copy]
 type NavItem = {
   id: Page
-  label: 'home' | 'reading' | 'speaking' | 'writing' | 'exercises'
+  label: 'home' | 'review' | 'reading' | 'speaking' | 'writing' | 'exercises'
   icon: React.ReactNode
 }
 
+const navLabel = (item: NavItem, t: UI, ui: UiLanguage) => (item.label === 'review' ? learnCopy(ui).navReview : t[item.label])
+
 const navItems: NavItem[] = [
   { id: 'home', label: 'home', icon: <Home size={18} /> },
+  { id: 'review', label: 'review', icon: <Layers size={18} /> },
   { id: 'reading', label: 'reading', icon: <BookOpen size={18} /> },
   { id: 'speaking', label: 'speaking', icon: <Mic size={18} /> },
   { id: 'writing', label: 'writing', icon: <PenLine size={18} /> },
@@ -134,6 +146,10 @@ export default function App() {
 
   const [pendingNavPage, setPendingNavPage] = useState<Page | null>(null)
   const writingDraftGuardRef = useRef<{ hasDraftMoreThan10Words: boolean; saveDraft: () => void } | null>(null)
+
+  // Minutes practised today, for the daily goal and the streak.
+  useActivityTimer(Boolean(state) && !viewingSharedLesson, (seconds) =>
+    setState((prev) => (prev ? addActivitySeconds(prev, seconds) : prev)))
 
   const toggleSide = () => {
     const next = !sideCollapsed
@@ -253,6 +269,18 @@ export default function App() {
     setPendingNavPage(null)
   }
 
+  const reviewDue = buildReviewQueue(state).ids.length
+  const sessionReading = state.dailySession?.day === dayKey() && currentStepId(state.dailySession) === 'reading'
+  const openSession = () => {
+    change((prev) => startSession(prev))
+    go('session')
+  }
+  const finishSessionReading = () => {
+    change((prev) => finishReading(prev))
+    setReaderId(null)
+    setPage('session')
+  }
+
   return (
     <CameraProvider
       language={state.settings.learningLanguage}
@@ -267,6 +295,8 @@ export default function App() {
           theme={state.settings.theme}
           toggleTheme={() => change((prev) => ({ ...prev, settings: { ...prev.settings, theme: prev.settings.theme === 'light' ? 'dark' : 'light' } }))}
           name={state.settings.name}
+          ui={ui}
+          reviewDue={reviewDue}
           collapsed={sideCollapsed}
           isAiTaskRunning={isAiTaskRunning}
           aiTaskLabel={aiTaskLabel}
@@ -313,7 +343,19 @@ export default function App() {
               onAiTaskChange={handleAiTaskChange} />
           ) : (
             <>
-              {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onNavigate={go} onContinue={(resourceId) => setReaderId(resourceId)} t={t} />}
+              {page === 'home' && <Dashboard name={state.settings.name} state={state} ui={ui} onUiLanguage={setUiLanguage} onWrite={() => go('writing')} onNavigate={go} onContinue={(resourceId) => setReaderId(resourceId)} onStartSession={openSession} t={t} />}
+              {page === 'review' && <ReviewPage state={state} ui={ui} onChange={change} onGoRead={() => go('reading')} />}
+              {page === 'session' && (
+                <SessionPage
+                  state={state}
+                  ui={ui}
+                  onChange={change}
+                  onOpenReader={(resourceId) => setReaderId(resourceId)}
+                  onFinishReading={finishSessionReading}
+                  onHome={() => go('home')}
+                  onAddText={() => go('reading')}
+                />
+              )}
               {page === 'reading' && <ReadingLibrary state={state} t={t} onOpen={(resource) => setReaderId(resource.id)} onAdd={(resource) => change((prev) => upsertResource(prev, resource))} onChange={change} onAiTaskChange={setIsAiTaskRunning} />}
               {page === 'speaking' && (
                 <SpeakingPage
@@ -365,12 +407,15 @@ export default function App() {
               )}
             </>
           )}
+          {reader && sessionReading && reader.id === state.dailySession?.resourceId && (
+            <SessionDock state={state} ui={ui} onFinish={finishSessionReading} onBack={() => { setReaderId(null); setPage('session') }} />
+          )}
         </section>
         <nav className="mobile-nav">
           {navItems.slice(1).concat(extraNavItems).map((item) => (
             <button className={page === item.id ? 'active' : ''} onClick={() => go(item.id)} key={item.id}>
-              <b>{item.icon}</b>
-              <span>{t[item.label]}</span>
+              <b>{item.icon}{item.id === 'review' && reviewDue > 0 && <i className="nav-badge">{reviewDue > 99 ? '99+' : reviewDue}</i>}</b>
+              <span>{navLabel(item, t, ui)}</span>
             </button>
           ))}
         </nav>
@@ -490,6 +535,8 @@ function Sidebar({
   theme,
   toggleTheme,
   name,
+  ui,
+  reviewDue,
   collapsed,
   isAiTaskRunning,
   aiTaskLabel,
@@ -501,6 +548,8 @@ function Sidebar({
   theme: string
   toggleTheme: () => void
   name: string
+  ui: UiLanguage
+  reviewDue: number
   collapsed: boolean
   isAiTaskRunning?: boolean
   aiTaskLabel?: string
@@ -520,13 +569,14 @@ function Sidebar({
       <nav>
         {navItems.map((item) => (
           <button
-            className={page === item.id ? 'active' : ''}
+            className={page === item.id || (item.id === 'home' && page === 'session') ? 'active' : ''}
             onClick={() => setPage(item.id)}
             key={item.id}
-            title={collapsed ? t[item.label] : undefined}
+            title={collapsed ? navLabel(item, t, ui) : undefined}
           >
-            <b>{item.icon}</b>
-            <span className="side-label">{t[item.label]}</span>
+            <b>{item.icon}{item.id === 'review' && reviewDue > 0 && collapsed && <i className="nav-badge">{reviewDue > 99 ? '99+' : reviewDue}</i>}</b>
+            <span className="side-label">{navLabel(item, t, ui)}</span>
+            {item.id === 'review' && reviewDue > 0 && !collapsed && <span className="nav-count">{reviewDue}</span>}
           </button>
         ))}
 
@@ -555,10 +605,10 @@ function Sidebar({
                 className={page === item.id ? 'active' : ''}
                 onClick={() => setPage(item.id)}
                 key={item.id}
-                title={collapsed ? t[item.label] : undefined}
+                title={collapsed ? navLabel(item, t, ui) : undefined}
               >
                 <b>{item.icon}</b>
-                <span className="side-label">{t[item.label]}</span>
+                <span className="side-label">{navLabel(item, t, ui)}</span>
               </button>
             ))}
           </div>
@@ -623,6 +673,7 @@ function Dashboard({
   onWrite,
   onNavigate,
   onContinue,
+  onStartSession,
   t,
 }: {
   name: string
@@ -632,6 +683,7 @@ function Dashboard({
   onWrite: () => void
   onNavigate: (page: Page) => void
   onContinue: (resourceId: string) => void
+  onStartSession: () => void
   t: UI
 }) {
   const { sessions, setActiveReviewSession } = useCamera()
@@ -661,6 +713,8 @@ function Dashboard({
         </div>
         <LanguageFlags ui={ui} onUiLanguage={onUiLanguage} />
       </header>
+
+      <SessionHero state={state} ui={ui} onStart={onStartSession} />
 
       {/* Top Section: Reprendre là où tu t'es arrêté */}
       <section className="dashboard-section resume-section-card">

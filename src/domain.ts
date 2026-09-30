@@ -1,3 +1,5 @@
+import type { CardState, Rating, SrsCard } from './features/srs/fsrs'
+
 export type Language = string
 /** Interface language (everything except imported content). */
 export type UiLanguage = 'en' | 'fr' | 'es' | 'zh' | 'ru' | 'pt'
@@ -76,6 +78,88 @@ export type LearnedWord = {
   reviewCount: number
   tags: string[]
   createdAt: string
+  /** Spaced-repetition memory state (FSRS). Absent until the first review. */
+  srs?: SrsCard
+}
+
+/** How a vocabulary card is presented during a review. */
+export type ReviewMode = 'recognition' | 'recall' | 'listening'
+
+export type ReviewLogEntry = {
+  id: string
+  wordId: string
+  rating: Rating
+  mode: ReviewMode | 'writing'
+  reviewedAt: string
+  /** Learning day (YYYY-MM-DD, 4 a.m. rollover). */
+  day: string
+  elapsedDays: number
+  scheduledDays: number
+  previousState: CardState
+  durationMs: number
+}
+
+/** What the learner did on a given learning day. */
+export type DayActivity = {
+  /** Active seconds in the app (visible tab, recent interaction). */
+  seconds: number
+  reviews: number
+  /** Reviews answered with anything but "Again". */
+  correct: number
+  /** Cards seen for the first time. */
+  newCards: number
+  writtenWords?: number
+  spokenSentences?: number
+  sessionDone?: boolean
+}
+
+export type LearningSettings = {
+  /** Daily goal, in minutes. */
+  dailyMinutes: number
+  newCardsPerDay: number
+  maxReviewsPerDay: number
+  /** Desired probability of recall when a card comes due. */
+  retention: number
+  maximumInterval: number
+  reviewMode: 'auto' | ReviewMode
+  autoPlayAudio: boolean
+  /** Ask the learner to type the answer on recall / listening cards. */
+  typeAnswer: boolean
+  /** Maximum cards reviewed inside the daily guided session. */
+  sessionReviewCap: number
+  sessionSteps: { review: boolean; reading: boolean; writing: boolean; speaking: boolean }
+}
+
+export type SessionStepId = 'review' | 'reading' | 'newWords' | 'writing' | 'speaking'
+export type SessionStepStatus = 'pending' | 'done' | 'skipped'
+
+export type SessionStep = {
+  id: SessionStepId
+  status: SessionStepStatus
+  completedAt?: string
+  /** Step-specific figures shown in the summary (cards, words, score…). */
+  stats?: Record<string, number>
+}
+
+/** The guided "Session du jour", persisted so it survives reloads. */
+export type DailySession = {
+  day: string
+  startedAt: string
+  completedAt?: string
+  steps: SessionStep[]
+  currentStep: number
+  resourceId?: string
+  /** Time the reading step began — words saved after it are "today's new words". */
+  readingStartedAt?: string
+  /** Words reviewed in the session and answered Again/Hard: reused for writing & speaking. */
+  struggledIds: string[]
+  /** Words saved during the reading step. */
+  newWordIds: string[]
+  /** Words proposed for the writing step (frozen when the step opens). */
+  writingWordIds?: string[]
+  /** Sentences to read aloud (frozen when the step opens). */
+  speakingSentences?: string[]
+  writingId?: string
 }
 
 export type WritingMode = 'reactivation' | 'guided' | 'sprint' | 'free'
@@ -210,6 +294,8 @@ export type UserSettings = {
   markColors: Partial<Record<string, string>>
   /** Custom keyboard shortcuts for Teacher Mode tools (tool id -> key). */
   teacherShortcuts?: Record<string, string>
+  /** Spaced repetition & daily session preferences (defaults in srsStore). */
+  learning?: Partial<LearningSettings>
   api: ApiSettings
 }
 
@@ -241,6 +327,11 @@ export type AppState = {
   customCategories: CustomCategory[]
   /** User-defined or global custom tags. */
   customTags?: string[]
+  /** Every graded review, newest last (capped). */
+  reviewLog?: ReviewLogEntry[]
+  /** Learning day (YYYY-MM-DD) → what happened that day. */
+  activity?: Record<string, DayActivity>
+  dailySession?: DailySession
 }
 
 export const todayKey = () => new Date().toISOString().slice(0, 10)

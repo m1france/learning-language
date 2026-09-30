@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { BUILTIN_CATEGORIES, id } from '../domain'
-import { copy, UI_LANGUAGES, settingsCopy, teacherCopy } from '../i18n'
+import { copy, learnCopy, UI_LANGUAGES, settingsCopy, teacherCopy } from '../i18n'
+import { DEFAULT_LEARNING } from './srs/srsStore'
+import type { LearningSettings } from '../domain'
 import { TOP_LEARNING_LANGUAGES } from '../languages'
 import { listVoices, speak, testOpenRouterTts } from '../ai'
 import { testAgentConnection } from './speaking/wordAiService'
@@ -35,6 +37,7 @@ import {
   Layers,
   Share2,
   ShieldCheck,
+  Target,
 } from 'lucide-react'
 import { MyLessonsSettingsTab } from './teacherExport/MyLessonsSettingsTab'
 import { syncService, type SyncStateInfo } from './sync/syncService'
@@ -49,7 +52,7 @@ type SettingsProps = {
   onOpenLesson?: (lesson: ExportedLesson) => void
 }
 
-type Tab = 'profile' | 'reading' | 'markings' | 'shortcuts' | 'tags-categories' | 'lessons' | 'connections' | 'data'
+type Tab = 'profile' | 'learning' | 'reading' | 'markings' | 'shortcuts' | 'tags-categories' | 'lessons' | 'connections' | 'data'
 
 const TEACHER_TOOLS_INFO = [
   { id: 'select', label: 'Sélection', desc: 'Sélectionner et déplacer des formes ou des notes' },
@@ -526,6 +529,8 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
   const update = <K extends keyof UserSettings>(key: K, value: UserSettings[K]) => setDraft((current) => ({ ...current, [key]: value }))
   const updateApi = <K extends keyof UserSettings['api']>(key: K, value: UserSettings['api'][K]) => setDraft((current) => ({ ...current, api: { ...current.api, [key]: value } }))
   const save = () => { onSave(draft); setSaved(true); window.setTimeout(() => setSaved(false), 2200) }
+  const learning: LearningSettings = { ...DEFAULT_LEARNING, ...draft.learning, sessionSteps: { ...DEFAULT_LEARNING.sessionSteps, ...draft.learning?.sessionSteps } }
+  const updateLearning = (patch: Partial<LearningSettings>) => setDraft((current) => ({ ...current, learning: { ...current.learning, ...patch } }))
 
   const currentUi: UiLanguage = draft.uiLanguage || 'fr'
   const t = settingsCopy[currentUi] || settingsCopy.fr
@@ -540,6 +545,7 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
 
   const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
     { id: 'profile', icon: <User size={16} />, label: t.tabs.profile },
+    { id: 'learning', icon: <Target size={16} />, label: learnCopy(currentUi).settingsTab },
     { id: 'reading', icon: <BookOpen size={16} />, label: t.tabs.reading },
     { id: 'markings', icon: <Palette size={16} />, label: t.tabs.markings },
     { id: 'shortcuts', icon: <Keyboard size={16} />, label: t.tabs.shortcuts },
@@ -590,6 +596,59 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
           </div>
           <aside className="settings-tip"><span><Sparkles size={16} /></span><p>{t.profileTip}</p></aside>
         </>}
+
+        {tab === 'learning' && (() => {
+          const lc = learnCopy(currentUi)
+          return <>
+            <SettingHeading title={lc.settingsTitle} detail={lc.settingsDetail} />
+            <div className="settings-fields">
+              <label>{lc.dailyGoal}
+                <select value={learning.dailyMinutes} onChange={(event) => updateLearning({ dailyMinutes: Number(event.target.value) })}>
+                  {[5, 10, 15, 20, 30, 45, 60].map((value) => <option key={value} value={value}>{value} {lc.minutesUnit}</option>)}
+                </select>
+              </label>
+              <label>{lc.newPerDay}
+                <div className="range-row"><input type="range" min="0" max="40" value={learning.newCardsPerDay} onChange={(event) => updateLearning({ newCardsPerDay: Number(event.target.value) })} /><output>{learning.newCardsPerDay}</output></div>
+                <small className="settings-field-hint">{lc.newPerDayHint}</small>
+              </label>
+              <label>{lc.maxReviews}
+                <div className="range-row"><input type="range" min="20" max="500" step="10" value={learning.maxReviewsPerDay} onChange={(event) => updateLearning({ maxReviewsPerDay: Number(event.target.value) })} /><output>{learning.maxReviewsPerDay}</output></div>
+              </label>
+              <label>{lc.retention}
+                <div className="range-row"><input type="range" min="0.8" max="0.97" step="0.01" value={learning.retention} onChange={(event) => updateLearning({ retention: Number(event.target.value) })} /><output>{Math.round(learning.retention * 100)} %</output></div>
+                <small className="settings-field-hint">{lc.retentionSettingHint}</small>
+              </label>
+              <label>{lc.maxInterval}
+                <select value={learning.maximumInterval} onChange={(event) => updateLearning({ maximumInterval: Number(event.target.value) })}>
+                  {[90, 180, 365, 730, 36500].map((value) => <option key={value} value={value}>{value === 36500 ? '∞' : `${value} ${lc.daysUnit}`}</option>)}
+                </select>
+              </label>
+              <label>{lc.reviewMode}
+                <select value={learning.reviewMode} onChange={(event) => updateLearning({ reviewMode: event.target.value as LearningSettings['reviewMode'] })}>
+                  <option value="auto">{lc.modeAuto}</option>
+                  <option value="recognition">{lc.modes.recognition}</option>
+                  <option value="recall">{lc.modes.recall}</option>
+                  <option value="listening">{lc.modes.listening}</option>
+                </select>
+                <small className="settings-field-hint">{lc.reviewModeHint}</small>
+              </label>
+              <label className="toggle-field"><span><strong>{lc.autoPlay}</strong><small>{lc.autoPlayHint}</small></span><input type="checkbox" checked={learning.autoPlayAudio} onChange={(event) => updateLearning({ autoPlayAudio: event.target.checked })} /></label>
+              <label className="toggle-field"><span><strong>{lc.typeAnswer}</strong><small>{lc.typeAnswerHint}</small></span><input type="checkbox" checked={learning.typeAnswer} onChange={(event) => updateLearning({ typeAnswer: event.target.checked })} /></label>
+            </div>
+            <SettingHeading title={lc.sessionSteps} detail="" />
+            <div className="settings-fields">
+              {(['review', 'reading', 'writing', 'speaking'] as const).map((stepId) => (
+                <label key={stepId} className="toggle-field"><span><strong>{lc.steps[stepId]}</strong></span>
+                  <input type="checkbox" checked={learning.sessionSteps[stepId]} onChange={(event) => updateLearning({ sessionSteps: { ...learning.sessionSteps, [stepId]: event.target.checked } })} />
+                </label>
+              ))}
+              <label>{lc.sessionCap}
+                <div className="range-row"><input type="range" min="10" max="150" step="5" value={learning.sessionReviewCap} onChange={(event) => updateLearning({ sessionReviewCap: Number(event.target.value) })} /><output>{learning.sessionReviewCap}</output></div>
+              </label>
+            </div>
+            <aside className="settings-tip"><span><Sparkles size={16} /></span><p>{lc.settingsTip}</p></aside>
+          </>
+        })()}
 
         {tab === 'reading' && <>
           <SettingHeading title={t.readingTitle} detail={t.readingDetail} />
