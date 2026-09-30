@@ -30,13 +30,13 @@ import {
 } from 'lucide-react'
 import type { AppState, CefrLevel, UiLanguage } from '../../domain'
 import { normalizeWord } from '../../domain'
-import { speak, speakAndWait, stopSpeaking } from '../../ai'
-import { getLanguageBcp47, getLanguageInfo } from '../../languages'
+import { speak, speakAndWait, stopSpeaking, unlockAudio } from '../../ai'
+import { getLanguageBcp47 } from '../../languages'
 import { resolveLlm, type LlmConfig } from '../../lib/llm'
 import { listen, speechRecognitionSupported, type ListenHandle } from '../../lib/speech'
 import { assistantCopy, type AssistantCopy } from '../../i18n/assistantCopy'
 import { upsertWordDetails } from '../../store'
-import { buildReviewQueue, strugglingWords } from '../srs/srsStore'
+import { strugglingWords } from '../srs/srsStore'
 import { listSpeakingTranscripts } from '../speaking/speakingStorage'
 import { buildHistory, runAgent } from './assistantAgent'
 import { buildSystemPrompt, buildVoiceDebriefPrompt } from './assistantPrompt'
@@ -47,6 +47,7 @@ import { BlockBoundary, SpecialBlock } from './blocks'
 import { BlockEnvContext, type BlockEnv, type SaveWordInput } from './blocks/shared'
 import { Markdown, parseMarkdown, type MdBlock } from './Markdown'
 import { VoiceMode, type VoiceExchange } from './VoiceMode'
+import { ModelPicker } from './ModelPicker'
 import './assistant.css'
 
 type Props = {
@@ -57,7 +58,6 @@ type Props = {
   onOpenSettings?: () => void
 }
 
-const LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 const now = () => new Date().toISOString()
 
@@ -222,9 +222,10 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   const [busyTurn, setBusyTurn] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth > 1180)
   const [query, setQuery] = useState('')
-  const [menu, setMenu] = useState<null | 'attach' | 'text' | 'writing' | 'speaking' | 'level'>(null)
+  const [menu, setMenu] = useState<null | 'attach' | 'text' | 'writing' | 'speaking' | 'model'>(null)
   const [speakingList, setSpeakingList] = useState<Awaited<ReturnType<typeof listSpeakingTranscripts>>>([])
   const [voiceOpen, setVoiceOpen] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('')
   const [offerDebrief, setOfferDebrief] = useState(false)
   const [canvas, setCanvas] = useState<{ turnId: string; index: number } | null>(null)
   const [dictating, setDictating] = useState<null | 'ui' | 'target'>(null)
@@ -251,9 +252,8 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
 
   const level: CefrLevel = state.settings.assistantLevel ?? 'B1'
   const lang = state.settings.learningLanguage
-  const langInfo = getLanguageInfo(lang)
   const api = state.settings.api
-  const cfg: LlmConfig | null = useMemo(() => resolveLlm(api, api.taskModelAssistant || api.taskModelExerciseBuilder), [api])
+  const cfg: LlmConfig | null = useMemo(() => resolveLlm(api, selectedModel || api.taskModelAssistant || api.taskModelExerciseBuilder), [api, selectedModel])
   const active = conversations.find((conversation) => conversation.id === activeId) ?? null
   const turns = active?.turns ?? []
 
@@ -475,6 +475,9 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   const voiceConversationId = useRef<string | null>(null)
   const openVoice = () => {
     if (!cfg) { setToast(c.errorNoKey); window.setTimeout(() => setToast(null), 2500); return }
+    if (voiceOpen || busyTurn) return
+    stopDictation()
+    unlockAudio()
     voiceConversationId.current = active?.id ?? null
     setVoiceOpen(true)
   }
@@ -511,6 +514,8 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
 
   const newChat = () => {
     stop()
+    setVoiceOpen(false)
+    setSelectedModel('')
     setActiveId(null)
     setDraft('')
     setAttachments([])
@@ -558,19 +563,6 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
     }, 20)
   }
 
-  // ── Suggestions built from the learner's data ──────────────────────────
-  const suggestions = useMemo(() => {
-    const out: { label: string; prompt: string; icon: React.ReactNode }[] = []
-    const struggling = strugglingWords(state, 25).length || state.words.filter((word) => word.language === lang && (word.knowledge ?? 1) <= 2).length
-    if (struggling) out.push({ label: c.strugglingSuggestion(Math.min(25, struggling)), prompt: c.strugglingPrompt, icon: <Layers size={14} /> })
-    const due = buildReviewQueue(state).ids.length
-    if (due) out.push({ label: c.dueSuggestion(due), prompt: c.duePrompt, icon: <GraduationCap size={14} /> })
-    const recentText = [...state.resources].filter((resource) => !resource.archived && resource.language === lang)
-      .sort((a, b) => (state.progress[b.id]?.updatedAt ?? b.createdAt).localeCompare(state.progress[a.id]?.updatedAt ?? a.createdAt))[0]
-    if (recentText) out.push({ label: c.textSuggestion(recentText.title), prompt: c.textPrompt(recentText.title), icon: <BookOpen size={14} /> })
-    return out
-  }, [state, lang, c])
-
   const canvasBlock = useMemo(() => {
     if (!canvas) return null
     const turn = conversations.flatMap((conversation) => conversation.turns).find((item) => item.id === canvas.turnId)
@@ -588,7 +580,6 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   }, [canvas, conversations])
 
   const empty = turns.length === 0
-  const levelLabel = `${level} · ${c.levelNames[level]}`
 
   return (
     <div className={`as-page${historyOpen ? ' with-history' : ''}`}>
@@ -611,7 +602,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
                       onBlur={() => { mutate(conversation.id, (item) => ({ ...item, title: renaming.title.trim() || item.title })); setRenaming(null) }}
                       onKeyDown={(event) => { if (event.key === 'Enter') (event.target as HTMLInputElement).blur(); if (event.key === 'Escape') setRenaming(null) }} />
                   ) : (
-                    <button type="button" className="as-row-main" onClick={() => { setActiveId(conversation.id); if (window.innerWidth <= 900) setHistoryOpen(false) }}>
+                    <button type="button" className="as-row-main" onClick={() => { setVoiceOpen(false); setSelectedModel(''); setActiveId(conversation.id); if (window.innerWidth <= 900) setHistoryOpen(false) }}>
                       {conversation.pinned && <Pin size={11} />}
                       <span>{conversation.title}</span>
                     </button>
@@ -644,12 +635,14 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
           const el = event.currentTarget
           setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80)
         }}>
-          {empty ? (
+          {voiceOpen && cfg ? (
+            <VoiceMode state={state} ui={ui} level={level} cfg={cfg} c={c}
+              history={active ? buildHistory(active.turns) : []} onExchange={onVoiceExchange}
+              onClose={(had) => { setVoiceOpen(false); if (had) setOfferDebrief(true) }} />
+          ) : empty ? (
             <div className="as-empty">
               <div className="as-hello">
-                <span className="as-mark" aria-hidden>{langInfo.flag}</span>
                 <h2>{c.greeting(state.settings.name)}</h2>
-                <p>{c.subtitle}</p>
               </div>
               <div className="as-starters">
                 {c.starters.map((starter) => (
@@ -663,16 +656,6 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
                   <span>{c.voiceIntro}</span>
                 </button>
               </div>
-              {suggestions.length > 0 && (
-                <div className="as-suggest">
-                  <span className="as-group-label">{c.forYou}</span>
-                  <div>
-                    {suggestions.map((item) => (
-                      <button key={item.label} type="button" onClick={() => void send(item.prompt)}>{item.icon} {item.label}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="as-messages">
@@ -691,7 +674,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
           )}
         </div>
 
-        {!atBottom && !empty && (
+        {!atBottom && !empty && !voiceOpen && (
           <button type="button" className="as-jump" onClick={() => { setAtBottom(true); scrollToBottom() }} aria-label="↓"><ArrowDown size={16} /></button>
         )}
 
@@ -713,7 +696,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
               rows={1}
               value={draft}
               placeholder={dictating ? c.placeholderVoice : c.placeholder}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => { if (voiceOpen) setVoiceOpen(false); setDraft(event.target.value) }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() }
                 if (event.key === 'Escape' && busyTurn) stop()
@@ -727,10 +710,9 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
             <div className="as-tools">
               <div className="as-tools-left">
                 <button type="button" className="as-tool as-pop-trigger" onClick={() => openMenu('attach')} aria-label={c.attach} title={c.attach}><Plus size={17} /></button>
-                <button type="button" className="as-tool as-level as-pop-trigger" onClick={() => openMenu('level')} title={c.level}>
-                  {levelLabel} <ChevronDown size={12} />
+                <button type="button" className="as-model-chip as-pop-trigger" disabled={Boolean(busyTurn) || voiceOpen} onClick={() => openMenu('model')} aria-expanded={menu === 'model'} title={cfg?.model}>
+                  {cfg?.model.split('/').pop()?.replace(':free', '') || (ui === 'fr' ? 'Choisir un modèle' : 'Choose a model')} <ChevronDown size={12} />
                 </button>
-                {cfg && <span className="as-model-chip" title={cfg.model}>{cfg.model.split('/').pop()?.replace(':free', '')}</span>}
               </div>
               <div className="as-tools-right">
                 {speechRecognitionSupported() && (
@@ -750,16 +732,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
               </div>
             </div>
 
-            {menu === 'level' && (
-              <div className="as-pop level">
-                {LEVELS.map((item) => (
-                  <button key={item} type="button" className={item === level ? 'on' : ''}
-                    onClick={() => { onChange((prev) => ({ ...prev, settings: { ...prev.settings, assistantLevel: item } })); setMenu(null) }}>
-                    <b>{item}</b> {c.levelNames[item]} {item === level && <Check size={13} />}
-                  </button>
-                ))}
-              </div>
-            )}
+            {menu === 'model' && <ModelPicker api={api} cfg={cfg} ui={ui} onSelect={(model) => { setSelectedModel(model); setMenu(null) }} />}
             {menu === 'attach' && (
               <div className="as-pop">
                 <button type="button" onClick={() => setMenu('text')}><BookOpen size={14} /> {c.attachText}</button>
@@ -812,13 +785,6 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
           </div>
         </div>
       </main>
-
-      {voiceOpen && cfg && (
-        <VoiceMode state={state} ui={ui} level={level} cfg={cfg} c={c}
-          history={active ? buildHistory(active.turns) : []}
-          onExchange={onVoiceExchange}
-          onClose={(had) => { setVoiceOpen(false); if (had) setOfferDebrief(true) }} />
-      )}
 
       {canvasBlock && (
         <div className="as-canvas" role="dialog" aria-modal="true">

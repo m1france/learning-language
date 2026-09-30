@@ -1,16 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Mic, MicOff, PhoneOff, X } from 'lucide-react'
+import { Mic, MicOff, PhoneOff } from 'lucide-react'
 import type { AppState, CefrLevel, UiLanguage } from '../../domain'
-import { speakAndWait, stopSpeaking, unlockAudio } from '../../ai'
+import { speakAndWait, stopSpeaking } from '../../ai'
 import { getLanguageBcp47 } from '../../languages'
 import type { ChatMessage, LlmConfig } from '../../lib/llm'
 import { isIOS, listen, speechRecognitionSupported, type ListenHandle } from '../../lib/speech'
 import type { AssistantCopy } from '../../i18n/assistantCopy'
 import { buildVoicePrompt, VOICE_SCENARIOS } from './assistantPrompt'
 import { parseVoiceReply, runAgent } from './assistantAgent'
-import type { VoiceScenario } from './assistantTypes'
 
-type Phase = 'setup' | 'idle' | 'listening' | 'thinking' | 'speaking'
+type Phase = 'idle' | 'listening' | 'thinking' | 'speaking'
 
 export type VoiceExchange = { user?: string; assistant?: string; fix?: string }
 
@@ -27,9 +26,9 @@ type Props = {
 }
 
 export function VoiceMode({ state, ui, level, cfg, c, history, onExchange, onClose }: Props) {
-  const [phase, setPhase] = useState<Phase>('setup')
-  const [scenario, setScenario] = useState<VoiceScenario>(VOICE_SCENARIOS[0])
-  const [custom, setCustom] = useState('')
+  const [phase, setPhase] = useState<Phase>('idle')
+  const scenario = VOICE_SCENARIOS[0]
+  const custom = ''
   const [muted, setMuted] = useState(false)
   const [caption, setCaption] = useState('')
   const [heard, setHeard] = useState('')
@@ -58,11 +57,13 @@ export function VoiceMode({ state, ui, level, cfg, c, history, onExchange, onClo
 
   // Microphone level for the orb (visual only; skipped on iOS where it competes with recognition).
   useEffect(() => {
-    if (phase === 'setup' || isIOS()) return
+    if (isIOS() || !supported) return
+    let disposed = false
     let stream: MediaStream | null = null
     let frame = 0
     let context: AudioContext | null = null
     void navigator.mediaDevices?.getUserMedia({ audio: true }).then((media) => {
+      if (disposed) { media.getTracks().forEach((track) => track.stop()); return }
       stream = media
       context = new AudioContext()
       const analyser = context.createAnalyser()
@@ -79,11 +80,12 @@ export function VoiceMode({ state, ui, level, cfg, c, history, onExchange, onClo
       tick()
     }).catch(() => undefined)
     return () => {
+      disposed = true
       cancelAnimationFrame(frame)
       stream?.getTracks().forEach((track) => track.stop())
       void context?.close().catch(() => undefined)
     }
-  }, [phase === 'setup']) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supported]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const stopListening = () => {
     listenRef.current?.abort()
@@ -177,11 +179,16 @@ export function VoiceMode({ state, ui, level, cfg, c, history, onExchange, onClo
     onClose(exchangesRef.current > 0)
   }
 
-  useEffect(() => () => {
-    activeRef.current = false
-    abortRef.current?.abort()
-    listenRef.current?.abort()
-    stopSpeaking()
+  useEffect(() => {
+    // Defer kickoff so React StrictMode can cancel the first setup cleanly.
+    const timer = window.setTimeout(start, 0)
+    return () => {
+      window.clearTimeout(timer)
+      activeRef.current = false
+      abortRef.current?.abort()
+      listenRef.current?.abort()
+      stopSpeaking()
+    }
   }, [])
 
   const tapOrb = () => {
@@ -198,40 +205,14 @@ export function VoiceMode({ state, ui, level, cfg, c, history, onExchange, onClo
     else if (phase === 'idle' && activeRef.current) startListening()
   }
 
-  if (phase === 'setup') {
-    return (
-      <div className="vm-overlay" role="dialog" aria-label={c.voiceTitle}>
-        <button type="button" className="vm-close" onClick={() => onClose(false)} aria-label={c.close}><X size={18} /></button>
-        <div className="vm-setup">
-          <h2>{c.voiceTitle}</h2>
-          <p>{c.voiceIntro}</p>
-          <div className="vm-scenarios">
-            {VOICE_SCENARIOS.map((item) => (
-              <button key={item.id} type="button" className={scenario.id === item.id && !custom ? 'on' : ''} onClick={() => { setScenario(item); setCustom('') }}>
-                <span aria-hidden>{item.icon}</span>
-                {c.scenarios[item.id as keyof AssistantCopy['scenarios']]}
-              </button>
-            ))}
-          </div>
-          <input className="vm-custom" value={custom} onChange={(event) => setCustom(event.target.value)} placeholder={c.customScenario} />
-          {!supported && <p className="vm-error">{c.voiceUnsupported}</p>}
-          {error && <p className="vm-error">{error}</p>}
-          <button type="button" className="vm-start" onClick={() => { unlockAudio(); setPhase('idle'); window.setTimeout(start, 50) }} disabled={!supported}>
-            <Mic size={18} /> {c.startTalking}
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   const status = phase === 'listening' ? c.listening : phase === 'speaking' ? c.speaking : phase === 'thinking' ? c.thinking : muted ? c.unmute : c.tapToTalk
 
   return (
-    <div className={`vm-overlay live ${phase}`} role="dialog" aria-label={c.voiceTitle}>
+    <div className={`vm-overlay live ${phase}`} role="region" aria-label={c.voiceTitle}>
       <div className="vm-stage">
         <button type="button" className="vm-orb" onClick={tapOrb} aria-label={phase === 'speaking' ? c.tapToInterrupt : c.tapToTalk}
           style={{ ['--lvl' as string]: phase === 'listening' ? level01.toFixed(2) : '0' }}>
-          <span className="vm-orb-core" />
+          <span className="vm-orb-core"><span className="vm-face"><i /><i /></span></span>
           <span className="vm-orb-ring" />
         </button>
         <p className="vm-status" aria-live="polite">{status}</p>

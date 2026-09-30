@@ -163,7 +163,7 @@ const fr: AssistantCopy = {
   dictateStop: 'Arrêter la dictée',
   level: 'Niveau',
   levelNames: { A1: 'Débutant', A2: 'Élémentaire', B1: 'Intermédiaire', B2: 'Avancé', C1: 'Autonome', C2: 'Maîtrise' },
-  voiceMode: 'Conversation vocale',
+  voiceMode: 'Conversation naturelle',
   thinking: 'Réflexion…',
   thinkingDone: 'Réflexion',
   showReasoning: 'Voir le raisonnement',

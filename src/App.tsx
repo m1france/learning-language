@@ -849,7 +849,6 @@ function Dashboard({
 function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: { state: AppState; t: UI; onOpen: (r: Resource) => void; onAdd: (r: Resource) => void; onChange: (state: AppState | ((prev: AppState) => AppState)) => void; onAiTaskChange?: (running: boolean) => void }) {
   const ui = state.settings.uiLanguage
   const [type, setType] = useState('all')
-  const [difficulty, setDifficulty] = useState<Difficulty | 'all'>('all')
   const [adding, setAdding] = useState(false)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [vocabVaultOpen, setVocabVaultOpen] = useState(false)
@@ -935,13 +934,13 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
   const filtered = useMemo(() => {
     if (type === 'archive') {
       return state.resources.filter(
-        (resource) => resource.archived && (difficulty === 'all' || resource.difficulty === difficulty),
+        (resource) => resource.archived,
       )
     }
     return state.resources.filter(
-      (resource) => !resource.archived && (type === 'all' || resource.type === type) && (difficulty === 'all' || resource.difficulty === difficulty),
+      (resource) => !resource.archived && (type === 'all' || resource.type === type),
     )
-  }, [state.resources, type, difficulty])
+  }, [state.resources, type])
 
   const learningWordsCount = useMemo(
     () => (state.words ?? []).filter((w) => w.language === state.settings.learningLanguage).length,
@@ -1018,9 +1017,6 @@ function ReadingLibrary({ state, t, onOpen, onAdd, onChange, onAiTaskChange }: {
     </header>
     {hasResources && <section className="filter-row">
       <div className="segmented">{types.map((item) => <button className={type === item ? 'selected' : ''} onClick={() => setType(item)} key={item}>{item === 'all' ? t.all : labelFor(item)}</button>)}</div>
-      <div className="filter-right-group">
-        <select value={difficulty} onChange={(e) => setDifficulty(e.target.value as Difficulty | 'all')}><option value="all">{t.allLevels}</option>{(['beginner', 'intermediate', 'advanced', 'native'] as Difficulty[]).map((level) => <option value={level} key={level}>{t.difficulty[level]}</option>)}</select>
-      </div>
     </section>}
     {hasResources
       ? <section className="resource-grid">

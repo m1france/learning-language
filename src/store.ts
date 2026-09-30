@@ -43,7 +43,7 @@ export const defaultSettings: UserSettings = {
   teacherShortcuts: DEFAULT_TEACHER_SHORTCUTS,
   api: {
     agentProvider: 'openrouter',
-    agentModel: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    agentModel: '',
     openRouterKey: '',
     openRouterModel: '',
     openAiKey: '',
@@ -88,6 +88,8 @@ const RETIRED_MODELS = new Set([
   'anthropic/claude-3.5-haiku',
   'mistralai/mistral-large-2411',
   'openai/gpt-4o-audio-preview',
+  // Removed on purpose (2026-09-30): text-only, it broke audio analyses when used as a silent fallback.
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
 ])
 
 /** Clears retired model ids so each task falls back to a model that answers. */

@@ -1,7 +1,7 @@
 import type { ApiSettings, Language, UiLanguage } from '../../domain'
 import { getLanguageName, getUiLanguageName } from '../../languages'
 import { blobToBase64, decodeAudio, encodeWav, findPauses, toSpeechPcm } from '../../lib/audio'
-import { acceptsAudio, chatWithFallback, llmFor, parseJsonLoose, resolveLlm, type ContentPart, type LlmConfig } from '../../lib/llm'
+import { acceptsAudio, chat, parseJsonLoose, resolveLlm, type ContentPart } from '../../lib/llm'
 import type { SessionTranscript, SpeakingVideoAdviceCategory, SpeakingVideoAdviceItem, SpeakingVideoAnalysis } from './speakingStorage'
 import { speechStats } from './transcriptionService'
 
@@ -77,12 +77,7 @@ Reply with JSON only:
   const userContent: ContentPart[] = [{ type: 'text', text: context }]
   if (audioPart) userContent.push(audioPart)
 
-  const configs: LlmConfig[] = [primary]
-  // A text-only fallback so a paid or broken audio model never blocks the analysis.
-  const textFallback = primary.provider === 'openrouter' ? llmFor(options.api, 'openrouter', 'nvidia/nemotron-3-ultra-550b-a55b:free') : null
-  if (textFallback && textFallback.model !== primary.model) configs.push(textFallback)
-
-  const result = await chatWithFallback(configs, {
+  const result = await chat(primary, {
     title: 'Vivre la langue · Coach oral',
     temperature: 0.3,
     maxTokens: 5000,

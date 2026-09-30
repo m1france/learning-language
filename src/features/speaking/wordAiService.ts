@@ -42,7 +42,7 @@ export function getAgentConfig(
       return {
         endpoint: 'https://openrouter.ai/api/v1/chat/completions',
         key,
-        model: customModel || api.agentModel?.trim() || 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        model: customModel || api.agentModel?.trim() || 'thinkingmachines/inkling:free',
       }
     }
     case 'nvidia': {
@@ -87,7 +87,7 @@ export function getAgentConfig(
       return {
         endpoint: 'https://openrouter.ai/api/v1/chat/completions',
         key,
-        model: customModel || api.agentModel?.trim() || 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        model: customModel || api.agentModel?.trim() || 'thinkingmachines/inkling:free',
       }
     }
   }

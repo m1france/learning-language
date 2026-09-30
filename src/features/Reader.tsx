@@ -251,7 +251,6 @@ export function Cover({
       title={editHint ?? ''}
     >
       {inner}
-      <span className="cover-edit-badge"><Pencil size={11} /></span>
     </button>
   )
 }
@@ -296,7 +295,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const [wikiArmed, setWikiArmed] = useState(false)
   const [wikiDefaultTab, setWikiDefaultTab] = useState<DictionaryTabId>(getSavedDefaultTab)
   const [focusOpen, setFocusOpen] = useState(false)
-  const [leftCollapsed, setLeftCollapsed] = useState(() => localStorage.getItem('vivre-reader-left-collapsed') === '1')
+  const [markingsOpen, setMarkingsOpen] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; markingId: string } | null>(null)
   const [pageContextMenu, setPageContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [wordContextMenu, setWordContextMenu] = useState<{ x: number; y: number; raw: string; sentence: string; isSaved: boolean; anchorRect?: AnchorRect } | null>(null)
@@ -670,12 +669,6 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     onBack()
   }
 
-  const toggleLeftPanel = () => {
-    const next = !leftCollapsed
-    setLeftCollapsed(next)
-    localStorage.setItem('vivre-reader-left-collapsed', next ? '1' : '0')
-  }
-
   useEffect(() => {
     setOriginals(loadOriginals(resource.id))
   }, [resource.id, resource.chapters])
@@ -1044,7 +1037,8 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   }
 
   const wordStats = useMemo(() => getResourceWordStats(state, resource), [state.words, state.knownWords, resource])
-  const progress = Math.round(((safePage + 1) / pages.length) * 100)
+  const readCount = pages.filter((_, index) => state.readPages?.[`${resource.id}:p${index}`]).length
+  const progress = Math.round(readCount / Math.max(1, pages.length) * 100)
   const activeType = markMode && markMode !== 'silent' ? markMode : null
 
   const handleWordContextMenu = (raw: string, entry: Entry, event: React.MouseEvent) => {
@@ -1081,77 +1075,53 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     onContextMenu={handlePageContextMenu}>
     <header className="reader-top">
       <button className="text-button" onClick={(event) => { event.stopPropagation(); onBack() }}><ArrowLeft size={16} /> {t.back.replace('←', '').trim()}</button>
-      <div className="reader-controls">
-        <button className="control control-learning-focus" onClick={(event) => { event.stopPropagation(); startFocus() }}><Target size={14} /> {t.focus}</button>
-        <button className="control control-focus desktop-reader-control" onClick={(event) => { event.stopPropagation(); onOpenFocus(resource) }}><GraduationCap size={14} /> {t.teacherMode}</button>
-        <button className="control desktop-reader-control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.min(26, fontSize + 1)) }}>A+</button>
-        <button className="control desktop-reader-control" onClick={(event) => { event.stopPropagation(); setFontSize(Math.max(15, fontSize - 1)) }}>A−</button>
-        <select className="control page-size desktop-reader-control" value={settings.readerPageSize} onClick={(event) => event.stopPropagation()} onChange={(event) => { onPageSize(Number(event.target.value)); setPageIndex(0) }}>
-          {PAGE_SIZE_OPTIONS.map((size) => <option value={size} key={size}>{size} {t.wordsPerPage}</option>)}
-        </select>
-      </div>
     </header>
 
-    <section className={`reader-layout ${leftCollapsed ? 'left-collapsed' : ''}`}>
-      <aside className={`reader-aside ${leftCollapsed ? 'collapsed' : ''}`}>
-        <div className="reader-aside-inner">
-          <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => pickCover(event.target.files?.[0])} />
-          <div className="cover-wrap">
-            <Cover
-              cover={resource.cover}
-              coverImage={resource.coverImage}
-              type={categoryLabel(resource.type)}
-              isAiGenerated={resource.isAiGenerated}
-              onClick={() => fileInputRef.current?.click()}
-              onContextMenu={handleCoverContextMenu}
-              editHint={t.coverChange}
-            />
-            <button
-              className="cover-hide-info-btn"
-              onClick={(event) => { event.stopPropagation(); toggleLeftPanel() }}
-              title={resT.hideResourceInfo}
-              aria-label={resT.hideResourceInfo}
-            >
-              <EyeOff size={14} />
-            </button>
+    <div className="reader-banner">
+      <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => pickCover(event.target.files?.[0])} />
+      <div className="reader-banner-cover">
+        <Cover cover={resource.cover} coverImage={resource.coverImage} type={categoryLabel(resource.type)} isAiGenerated={false}
+          onClick={() => fileInputRef.current?.click()} onContextMenu={handleCoverContextMenu} editHint={t.coverChange} />
+      </div>
+      <div className="reader-banner-heading">
+        <span className="eyebrow">{categoryLabel(resource.type)}</span>
+        {editingTitle
+          ? <input className="title-inline" autoFocus defaultValue={resource.title} onClick={(e) => e.stopPropagation()}
+              onBlur={(e) => saveTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(e.currentTarget.value); if (e.key === 'Escape') setEditingTitle(false) }} />
+          : <h1><button title={t.renameHint} onClick={(e) => { e.stopPropagation(); setEditingTitle(true) }}>{resource.title}</button></h1>}
+        {resource.author && !isGenericImportedAuthor(resource.author) && <p>{resource.author}</p>}
+      </div>
+      <div className="reader-controls">
+        <button className="control" title={t.focus} aria-label={t.focus} onClick={(e) => { e.stopPropagation(); startFocus() }}><Target size={19} /></button>
+        <button className="control desktop-reader-control" title={t.teacherMode} aria-label={t.teacherMode} onClick={(e) => { e.stopPropagation(); onOpenFocus(resource) }}><GraduationCap size={19} /></button>
+        <button className={`control ${markingsOpen ? 'active' : ''}`} title={t.marking} aria-label={t.marking} aria-expanded={markingsOpen} aria-controls="reader-markings" onClick={(e) => { e.stopPropagation(); setMarkingsOpen(!markingsOpen) }}><Pencil size={18} /></button>
+        <details className="reader-display-options" onClick={(e) => e.stopPropagation()}>
+          <summary title={ui === 'fr' ? 'Affichage' : 'Display'} aria-label={ui === 'fr' ? 'Affichage' : 'Display'}>Aa</summary>
+          <div>
+            <button className="control" aria-label={ui === 'fr' ? 'Agrandir le texte' : 'Larger text'} onClick={() => setFontSize(Math.min(26, fontSize + 1))}>A+</button>
+            <button className="control" aria-label={ui === 'fr' ? 'Réduire le texte' : 'Smaller text'} onClick={() => setFontSize(Math.max(15, fontSize - 1))}>A−</button>
+            <select className="control page-size" aria-label={t.wordsPerPage} value={settings.readerPageSize} onChange={(e) => { onPageSize(Number(e.target.value)); setPageIndex(0) }}>
+              {PAGE_SIZE_OPTIONS.map((size) => <option value={size} key={size}>{size} {t.wordsPerPage}</option>)}
+            </select>
           </div>
-          <div className="reader-aside-meta">
-            <span className="tag">{categoryLabel(resource.type)}</span>
-            {editingTitle
-              ? <input className="title-inline" autoFocus defaultValue={resource.title}
-                onClick={(event) => event.stopPropagation()}
-                onBlur={(event) => saveTitle(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter') saveTitle((event.target as HTMLInputElement).value); if (event.key === 'Escape') setEditingTitle(false) }} />
-              : <h2 className="title-clickable" title={t.renameHint} onClick={(event) => { event.stopPropagation(); setEditingTitle(true) }}>{resource.title}</h2>}
-            {resource.author && !isGenericImportedAuthor(resource.author) && <p>{resource.author}</p>}
-          </div>
-          <div className="reader-progress">
-            <div>
-              <span>{t.progress}</span>
-              <strong>{wordStats.totalUnique > 0 ? `${wordStats.knownCount} / ${wordStats.totalUnique} (${wordStats.percentage}%)` : `${progress}%`}</strong>
-            </div>
-            <i><b style={{ width: `${wordStats.totalUnique > 0 ? wordStats.percentage : progress}%` }} /></i>
-          </div>
-          <div className="reader-page-nav">
-            <button aria-label={t.previous} disabled={safePage === 0} onClick={(event) => { event.stopPropagation(); gotoPage(safePage - 1) }}><ChevronLeft size={18} /></button>
-            <span>{safePage + 1} / {pages.length}</span>
-            <button aria-label={t.next} disabled={safePage >= pages.length - 1} onClick={(event) => { event.stopPropagation(); gotoPage(safePage + 1) }}><ChevronRight size={18} /></button>
-          </div>
-        </div>
-      </aside>
+        </details>
+      </div>
+    </div>
+    <div className="reader-journey">
+      <div className="reader-journey-status">
+        <span>{readCount} / {pages.length} {ui === 'fr' ? 'pages lues' : 'pages read'}</span>
+        <progress value={progress} max={100} aria-label={t.progress} />
+        <small>{wordStats.knownCount} / {wordStats.totalUnique} {ui === 'fr' ? 'mots connus' : 'known words'}</small>
+      </div>
+      <div className="reader-page-nav">
+        <button aria-label={t.previous} disabled={safePage === 0} onClick={() => gotoPage(safePage - 1)}><ChevronLeft size={18} /></button>
+        <span>{safePage + 1} / {pages.length}</span>
+        <button aria-label={t.next} disabled={safePage >= pages.length - 1} onClick={() => gotoPage(safePage + 1)}><ChevronRight size={18} /></button>
+      </div>
+    </div>
 
-      {leftCollapsed && (
-        <button
-          className="reader-toggle-left-btn collapsed"
-          onClick={(event) => { event.stopPropagation(); toggleLeftPanel() }}
-          title="Afficher les informations de la ressource"
-          aria-label="Afficher les informations de la ressource"
-        >
-          <ChevronRight size={16} />
-        </button>
-      )}
-
-      <article className={`reading-text ${settings.readerWidth} ${leftCollapsed ? 'left-free' : ''}`}>
+    <section className="reader-layout reader-layout-focused">
+      <article className={`reading-text ${settings.readerWidth}`}>
         {page.map((entry) => {
           const paragraphKey = `${entry.chapterIndex}:${entry.paragraphIndex}`
           const original = originals[paragraphKey]
@@ -1209,7 +1179,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
         </div>
       </article>
 
-      <aside className="reader-right">
+      <aside id="reader-markings" className={`reader-right reader-markings-drawer ${markingsOpen ? 'open' : ''}`} hidden={!markingsOpen}>
         <div className="mark-panel" onClick={(event) => event.stopPropagation()}>
           <span className="eyebrow">{t.marking.toUpperCase()}</span>
           {markings.map((type) => {

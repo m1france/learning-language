@@ -687,3 +687,36 @@
 .as-reasoning button.live { color: var(--muted) !important; cursor: default; }
 .as-reasoning button:disabled { opacity: 1; cursor: default; }
 .as-reasoning button .as-dots { margin-right: 2px; }
+
+/* Quiet workspace with a single visual centre of gravity. */
+.as-new { justify-content: flex-start; padding: 10px 8px; border: 0; background: transparent; border-radius: 9px; font-size: 14px; font-weight: 500; }
+.as-new:hover { background: var(--as-hover); }
+.as-empty { max-width: 780px; margin: auto; padding-top: clamp(32px, 8vh, 100px); }
+.as-hello { text-align: center; margin-bottom: 34px; }
+.as-hello h2 { max-width: 650px; margin: 0 auto; font-size: clamp(26px, 3vw, 38px); line-height: 1.2; font-weight: 500; }
+.as-starters { gap: 12px; }
+.as-starters > button { min-height: 98px; padding: 18px; border-radius: 16px; background: transparent; box-shadow: none; }
+.as-starters > button:hover { background: var(--white); box-shadow: none; }
+.as-starters span { font-size: 12px; }
+.as-starters .as-starter-voice { justify-content: center; min-height: 54px; margin-top: 4px; background: transparent; border: 1px solid var(--line); color: var(--ink); }
+.as-starters .as-starter-voice span { display: none; }
+.as-starters .as-starter-voice:hover { background: var(--as-hover); }
+button.as-model-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 2px; max-width: min(330px, 40vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+button.as-model-chip:hover { color: var(--ink); }
+.as-model-picker { width: min(390px, calc(100vw - 70px)); max-height: 330px; overflow-y: auto; }
+.as-model-picker label { display: block; padding: 8px; font-size: 12px; color: var(--muted); }
+.as-model-picker input { display: block; width: 100%; padding: 10px; margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); }
+.as-model-picker p { margin: 8px; font-size: 12px; color: var(--muted); }
+.as-model-picker button { overflow-wrap: anywhere; }
+.as-thread:has(.vm-overlay) { display: flex; }
+.as-thread .vm-overlay { position: relative; inset: auto; z-index: auto; flex: 1; min-height: 400px; padding: 24px 16px; background: none; color: var(--ink); }
+.as-thread .vm-status, .as-thread .vm-heard, .as-thread .vm-fixes h3 { color: var(--muted); }
+.as-thread .vm-controls { position: static; transform: none; margin-top: 24px; }
+.as-thread .vm-ctrl { width: 44px; height: 44px; background: var(--as-hover); }
+.as-thread .vm-ctrl.end { background: #d84a3a; color: #fff; }
+.as-thread .vm-fixes { position: static; margin-top: 20px; width: min(540px, 100%); max-height: 160px; background: var(--white); border-color: var(--line); }
+.as-thread .vm-orb { animation: vm-float 4s ease-in-out infinite; }
+.vm-face { position: absolute; inset: 40% 28%; display: flex; justify-content: space-between; align-items: center; }
+.vm-face i { width: 9px; height: 13px; background: #492e29; border-radius: 50%; }
+@keyframes vm-float { 50% { translate: 0 -10px; } }
+@media (max-width: 600px) { .as-empty { padding-top: 24px; } .as-starters > button { padding: 14px; } .as-thread .vm-overlay { min-height: 340px; } }

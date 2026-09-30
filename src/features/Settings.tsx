@@ -83,13 +83,13 @@ const AGENT_PROVIDERS: {
   {
     id: 'openrouter',
     name: 'OpenRouter',
-    detail: 'Accès universel (Nemotron, Claude, GPT, Llama, Gemini…)',
-    defaultModel: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    detail: 'Accès universel (Inkling, Qwen, Gemma, Claude, GPT, Gemini…)',
+    defaultModel: 'thinkingmachines/inkling:free',
     keyField: 'openRouterKey',
     keyPlaceholder: 'sk-or-v1-…',
     keyLabel: 'Clé API OpenRouter',
     keyHint: 'Permet d’accéder à de nombreux modèles gratuits ou payants avec une seule clé (openrouter.ai).',
-    examples: 'nvidia/nemotron-3-ultra-550b-a55b:free, google/gemma-4-31b-it:free, google/gemini-3.5-flash',
+    examples: 'thinkingmachines/inkling:free, qwen/qwen3.8-27b:free, google/gemini-3.5-flash',
   },
   {
     id: 'nvidia',
@@ -161,11 +161,12 @@ const OPENROUTER_VOICES = [
 
 const PROVIDER_MODEL_PRESETS: Record<string, string[]> = {
   openrouter: [
-    'nvidia/nemotron-3-ultra-550b-a55b:free',
-    'nvidia/nemotron-3-super-120b-a12b:free',
-    'google/gemma-4-31b-it:free',
-    'qwen/qwen3.8-27b:free',
     'thinkingmachines/inkling:free',
+    'thinkingmachines/inkling-small:free',
+    'qwen/qwen3.8-27b:free',
+    'nvidia/nemotron-3.5-lightning:free',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+    'google/gemma-4-31b-it:free',
     'google/gemini-3.5-flash',
     'google/gemini-3.1-flash-lite',
     'google/gemini-2.5-flash',

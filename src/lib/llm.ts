@@ -22,7 +22,7 @@ const ENDPOINTS: Record<AgentProvider, string> = {
 }
 
 export const DEFAULT_MODELS: Record<AgentProvider, string> = {
-  openrouter: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+  openrouter: 'thinkingmachines/inkling:free',
   google: 'gemini-2.5-flash',
   openai: 'gpt-4o-mini',
   nvidia: 'meta/llama-3.3-70b-instruct',
