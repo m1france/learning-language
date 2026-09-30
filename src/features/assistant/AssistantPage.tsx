@@ -41,7 +41,7 @@ import { listSpeakingTranscripts } from '../speaking/speakingStorage'
 import { buildHistory, runAgent } from './assistantAgent'
 import { buildSystemPrompt, buildVoiceDebriefPrompt } from './assistantPrompt'
 import { deleteConversation, listConversations, saveConversation } from './assistantStorage'
-import { ASSISTANT_TOOLS, autoExamples, executeTool, TOOL_LABELS } from './assistantTools'
+import { ASSISTANT_TOOLS, autoExamples, effortFor, executeTool, TOOL_LABELS, wantsLearnerData } from './assistantTools'
 import type { Attachment, BlockState, ChatTurn, Conversation } from './assistantTypes'
 import { BlockBoundary, SpecialBlock } from './blocks'
 import { BlockEnvContext, type BlockEnv, type SaveWordInput } from './blocks/shared'
@@ -162,15 +162,16 @@ const Message = memo(function Message({ turn, streaming, isLast, env, onBlock, o
           ))}
         </ul>
       ) : null}
-      {thinking && (
-        <div className="as-thinking"><span className="as-dots"><i /><i /><i /></span> {c.thinking}</div>
-      )}
-      {turn.reasoning && !turn.voice && (
+      {(thinking || (turn.reasoning && !turn.voice)) && (
         <div className="as-reasoning">
-          <button type="button" onClick={() => setShowReasoning(!showReasoning)}>
-            <Sparkles size={12} /> {showReasoning ? c.hideReasoning : c.showReasoning} <ChevronDown size={12} className={showReasoning ? 'open' : ''} />
+          <button type="button" className={thinking ? 'live' : ''} disabled={!turn.reasoning}
+            onClick={() => setShowReasoning(!showReasoning)} aria-expanded={showReasoning}
+            aria-label={showReasoning ? c.hideReasoning : c.showReasoning} title={showReasoning ? c.hideReasoning : c.showReasoning}>
+            {thinking ? <span className="as-dots"><i /><i /><i /></span> : <Sparkles size={12} />}
+            {thinking ? c.thinking : c.thinkingDone}
+            {turn.reasoning && <ChevronDown size={12} className={showReasoning ? 'open' : ''} />}
           </button>
-          {showReasoning && <p>{turn.reasoning}</p>}
+          {showReasoning && turn.reasoning && <p>{turn.reasoning}</p>}
         </div>
       )}
       {turn.content && (
@@ -354,9 +355,10 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
     const controller = new AbortController()
     abortRef.current = controller
     onAiTaskChange?.(true)
-    const toolsOk = !toolless.has(cfg.model)
     const lastUser = [...conversation.turns].reverse().find((turn) => turn.role === 'user')
-    const examples = !toolsOk && lastUser ? autoExamples(stateRef.current, lastUser.content) : []
+    const needsData = Boolean(lastUser && wantsLearnerData(lastUser.content, Boolean(lastUser.attachments?.length)))
+    const toolsOk = needsData && !toolless.has(cfg.model)
+    const examples = needsData && !toolsOk && lastUser ? autoExamples(stateRef.current, lastUser.content) : []
     const system = [
       buildSystemPrompt(stateRef.current, { level, ui, toolsAvailable: toolsOk }),
       examples.length ? `\n# Sentences from the learner's texts that may be relevant\n${examples.map((example) => `- "${example.text}" (from "${example.title}")`).join('\n')}` : '',
@@ -374,6 +376,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
         system,
         messages: buildHistory(conversation.turns),
         tools: toolsOk ? ASSISTANT_TOOLS : undefined,
+        reasoningEffort: effortFor(lastUser?.content ?? ''),
         executeTool: (name, args) => executeTool(stateRef.current, name, args, ui === 'fr' ? 'fr' : 'en'),
         signal: controller.signal,
         callbacks: {

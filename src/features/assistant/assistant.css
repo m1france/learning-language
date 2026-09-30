@@ -682,3 +682,8 @@
   .vm-controls { bottom: 20px; }
   .as-jump { bottom: 110px; }
 }
+
+/* One row: dots/sparkle, label, chevron right after it. */
+.as-reasoning button.live { color: var(--muted) !important; cursor: default; }
+.as-reasoning button:disabled { opacity: 1; cursor: default; }
+.as-reasoning button .as-dots { margin-right: 2px; }

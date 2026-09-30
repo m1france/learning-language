@@ -48,6 +48,7 @@ export type AssistantCopy = {
   levelNames: Record<'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2', string>
   voiceMode: string
   thinking: string
+  thinkingDone: string
   showReasoning: string
   hideReasoning: string
   copy: string
@@ -164,6 +165,7 @@ const fr: AssistantCopy = {
   levelNames: { A1: 'Débutant', A2: 'Élémentaire', B1: 'Intermédiaire', B2: 'Avancé', C1: 'Autonome', C2: 'Maîtrise' },
   voiceMode: 'Conversation vocale',
   thinking: 'Réflexion…',
+  thinkingDone: 'Réflexion',
   showReasoning: 'Voir le raisonnement',
   hideReasoning: 'Masquer le raisonnement',
   copy: 'Copier',
@@ -277,6 +279,7 @@ const en: AssistantCopy = {
   levelNames: { A1: 'Beginner', A2: 'Elementary', B1: 'Intermediate', B2: 'Upper-intermediate', C1: 'Advanced', C2: 'Proficient' },
   voiceMode: 'Voice conversation',
   thinking: 'Thinking…',
+  thinkingDone: 'Reasoning',
   showReasoning: 'Show reasoning',
   hideReasoning: 'Hide reasoning',
   copy: 'Copy',
@@ -391,6 +394,7 @@ const es: AssistantCopy = {
   levelNames: { A1: 'Principiante', A2: 'Elemental', B1: 'Intermedio', B2: 'Intermedio alto', C1: 'Avanzado', C2: 'Maestría' },
   voiceMode: 'Conversación por voz',
   thinking: 'Pensando…',
+  thinkingDone: 'Razonamiento',
   showReasoning: 'Ver el razonamiento',
   hideReasoning: 'Ocultar el razonamiento',
   copy: 'Copiar',
@@ -504,6 +508,7 @@ const pt: AssistantCopy = {
   levelNames: { A1: 'Iniciante', A2: 'Elementar', B1: 'Intermédio', B2: 'Intermédio alto', C1: 'Avançado', C2: 'Proficiente' },
   voiceMode: 'Conversa por voz',
   thinking: 'A pensar…',
+  thinkingDone: 'Raciocínio',
   showReasoning: 'Ver o raciocínio',
   hideReasoning: 'Ocultar o raciocínio',
   copy: 'Copiar',
@@ -617,6 +622,7 @@ const ru: AssistantCopy = {
   levelNames: { A1: 'Начальный', A2: 'Элементарный', B1: 'Средний', B2: 'Выше среднего', C1: 'Продвинутый', C2: 'Свободный' },
   voiceMode: 'Голосовой разговор',
   thinking: 'Думаю…',
+  thinkingDone: 'Рассуждение',
   showReasoning: 'Показать рассуждение',
   hideReasoning: 'Скрыть рассуждение',
   copy: 'Копировать',
@@ -730,6 +736,7 @@ const zh: AssistantCopy = {
   levelNames: { A1: '入门', A2: '初级', B1: '中级', B2: '中高级', C1: '高级', C2: '精通' },
   voiceMode: '语音对话',
   thinking: '思考中…',
+  thinkingDone: '推理',
   showReasoning: '查看推理',
   hideReasoning: '隐藏推理',
   copy: '复制',

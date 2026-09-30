@@ -302,3 +302,18 @@ export async function executeTool(state: AppState, name: string, rawArgs: string
     return { content: clip({ error: error instanceof Error ? error.message : 'Tool failed' }), summary: fr ? 'Échec de l’outil' : 'Tool failed' }
   }
 }
+
+/**
+ * Does the message refer to the learner's own material? Tools (and the cost
+ * and latency they add) are offered only then.
+ */
+const OWN_DATA = /\b(mes|mon|ma|my|mis|meus|minhas|мои|мой)\s+(propres\s+)?(textes?|texts?|mots|words?|vocabulaire|vocabulary|vocabulario|vocabulário|écrits?|writings?|journal|sessions?|enregistrements?|recordings?|prises|progr[eè]s(sion)?|progress|lectures?|livres?|books?|articles?|erreurs|mistakes|textos|palavras|palabras)\b|\b(dans|de|from|in|en|de)\s+(mes|my|mis|meus)\b|biblioth[eè]que|library|à réviser|to review|mots difficiles|tricky words|struggl|\bdue\b/i
+
+export function wantsLearnerData(message: string, hasAttachments: boolean): boolean {
+  return !hasAttachments && OWN_DATA.test(message)
+}
+
+/** Full lessons deserve more thinking; everything else stays quick. */
+export function effortFor(message: string): 'low' | 'medium' {
+  return /leçon compl[eè]te|full lesson|lección completa|lição completa|полный урок|完整课程/i.test(message) ? 'medium' : 'low'
+}
