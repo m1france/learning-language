@@ -110,7 +110,7 @@ export type ResourceWordStats = {
 /**
  * Computes the reading progress of a resource based on the ratio of known unique words to total unique words.
  */
-export function getResourceWordStats(state: AppState, resource: Resource): ResourceWordStats {
+export function getResourceWordStats(state: AppState, resource: Resource, readPageTexts: string[] = []): ResourceWordStats {
   const knownPhrases = state.words
     .filter((w) => w.language === resource.language && (w.word.includes(' ') || w.word.includes('-')))
     .map((w) => w.word.trim())
@@ -123,9 +123,19 @@ export function getResourceWordStats(state: AppState, resource: Resource): Resou
   }
 
   const langWords = state.words.filter((w) => w.language === resource.language)
+  // Words on a page marked as read count as known unless saved with their own level (same rule as the reader's colouring).
+  const readTokens = new Set<string>()
+  for (const text of readPageTexts) {
+    for (const token of text.split(/\s+/)) {
+      const norm = normalizeWord(cleanWordToken(token))
+      if (norm) readTokens.add(norm)
+    }
+  }
   let knownCount = 0
   for (const norm of uniqueWords) {
     if (isWordKnown(langWords, resource.language, norm, state.knownWords)) {
+      knownCount++
+    } else if (readTokens.has(norm) && !findMatchingLearnedWord(langWords, norm, resource.language)) {
       knownCount++
     }
   }

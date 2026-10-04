@@ -1036,7 +1036,11 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
     onBack()
   }
 
-  const wordStats = useMemo(() => getResourceWordStats(state, resource), [state.words, state.knownWords, resource])
+  const readPageTexts = useMemo(
+    () => pages.flatMap((entries, index) => (state.readPages?.[`${resource.id}:p${index}`] ? entries.map((entry) => entry.text) : [])),
+    [pages, state.readPages, resource.id],
+  )
+  const wordStats = useMemo(() => getResourceWordStats(state, resource, readPageTexts), [state.words, state.knownWords, resource, readPageTexts])
   const readCount = pages.filter((_, index) => state.readPages?.[`${resource.id}:p${index}`]).length
   const progress = Math.round(readCount / Math.max(1, pages.length) * 100)
   const activeType = markMode && markMode !== 'silent' ? markMode : null
