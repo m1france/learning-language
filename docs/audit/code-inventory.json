@@ -1,0 +1,2289 @@
+{
+  "generatedAt": "2026-11-01T11:32:49.564Z",
+  "sourceFiles": 123,
+  "lines": 69510,
+  "unreachableModules": [
+    "src/features/exercises/exerciseStorage.ts",
+    "src/features/speaking/ImprovWheel.tsx",
+    "src/features/writing/WritingHistory.tsx",
+    "src/features/writing/WritingSetupModal.tsx",
+    "src/seed.ts"
+  ],
+  "unused": [
+    {
+      "file": "src/App.tsx",
+      "line": 2,
+      "message": "'Difficulty' is declared but never used."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 3,
+      "message": "'id' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 7,
+      "message": "All imports in import declaration are unused."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 24,
+      "message": "'prompts' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 45,
+      "message": "'Search' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 46,
+      "message": "'Upload' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 47,
+      "message": "'Link2' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 48,
+      "message": "'Trash2' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 49,
+      "message": "'Lock' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 50,
+      "message": "'Compass' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 52,
+      "message": "'X' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 53,
+      "message": "'Check' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 54,
+      "message": "'ArrowUpDown' is declared but its value is never read."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 540,
+      "message": "'name' is declared but its value is never read."
+    },
+    {
+      "file": "src/components/AddResourceModal.tsx",
+      "line": 20,
+      "message": "'t' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/assistant/AssistantPage.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/assistant/AssistantPage.tsx",
+      "line": 13,
+      "message": "'GraduationCap' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/assistant/blocks/ExerciseBlock.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/assistant/blocks/HtmlArtifact.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/assistant/blocks/PracticeBlocks.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/assistant/VoiceMode.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/CrosswordBoard.tsx",
+      "line": 1,
+      "message": "'useEffect' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/CrosswordBoard.tsx",
+      "line": 5,
+      "message": "'HelpCircle' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/CrosswordBoard.tsx",
+      "line": 209,
+      "message": "'targetHoverClue' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/GeneralExerciseBoards.tsx",
+      "line": 1,
+      "message": "'useEffect' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/GeneralExerciseBoards.tsx",
+      "line": 1,
+      "message": "'useCallback' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/GeneralExerciseBoards.tsx",
+      "line": 1,
+      "message": "'useRef' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/GeneralExerciseBoards.tsx",
+      "line": 11,
+      "message": "'HelpCircle' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/GeneralExerciseBoards.tsx",
+      "line": 11,
+      "message": "'Lightbulb' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/GeneralExerciseBoards.tsx",
+      "line": 147,
+      "message": "'isWrong' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/GeneralExerciseBoards.tsx",
+      "line": 757,
+      "message": "'allOptions' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/GeneralExerciseBoards.tsx",
+      "line": 763,
+      "message": "'isWrong' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/HandwrittenCorrections.tsx",
+      "line": 5,
+      "message": "'Check' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/HandwrittenCorrections.tsx",
+      "line": 5,
+      "message": "'CheckCircle2' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/MatchPairsBoard.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/MatchPairsBoard.tsx",
+      "line": 5,
+      "message": "'HelpCircle' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/SentenceScrambleBoard.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/components/SentenceScrambleBoard.tsx",
+      "line": 109,
+      "message": "'isWrong' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/crosswordUtils.ts",
+      "line": 43,
+      "message": "'intersects' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/exercises/crosswordUtils.ts",
+      "line": 67,
+      "message": "'intersects' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/LearningFocus.tsx",
+      "line": 536,
+      "message": "'exportParagraphs' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Reader.tsx",
+      "line": 10,
+      "message": "'WordFamily' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Reader.tsx",
+      "line": 17,
+      "message": "'Headphones' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Reader.tsx",
+      "line": 19,
+      "message": "'EyeOff' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Reader.tsx",
+      "line": 24,
+      "message": "'ChevronUp' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Reader.tsx",
+      "line": 258,
+      "message": "'onBatchMarkKnown' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Reader.tsx",
+      "line": 3119,
+      "message": "'type' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/resourceAiService.ts",
+      "line": 1,
+      "message": "'Resource' is declared but never used."
+    },
+    {
+      "file": "src/features/resourceAiService.ts",
+      "line": 2,
+      "message": "'id' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/resourceAiService.ts",
+      "line": 3,
+      "message": "All imports in import declaration are unused."
+    },
+    {
+      "file": "src/features/session/SessionHero.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/session/SessionSteps.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Settings.tsx",
+      "line": 3,
+      "message": "'BUILTIN_CATEGORIES' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Settings.tsx",
+      "line": 4,
+      "message": "'copy' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Settings.tsx",
+      "line": 31,
+      "message": "'RefreshCw' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Settings.tsx",
+      "line": 37,
+      "message": "'Layers' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Settings.tsx",
+      "line": 295,
+      "message": "'syncInfo' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/Settings.tsx",
+      "line": 303,
+      "message": "'handleManualSync' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/speaking/CameraContext.tsx",
+      "line": 3,
+      "message": "'getPromptText' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/speaking/QuickWordLookup.tsx",
+      "line": 40,
+      "message": "'existingTags' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/speaking/review/CoachPanel.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/speaking/review/Waveform.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/speaking/wordAiService.ts",
+      "line": 7,
+      "message": "'OPENROUTER_URL' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/SpeakingPage.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/SpeakingPage.tsx",
+      "line": 89,
+      "message": "'selectedCategory' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/SpeakingPage.tsx",
+      "line": 90,
+      "message": "'setSelectedCategory' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/SpeakingPage.tsx",
+      "line": 151,
+      "message": "'handleStageWord' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/srs/ReviewPage.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/srs/ReviewStats.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/sync/syncService.ts",
+      "line": 2,
+      "message": "'saveState' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/sync/syncService.ts",
+      "line": 257,
+      "message": "'pushTimer' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/sync/syncService.ts",
+      "line": 258,
+      "message": "'heartbeatTimer' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/sync/syncService.ts",
+      "line": 260,
+      "message": "'onRemoteUpdateCallback' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/sync/syncService.ts",
+      "line": 261,
+      "message": "'isPushing' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/sync/syncService.ts",
+      "line": 262,
+      "message": "'isPulling' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/sync/syncService.ts",
+      "line": 263,
+      "message": "'localRevision' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/sync/syncService.ts",
+      "line": 352,
+      "message": "'checkStatusAndPullIfNeeded' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportConfirmModal.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 1,
+      "message": "'useMemo' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 8,
+      "message": "'Send' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 11,
+      "message": "'Calendar' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 12,
+      "message": "'FileText' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 16,
+      "message": "'Layers' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 21,
+      "message": "'Point' is declared but never used."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 21,
+      "message": "'TextRun' is declared but never used."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 22,
+      "message": "'modifiedCharIndices' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 28,
+      "message": "'ExportedLessonParagraph' is declared but never used."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 76,
+      "message": "'forceRedraw' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 562,
+      "message": "'pIdx' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "line": 593,
+      "message": "'parIdx' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/ExportSuccessModal.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/MyLessonsSettingsTab.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/MyLessonsSettingsTab.tsx",
+      "line": 16,
+      "message": "'Calendar' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/MyLessonsSettingsTab.tsx",
+      "line": 17,
+      "message": "'Layers' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/MyLessonsSettingsTab.tsx",
+      "line": 41,
+      "message": "'onOpenLesson' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 6,
+      "message": "'Smile' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 7,
+      "message": "'MessageCircle' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 12,
+      "message": "'FileText' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 13,
+      "message": "'Check' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 15,
+      "message": "'Share2' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 16,
+      "message": "'Clock' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 17,
+      "message": "'User' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 18,
+      "message": "'Trash2' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 26,
+      "message": "'StudentComment' is declared but never used."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 27,
+      "message": "'StudentFigmaComment' is declared but never used."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 28,
+      "message": "'StudentSticker' is declared but never used."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 31,
+      "message": "'addLessonReaction' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 32,
+      "message": "'addLessonComment' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 37,
+      "message": "'TextNote' is declared but never used."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 118,
+      "message": "'wordCommentMap' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "line": 279,
+      "message": "'pIdx' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/teacherExport/teacherExportService.ts",
+      "line": 3,
+      "message": "'ExportedLessonParagraph' is declared but never used."
+    },
+    {
+      "file": "src/features/vocabulary/ObsidianWordGraph.tsx",
+      "line": 67,
+      "message": "'setPhysicsActive' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/vocabulary/phraseMatchingService.ts",
+      "line": 221,
+      "message": "'index' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingCorrectionOverlay.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingCorrectionOverlay.tsx",
+      "line": 53,
+      "message": "'sIdx' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingEditor.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingEditor.tsx",
+      "line": 13,
+      "message": "'Video' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingEditor.tsx",
+      "line": 15,
+      "message": "'Sparkles' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingEditor.tsx",
+      "line": 87,
+      "message": "'setIsDrawerOpen' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingEditor.tsx",
+      "line": 280,
+      "message": "'handleSendToPrompter' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingHistory.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingHistory.tsx",
+      "line": 9,
+      "message": "'Video' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingHistory.tsx",
+      "line": 10,
+      "message": "'Clock' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingHistory.tsx",
+      "line": 33,
+      "message": "'onNavigateToSpeaking' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingPage.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingPromptSelector.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    },
+    {
+      "file": "src/features/writing/WritingSetupModal.tsx",
+      "line": 1,
+      "message": "'React' is declared but its value is never read."
+    }
+  ],
+  "inventory": [
+    {
+      "file": "server/src/db-init.sql",
+      "lines": 6,
+      "bytes": 182,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "server/src/index.ts",
+      "lines": 461,
+      "bytes": 18365,
+      "imports": [],
+      "fetch": 1,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/App.tsx",
+      "lines": 1119,
+      "bytes": 47375,
+      "imports": [
+        "src/domain.ts",
+        "src/store.ts",
+        "src/features/readingProgressUtils.ts",
+        "src/features/srs/srsStore.ts",
+        "src/importer.ts",
+        "src/features/Reader.tsx",
+        "src/features/LearningFocus.tsx",
+        "src/features/SpeakingPage.tsx",
+        "src/features/writing/WritingPage.tsx",
+        "src/features/srs/ReviewPage.tsx",
+        "src/features/session/SessionPage.tsx",
+        "src/features/session/SessionHero.tsx",
+        "src/features/session/sessionPlan.ts",
+        "src/features/srs/fsrs.ts",
+        "src/features/srs/useActivityTimer.ts",
+        "src/features/speaking/CameraContext.tsx",
+        "src/features/speaking/FloatingMiniCam.tsx",
+        "src/features/Settings.tsx",
+        "src/features/vocabulary/VocabularyVaultModal.tsx",
+        "src/components/AddResourceModal.tsx",
+        "src/data.ts",
+        "src/i18n.ts",
+        "src/i18n/assistantCopy.ts",
+        "src/languages.ts",
+        "src/assets/doveWhite.ts",
+        "src/features/teacherExport/SharedLessonViewer.tsx",
+        "src/features/teacherExport/teacherExportService.ts",
+        "src/features/teacherExport/teacherExportDomain.ts",
+        "src/components/ResourceModals.tsx",
+        "src/features/assistant/AssistantPage.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 2
+    },
+    {
+      "file": "src/ai.ts",
+      "lines": 379,
+      "bytes": 15641,
+      "imports": [
+        "src/domain.ts",
+        "src/languages.ts"
+      ],
+      "fetch": 4,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/assets/doveWhite.ts",
+      "lines": 3,
+      "bytes": 13385,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/components/AddResourceModal.tsx",
+      "lines": 495,
+      "bytes": 17087,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/importer.ts",
+        "src/features/resourceAiService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/components/ResourceModals.tsx",
+      "lines": 304,
+      "bytes": 8919,
+      "imports": [
+        "src/domain.ts",
+        "src/importer.ts",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/data.ts",
+      "lines": 104,
+      "bytes": 2577,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/domain.ts",
+      "lines": 451,
+      "bytes": 15407,
+      "imports": [
+        "src/features/srs/fsrs.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/LearningFocus.tsx",
+      "lines": 1629,
+      "bytes": 67160,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/teacherExport/TeacherUsernameModal.tsx",
+        "src/features/teacherExport/ExportConfirmModal.tsx",
+        "src/features/teacherExport/ExportPreviewFrame.tsx",
+        "src/features/teacherExport/ExportSuccessModal.tsx",
+        "src/features/teacherExport/teacherExportService.ts",
+        "src/features/teacherExport/teacherExportDomain.ts",
+        "src/features/teacherExport/annotationAnchorService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 8
+    },
+    {
+      "file": "src/features/Reader.tsx",
+      "lines": 3725,
+      "bytes": 140053,
+      "imports": [
+        "src/features/floatingPosition.tsx",
+        "src/domain.ts",
+        "src/store.ts",
+        "src/i18n.ts",
+        "src/features/LearningFocus.tsx",
+        "src/App.tsx",
+        "src/ai.ts",
+        "src/features/speaking/wordAiService.ts",
+        "src/features/vocabulary/phoneticUtils.tsx",
+        "src/features/vocabulary/RichInputField.tsx",
+        "src/features/readingProgressUtils.ts",
+        "src/features/vocabulary/PageSavedWordsModal.tsx",
+        "src/features/vocabulary/wordMatchingService.ts",
+        "src/features/vocabulary/phraseMatchingService.ts",
+        "src/components/ResourceModals.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 10
+    },
+    {
+      "file": "src/features/Settings.tsx",
+      "lines": 1666,
+      "bytes": 75084,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/srs/srsStore.ts",
+        "src/languages.ts",
+        "src/ai.ts",
+        "src/features/speaking/wordAiService.ts",
+        "src/features/speaking/deeplService.ts",
+        "src/features/vocabulary/phoneticUtils.tsx",
+        "src/store.ts",
+        "src/features/teacherExport/MyLessonsSettingsTab.tsx",
+        "src/features/sync/syncService.ts",
+        "src/features/teacherExport/teacherExportDomain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/SpeakingPage.tsx",
+      "lines": 784,
+      "bytes": 28357,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/speakingTopics.ts",
+        "src/features/speaking/CameraContext.tsx",
+        "src/features/speaking/TeleprompterOverlay.tsx",
+        "src/features/speaking/review/SessionReview.tsx",
+        "src/features/speaking/review/notesMarkdown.ts",
+        "src/i18n/reviewCopy.ts",
+        "src/features/speaking/QuickWordLookup.tsx",
+        "src/features/speaking/wordAiService.ts",
+        "src/features/speaking/StagedWordsReviewModal.tsx",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/aiResponseUtils.ts",
+      "lines": 140,
+      "bytes": 4479,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/AssistantPage.tsx",
+      "lines": 816,
+      "bytes": 42869,
+      "imports": [
+        "src/domain.ts",
+        "src/ai.ts",
+        "src/languages.ts",
+        "src/lib/llm.ts",
+        "src/lib/speech.ts",
+        "src/i18n/assistantCopy.ts",
+        "src/store.ts",
+        "src/features/srs/srsStore.ts",
+        "src/features/speaking/speakingStorage.ts",
+        "src/features/assistant/assistantAgent.ts",
+        "src/features/assistant/assistantPrompt.ts",
+        "src/features/assistant/assistantStorage.ts",
+        "src/features/assistant/assistantTools.ts",
+        "src/features/assistant/assistantTypes.ts",
+        "src/features/assistant/blocks/index.tsx",
+        "src/features/assistant/blocks/shared.tsx",
+        "src/features/assistant/Markdown.tsx",
+        "src/features/assistant/VoiceMode.tsx",
+        "src/features/assistant/ModelPicker.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/Markdown.tsx",
+      "lines": 285,
+      "bytes": 12845,
+      "imports": [
+        "src/features/assistant/assistantPrompt.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 1,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/ModelPicker.tsx",
+      "lines": 36,
+      "bytes": 2963,
+      "imports": [
+        "src/domain.ts",
+        "src/lib/llm.ts"
+      ],
+      "fetch": 1,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/VoiceMode.tsx",
+      "lines": 242,
+      "bytes": 9472,
+      "imports": [
+        "src/domain.ts",
+        "src/ai.ts",
+        "src/languages.ts",
+        "src/lib/llm.ts",
+        "src/lib/speech.ts",
+        "src/i18n/assistantCopy.ts",
+        "src/features/assistant/assistantPrompt.ts",
+        "src/features/assistant/assistantAgent.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/assistant.css",
+      "lines": 723,
+      "bytes": 52056,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/assistantAgent.ts",
+      "lines": 131,
+      "bytes": 6209,
+      "imports": [
+        "src/lib/llm.ts",
+        "src/features/assistant/assistantTypes.ts",
+        "src/features/assistant/assistantPrompt.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/assistantPrompt.ts",
+      "lines": 164,
+      "bytes": 11419,
+      "imports": [
+        "src/domain.ts",
+        "src/languages.ts",
+        "src/features/srs/srsStore.ts",
+        "src/features/assistant/assistantTypes.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/assistantStorage.ts",
+      "lines": 47,
+      "bytes": 1862,
+      "imports": [
+        "src/features/assistant/assistantTypes.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 2
+    },
+    {
+      "file": "src/features/assistant/assistantTools.ts",
+      "lines": 320,
+      "bytes": 16388,
+      "imports": [
+        "src/domain.ts",
+        "src/lib/llm.ts",
+        "src/features/srs/fsrs.ts",
+        "src/features/srs/srsStore.ts",
+        "src/features/speaking/speakingStorage.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/assistantTypes.ts",
+      "lines": 63,
+      "bytes": 1444,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/blocks/ExerciseBlock.tsx",
+      "lines": 87,
+      "bytes": 4988,
+      "imports": [
+        "src/domain.ts",
+        "src/features/exercises/exerciseAiService.ts",
+        "src/features/exercises/exercisesDomain.ts",
+        "src/features/exercises/components/CrosswordBoard.tsx",
+        "src/features/exercises/components/MatchPairsBoard.tsx",
+        "src/features/exercises/components/SentenceScrambleBoard.tsx",
+        "src/features/exercises/components/HandwrittenCorrections.tsx",
+        "src/features/exercises/components/GeneralExerciseBoards.tsx",
+        "src/features/assistant/blocks/shared.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/blocks/HtmlArtifact.tsx",
+      "lines": 106,
+      "bytes": 5668,
+      "imports": [
+        "src/features/assistant/blocks/shared.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 3,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/blocks/LearnBlocks.tsx",
+      "lines": 236,
+      "bytes": 11620,
+      "imports": [
+        "src/features/assistant/Markdown.tsx",
+        "src/features/assistant/blocks/shared.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/blocks/PracticeBlocks.tsx",
+      "lines": 347,
+      "bytes": 17645,
+      "imports": [
+        "src/features/assistant/Markdown.tsx",
+        "src/features/assistant/blocks/shared.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/blocks/index.tsx",
+      "lines": 69,
+      "bytes": 3531,
+      "imports": [
+        "src/features/assistant/Markdown.tsx",
+        "src/lib/llm.ts",
+        "src/features/assistant/blocks/ExerciseBlock.tsx",
+        "src/features/assistant/blocks/HtmlArtifact.tsx",
+        "src/features/assistant/blocks/LearnBlocks.tsx",
+        "src/features/assistant/blocks/PracticeBlocks.tsx",
+        "src/features/assistant/blocks/shared.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/assistant/blocks/shared.tsx",
+      "lines": 112,
+      "bytes": 3845,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n/assistantCopy.ts",
+        "src/features/assistant/assistantTypes.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/exercises/components/CrosswordBoard.tsx",
+      "lines": 396,
+      "bytes": 14765,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/exercises/exercisesDomain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/exercises/components/GeneralExerciseBoards.tsx",
+      "lines": 837,
+      "bytes": 29154,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/exercises/exercisesDomain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/exercises/components/HandwrittenCorrections.tsx",
+      "lines": 281,
+      "bytes": 10615,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/exercises/exercisesDomain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/exercises/components/MatchPairsBoard.tsx",
+      "lines": 285,
+      "bytes": 10850,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/exercises/exercisesDomain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/exercises/components/SentenceScrambleBoard.tsx",
+      "lines": 224,
+      "bytes": 8156,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/exercises/exercisesDomain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/exercises/crosswordUtils.ts",
+      "lines": 348,
+      "bytes": 10764,
+      "imports": [
+        "src/features/exercises/exercisesDomain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/exercises/exerciseAiService.ts",
+      "lines": 258,
+      "bytes": 11871,
+      "imports": [
+        "src/domain.ts",
+        "src/features/exercises/exercisesDomain.ts",
+        "src/languages.ts",
+        "src/features/exercises/crosswordUtils.ts",
+        "src/features/aiResponseUtils.ts",
+        "src/lib/llm.ts"
+      ],
+      "fetch": 1,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/exercises/exerciseStorage.ts",
+      "lines": 74,
+      "bytes": 2498,
+      "imports": [
+        "src/features/exercises/exercisesDomain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 2
+    },
+    {
+      "file": "src/features/exercises/exercisesDomain.ts",
+      "lines": 361,
+      "bytes": 9196,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n/exercisesCopy.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/floatingPosition.tsx",
+      "lines": 262,
+      "bytes": 8119,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/readingProgressUtils.ts",
+      "lines": 179,
+      "bytes": 5929,
+      "imports": [
+        "src/domain.ts",
+        "src/features/vocabulary/wordMatchingService.ts",
+        "src/features/vocabulary/phraseMatchingService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/resourceAiService.ts",
+      "lines": 384,
+      "bytes": 15196,
+      "imports": [
+        "src/domain.ts",
+        "src/importer.ts",
+        "src/features/speaking/wordAiService.ts",
+        "src/languages.ts",
+        "src/features/aiResponseUtils.ts"
+      ],
+      "fetch": 3,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/session/SessionHero.tsx",
+      "lines": 83,
+      "bytes": 3678,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/srs/fsrs.ts",
+        "src/features/srs/srsStore.ts",
+        "src/features/session/SessionPage.tsx",
+        "src/features/session/sessionPlan.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/session/SessionPage.tsx",
+      "lines": 97,
+      "bytes": 4430,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/srs/fsrs.ts",
+        "src/features/srs/srsStore.ts",
+        "src/features/session/SessionSteps.tsx",
+        "src/features/session/sessionPlan.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/session/SessionSteps.tsx",
+      "lines": 424,
+      "bytes": 18986,
+      "imports": [
+        "src/domain.ts",
+        "src/ai.ts",
+        "src/i18n.ts",
+        "src/languages.ts",
+        "src/store.ts",
+        "src/features/readingProgressUtils.ts",
+        "src/features/Reader.tsx",
+        "src/features/speaking/wordAiService.ts",
+        "src/features/writing/writingCorrectionAiService.ts",
+        "src/features/writing/WritingCorrectionOverlay.tsx",
+        "src/features/vocabulary/RichInputField.tsx",
+        "src/features/writing/wordMatcher.ts",
+        "src/features/srs/fsrs.ts",
+        "src/features/srs/reviewHelpers.ts",
+        "src/features/srs/ReviewRunner.tsx",
+        "src/features/srs/srsStore.ts",
+        "src/features/srs/ReviewStats.tsx",
+        "src/features/session/sessionPlan.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 3
+    },
+    {
+      "file": "src/features/session/sessionPlan.ts",
+      "lines": 216,
+      "bytes": 10915,
+      "imports": [
+        "src/domain.ts",
+        "src/features/srs/fsrs.ts",
+        "src/features/srs/srsStore.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/CameraContext.tsx",
+      "lines": 610,
+      "bytes": 22610,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/speakingTopics.ts",
+        "src/features/speaking/speakingStorage.ts",
+        "src/features/speaking/speakingCoachService.ts",
+        "src/features/speaking/transcriptionService.ts",
+        "src/lib/speech.ts",
+        "src/languages.ts",
+        "src/lib/llm.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/FloatingMiniCam.tsx",
+      "lines": 165,
+      "bytes": 5155,
+      "imports": [
+        "src/features/speaking/CameraContext.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 2
+    },
+    {
+      "file": "src/features/speaking/ImprovWheel.tsx",
+      "lines": 285,
+      "bytes": 9731,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/speakingTopics.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/QuickWordLookup.tsx",
+      "lines": 490,
+      "bytes": 16065,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/deeplService.ts",
+        "src/ai.ts",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/StagedWordsReviewModal.tsx",
+      "lines": 307,
+      "bytes": 9680,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/wordAiService.ts",
+        "src/ai.ts",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/TeleprompterOverlay.tsx",
+      "lines": 37,
+      "bytes": 889,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/deeplService.ts",
+      "lines": 204,
+      "bytes": 7212,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/wordAiService.ts",
+        "src/languages.ts"
+      ],
+      "fetch": 3,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/review/CoachPanel.tsx",
+      "lines": 139,
+      "bytes": 6470,
+      "imports": [
+        "src/features/speaking/speakingStorage.ts",
+        "src/features/speaking/review/notesMarkdown.ts",
+        "src/i18n/reviewCopy.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/review/NotesEditor.tsx",
+      "lines": 611,
+      "bytes": 25552,
+      "imports": [
+        "src/features/speaking/review/notesMarkdown.ts",
+        "src/i18n/reviewCopy.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 8,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/review/SessionReview.tsx",
+      "lines": 425,
+      "bytes": 20977,
+      "imports": [
+        "src/domain.ts",
+        "src/ai.ts",
+        "src/lib/audio.ts",
+        "src/lib/llm.ts",
+        "src/i18n/reviewCopy.ts",
+        "src/features/speaking/CameraContext.tsx",
+        "src/features/speaking/speakingStorage.ts",
+        "src/features/speaking/transcriptionService.ts",
+        "src/features/speaking/review/CoachPanel.tsx",
+        "src/features/speaking/review/NotesEditor.tsx",
+        "src/features/speaking/review/notesMarkdown.ts",
+        "src/features/speaking/review/TranscriptPanel.tsx",
+        "src/features/speaking/review/Waveform.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/review/TranscriptPanel.tsx",
+      "lines": 173,
+      "bytes": 8521,
+      "imports": [
+        "src/features/speaking/speakingStorage.ts",
+        "src/features/speaking/transcriptionService.ts",
+        "src/features/speaking/review/notesMarkdown.ts",
+        "src/i18n/reviewCopy.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/review/Waveform.tsx",
+      "lines": 85,
+      "bytes": 3303,
+      "imports": [
+        "src/features/speaking/review/notesMarkdown.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/review/notesMarkdown.ts",
+      "lines": 205,
+      "bytes": 9093,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/review/review.css",
+      "lines": 638,
+      "bytes": 29022,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/speakingCoachService.ts",
+      "lines": 128,
+      "bytes": 7032,
+      "imports": [
+        "src/domain.ts",
+        "src/languages.ts",
+        "src/lib/audio.ts",
+        "src/lib/llm.ts",
+        "src/features/speaking/speakingStorage.ts",
+        "src/features/speaking/transcriptionService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/speakingStorage.ts",
+      "lines": 228,
+      "bytes": 7568,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 2
+    },
+    {
+      "file": "src/features/speaking/speakingTopics.ts",
+      "lines": 568,
+      "bytes": 44994,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/transcriptionService.ts",
+      "lines": 312,
+      "bytes": 13933,
+      "imports": [
+        "src/domain.ts",
+        "src/languages.ts",
+        "src/lib/audio.ts",
+        "src/lib/llm.ts",
+        "src/features/speaking/speakingStorage.ts"
+      ],
+      "fetch": 1,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/speaking/wordAiService.ts",
+      "lines": 552,
+      "bytes": 23661,
+      "imports": [
+        "src/domain.ts",
+        "src/features/vocabulary/phoneticUtils.tsx",
+        "src/languages.ts",
+        "src/features/aiResponseUtils.ts"
+      ],
+      "fetch": 3,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/srs/ReviewPage.tsx",
+      "lines": 195,
+      "bytes": 8822,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/store.ts",
+        "src/features/srs/fsrs.ts",
+        "src/features/srs/ReviewRunner.tsx",
+        "src/features/srs/ReviewStats.tsx",
+        "src/features/srs/srsStore.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/srs/ReviewRunner.tsx",
+      "lines": 375,
+      "bytes": 16161,
+      "imports": [
+        "src/features/vocabulary/RichInputField.tsx",
+        "src/domain.ts",
+        "src/ai.ts",
+        "src/i18n.ts",
+        "src/features/vocabulary/phoneticUtils.tsx",
+        "src/features/srs/fsrs.ts",
+        "src/features/srs/srsStore.ts",
+        "src/features/srs/reviewHelpers.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/srs/ReviewStats.tsx",
+      "lines": 160,
+      "bytes": 7876,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/srs/fsrs.ts",
+        "src/features/srs/srsStore.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/srs/fsrs.ts",
+      "lines": 227,
+      "bytes": 10167,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/srs/learn.css",
+      "lines": 1703,
+      "bytes": 29557,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/srs/reviewHelpers.ts",
+      "lines": 96,
+      "bytes": 3725,
+      "imports": [
+        "src/domain.ts",
+        "src/features/vocabulary/phraseMatchingService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/srs/srsStore.ts",
+      "lines": 432,
+      "bytes": 17740,
+      "imports": [
+        "src/domain.ts",
+        "src/features/srs/fsrs.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/srs/useActivityTimer.ts",
+      "lines": 31,
+      "bytes": 1224,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/sync/syncService.ts",
+      "lines": 356,
+      "bytes": 12448,
+      "imports": [
+        "src/domain.ts",
+        "src/store.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 7
+    },
+    {
+      "file": "src/features/teacherExport/ExportConfirmModal.tsx",
+      "lines": 60,
+      "bytes": 1984,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/teacherExport/ExportPreviewFrame.tsx",
+      "lines": 1290,
+      "bytes": 51478,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/LearningFocus.tsx",
+        "src/features/teacherExport/teacherExportDomain.ts",
+        "src/features/teacherExport/annotationAnchorService.ts",
+        "src/features/teacherExport/teacherAlignmentAiService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/teacherExport/ExportSuccessModal.tsx",
+      "lines": 119,
+      "bytes": 4372,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/teacherExport/teacherExportDomain.ts",
+        "src/features/teacherExport/teacherExportService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/teacherExport/MyLessonsSettingsTab.tsx",
+      "lines": 281,
+      "bytes": 10231,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/teacherExport/teacherExportDomain.ts",
+        "src/features/teacherExport/teacherExportService.ts",
+        "src/features/teacherExport/TeacherUsernameModal.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/teacherExport/SharedLessonViewer.tsx",
+      "lines": 795,
+      "bytes": 32589,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/teacherExport/teacherExportDomain.ts",
+        "src/features/teacherExport/teacherExportService.ts",
+        "src/features/LearningFocus.tsx",
+        "src/features/teacherExport/annotationAnchorService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 2
+    },
+    {
+      "file": "src/features/teacherExport/TeacherUsernameModal.tsx",
+      "lines": 91,
+      "bytes": 3115,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/teacherExport/teacherExportService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/teacherExport/annotationAnchorService.ts",
+      "lines": 235,
+      "bytes": 7120,
+      "imports": [
+        "src/features/LearningFocus.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/teacherExport/teacherAlignmentAiService.ts",
+      "lines": 252,
+      "bytes": 8161,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/wordAiService.ts",
+        "src/features/LearningFocus.tsx",
+        "src/features/teacherExport/teacherExportDomain.ts"
+      ],
+      "fetch": 1,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/teacherExport/teacherExportDomain.ts",
+      "lines": 111,
+      "bytes": 2786,
+      "imports": [
+        "src/features/LearningFocus.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/teacherExport/teacherExportService.ts",
+      "lines": 368,
+      "bytes": 11533,
+      "imports": [
+        "src/domain.ts",
+        "src/features/LearningFocus.tsx",
+        "src/features/teacherExport/teacherExportDomain.ts"
+      ],
+      "fetch": 7,
+      "htmlSinks": 0,
+      "storage": 7
+    },
+    {
+      "file": "src/features/vocabulary/ObsidianWordGraph.tsx",
+      "lines": 617,
+      "bytes": 19498,
+      "imports": [
+        "src/domain.ts",
+        "src/features/vocabulary/phoneticUtils.tsx",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/vocabulary/PageSavedWordsModal.tsx",
+      "lines": 195,
+      "bytes": 6027,
+      "imports": [
+        "src/domain.ts",
+        "src/features/vocabulary/phoneticUtils.tsx",
+        "src/ai.ts",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/vocabulary/RichInputField.tsx",
+      "lines": 210,
+      "bytes": 5627,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 5,
+      "storage": 0
+    },
+    {
+      "file": "src/features/vocabulary/TagInputInline.tsx",
+      "lines": 119,
+      "bytes": 3719,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/vocabulary/VocabularyVaultModal.tsx",
+      "lines": 765,
+      "bytes": 28282,
+      "imports": [
+        "src/domain.ts",
+        "src/features/vocabulary/ObsidianWordGraph.tsx",
+        "src/features/vocabulary/phoneticUtils.tsx",
+        "src/features/vocabulary/RichInputField.tsx",
+        "src/features/vocabulary/TagInputInline.tsx",
+        "src/ai.ts",
+        "src/features/vocabulary/ankiExporter.ts",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/vocabulary/ankiExporter.ts",
+      "lines": 129,
+      "bytes": 4277,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 3,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/vocabulary/phoneticUtils.tsx",
+      "lines": 178,
+      "bytes": 5932,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/vocabulary/phraseMatchingService.ts",
+      "lines": 273,
+      "bytes": 12268,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/vocabulary/wordMatchingService.ts",
+      "lines": 101,
+      "bytes": 4132,
+      "imports": [
+        "src/domain.ts",
+        "src/features/vocabulary/phraseMatchingService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/writing/WordBricksTray.tsx",
+      "lines": 319,
+      "bytes": 9565,
+      "imports": [
+        "src/domain.ts",
+        "src/ai.ts",
+        "src/features/vocabulary/phoneticUtils.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/writing/WritingCorrectionOverlay.tsx",
+      "lines": 605,
+      "bytes": 19007,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/writing/writingCorrectionAiService.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/writing/WritingEditor.tsx",
+      "lines": 790,
+      "bytes": 27919,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/features/writing/WordBricksTray.tsx",
+        "src/features/writing/wordMatcher.ts",
+        "src/data.ts",
+        "src/features/vocabulary/phoneticUtils.tsx",
+        "src/features/writing/WritingPromptSelector.tsx",
+        "src/features/writing/writingCorrectionAiService.ts",
+        "src/features/writing/WritingCorrectionOverlay.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/writing/WritingHistory.tsx",
+      "lines": 244,
+      "bytes": 7869,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/writing/WritingPage.tsx",
+      "lines": 88,
+      "bytes": 2431,
+      "imports": [
+        "src/domain.ts",
+        "src/store.ts",
+        "src/features/writing/WritingPromptSelector.tsx",
+        "src/features/writing/WritingEditor.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/writing/WritingPromptSelector.tsx",
+      "lines": 112,
+      "bytes": 3551,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/writing/WritingSetupModal.tsx",
+      "lines": 382,
+      "bytes": 13374,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n.ts",
+        "src/data.ts",
+        "src/features/vocabulary/phoneticUtils.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/writing/wordMatcher.ts",
+      "lines": 69,
+      "bytes": 2171,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/features/writing/writingCorrectionAiService.ts",
+      "lines": 268,
+      "bytes": 9830,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/wordAiService.ts",
+        "src/languages.ts",
+        "src/features/aiResponseUtils.ts"
+      ],
+      "fetch": 1,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n.ts",
+      "lines": 767,
+      "bytes": 44806,
+      "imports": [
+        "src/domain.ts",
+        "src/i18n/teacherCopy.ts",
+        "src/i18n/writeCopy.ts",
+        "src/i18n/exercisesCopy.ts",
+        "src/i18n/settingsCopy.ts",
+        "src/i18n/vocabCopy.ts",
+        "src/i18n/speakingCopy.ts",
+        "src/i18n/resourcesCopy.ts",
+        "src/i18n/learnCopy.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/assistantCopy.ts",
+      "lines": 802,
+      "bytes": 36464,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/exercisesCopy.ts",
+      "lines": 517,
+      "bytes": 25796,
+      "imports": [
+        "src/domain.ts",
+        "src/features/exercises/exercisesDomain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/learnCopy.ts",
+      "lines": 353,
+      "bytes": 16255,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/resourcesCopy.ts",
+      "lines": 637,
+      "bytes": 25018,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/reviewCopy.ts",
+      "lines": 667,
+      "bytes": 25084,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/speakingStorage.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/settingsCopy.ts",
+      "lines": 1068,
+      "bytes": 58019,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/speakingCopy.ts",
+      "lines": 543,
+      "bytes": 23060,
+      "imports": [
+        "src/domain.ts",
+        "src/features/speaking/speakingStorage.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/teacherCopy.ts",
+      "lines": 935,
+      "bytes": 44590,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/vocabCopy.ts",
+      "lines": 445,
+      "bytes": 22429,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/i18n/writeCopy.ts",
+      "lines": 543,
+      "bytes": 21817,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/importer.ts",
+      "lines": 322,
+      "bytes": 12830,
+      "imports": [
+        "src/domain.ts",
+        "src/features/resourceAiService.ts"
+      ],
+      "fetch": 1,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/languages.ts",
+      "lines": 85,
+      "bytes": 5046,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/lib/audio.ts",
+      "lines": 159,
+      "bytes": 6251,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/lib/llm.ts",
+      "lines": 331,
+      "bytes": 13908,
+      "imports": [
+        "src/domain.ts"
+      ],
+      "fetch": 1,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/lib/speech.ts",
+      "lines": 212,
+      "bytes": 7191,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/main.tsx",
+      "lines": 12,
+      "bytes": 261,
+      "imports": [
+        "src/App.tsx"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/seed.ts",
+      "lines": 52,
+      "bytes": 8242,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/store.ts",
+      "lines": 888,
+      "bytes": 31659,
+      "imports": [
+        "src/domain.ts",
+        "src/features/readingProgressUtils.ts",
+        "src/features/vocabulary/phoneticUtils.tsx",
+        "src/features/vocabulary/phraseMatchingService.ts",
+        "src/features/srs/srsStore.ts"
+      ],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 3
+    },
+    {
+      "file": "src/styles.css",
+      "lines": 21608,
+      "bytes": 400733,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    },
+    {
+      "file": "src/vite-env.d.ts",
+      "lines": 2,
+      "bytes": 38,
+      "imports": [],
+      "fetch": 0,
+      "htmlSinks": 0,
+      "storage": 0
+    }
+  ]
+}

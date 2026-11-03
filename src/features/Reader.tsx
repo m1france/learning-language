@@ -1,3 +1,4 @@
+import { appStorage } from './auth/storageScope'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   type AnchorRect,
@@ -137,7 +138,7 @@ const DICTIONARY_TABS: Record<DictionaryTabId, { label: string; getUrl: (languag
 
 function getSavedDefaultTab(): DictionaryTabId {
   try {
-    const raw = localStorage.getItem('vivre-dict-default-tab')
+    const raw = appStorage.getItem('vivre-dict-default-tab')
     if (raw === 'wiktionary' || raw === 'linguee' || raw === 'cambridge') return raw
   } catch {}
   return 'wiktionary'
@@ -145,7 +146,7 @@ function getSavedDefaultTab(): DictionaryTabId {
 
 function getSavedTabOrder(): DictionaryTabId[] {
   try {
-    const raw = localStorage.getItem('vivre-dict-tab-order')
+    const raw = appStorage.getItem('vivre-dict-tab-order')
     if (raw) {
       const parsed = JSON.parse(raw) as DictionaryTabId[]
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -283,7 +284,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const resT = resourcesCopy[ui] || resourcesCopy.fr
   const settings = state.settings
   const categoryLabel = (typeId: string) => copy[ui].categories[typeId] ?? state.customCategories.find((c) => c.id === typeId)?.label ?? typeId
-  const [pageIndex, setPageIndex] = useState(() => Number(localStorage.getItem(`vivre-page-${resource.id}`) ?? 0) || 0)
+  const [pageIndex, setPageIndex] = useState(() => Number(appStorage.getItem(`vivre-page-${resource.id}`) ?? 0) || 0)
   const [fontSize, setFontSize] = useState(settings.readerFontSize)
   const [selected, setSelected] = useState<SelectedWord | null>(null)
   const [editingTitle, setEditingTitle] = useState(false)
@@ -754,7 +755,7 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
   const isLastPage = pages.length > 0 && safePage >= pages.length - 1
 
   useEffect(() => {
-    localStorage.setItem(`vivre-page-${resource.id}`, String(safePage))
+    appStorage.setItem(`vivre-page-${resource.id}`, String(safePage))
     const first = page[0]
     if (first) onProgress(resource.id, first.chapterIndex, first.paragraphIndex)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1024,9 +1025,9 @@ export function Reader({ state, resource, ui, onBack, onUpdate, onDelete, onProg
       }))
       onUpdate({ ...resource, chapters })
     }
-    localStorage.removeItem(`vivre-focus-${resource.id}`)
-    localStorage.removeItem(`vivre-focus-originals-${resource.id}`)
-    localStorage.removeItem(`vivre-focus-edited-${resource.id}`)
+    appStorage.removeItem(`vivre-focus-${resource.id}`)
+    appStorage.removeItem(`vivre-focus-originals-${resource.id}`)
+    appStorage.removeItem(`vivre-focus-edited-${resource.id}`)
     setOriginals({})
     setPageContextMenu(null)
   }
@@ -1715,7 +1716,7 @@ function WikiPanel({ word, language, initialTab, onClose }: {
 
   const makeDefault = (tabId: DictionaryTabId) => {
     setDefaultTab(tabId)
-    localStorage.setItem('vivre-dict-default-tab', tabId)
+    appStorage.setItem('vivre-dict-default-tab', tabId)
     setTab(tabId)
     setTabContextMenu(null)
   }
@@ -1728,7 +1729,7 @@ function WikiPanel({ word, language, initialTab, onClose }: {
       newOrder[idx - 1] = newOrder[idx]
       newOrder[idx] = temp
       setTabOrder(newOrder)
-      localStorage.setItem('vivre-dict-tab-order', JSON.stringify(newOrder))
+      appStorage.setItem('vivre-dict-tab-order', JSON.stringify(newOrder))
     }
     setTabContextMenu(null)
   }
@@ -1741,7 +1742,7 @@ function WikiPanel({ word, language, initialTab, onClose }: {
       newOrder[idx + 1] = newOrder[idx]
       newOrder[idx] = temp
       setTabOrder(newOrder)
-      localStorage.setItem('vivre-dict-tab-order', JSON.stringify(newOrder))
+      appStorage.setItem('vivre-dict-tab-order', JSON.stringify(newOrder))
     }
     setTabContextMenu(null)
   }

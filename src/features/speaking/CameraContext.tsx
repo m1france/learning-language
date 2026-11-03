@@ -15,6 +15,7 @@ import { planTranscription, tidySegments, transcribeRecording, wantsLiveCaptions
 import { createLiveTranscriber, isIOS, speechRecognitionSupported } from '../../lib/speech'
 import { getLanguageBcp47 } from '../../languages'
 import { resolveLlm } from '../../lib/llm'
+import { getStorageScope } from '../auth/storageScope'
 
 type CameraContextType = {
   stream: MediaStream | null
@@ -81,6 +82,9 @@ export function CameraProvider({
   ui?: UiLanguage
   api?: ApiSettings
 }) {
+  const mountedScope = useRef(getStorageScope())
+  const mounted = useRef(true)
+  const isCurrentScope = useCallback(() => mounted.current && getStorageScope() === mountedScope.current, [])
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [cameraActive, setCameraActive] = useState(false)
   const [cameraDisabled, setCameraDisabled] = useState(false)
@@ -122,9 +126,44 @@ export function CameraProvider({
   const liveSegmentsRef = useRef<TranscriptSegment[]>([])
   const sessionsRef = useRef<SpeakingSessionRecord[]>([])
   const apiRef = useRef(api)
+  const mediaRequest = useRef(0)
   apiRef.current = api
   const [liveCaption, setLiveCaption] = useState('')
   const [liveCaptionsOn, setLiveCaptionsOn] = useState(false)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      // Detach callbacks before stopping tracks: unmount must never save into a new account.
+      mounted.current = false
+      mediaRequest.current += 1
+      const recorder = recorderRef.current
+      recorderRef.current = null
+      if (recorder) {
+        recorder.onstop = null
+        recorder.ondataavailable = null
+        recorder.onerror = null
+        if (recorder.state !== 'inactive') { try { recorder.stop() } catch { /* already stopped */ } }
+      }
+      chunksRef.current = []
+      const live = liveRef.current
+      liveRef.current = null
+      void live?.stop().catch(() => undefined)
+      liveSegmentsRef.current = []
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+      if (timerRef.current !== null) window.clearInterval(timerRef.current)
+      if (countdownIntervalRef.current !== null) window.clearInterval(countdownIntervalRef.current)
+      if (animFrameRef.current !== null) cancelAnimationFrame(animFrameRef.current)
+      timerRef.current = null
+      countdownIntervalRef.current = null
+      animFrameRef.current = null
+      analyserRef.current = null
+      if (audioContextRef.current) void audioContextRef.current.close().catch(() => undefined)
+      audioContextRef.current = null
+      sessionsRef.current.forEach((session) => { if (session.mediaUrl) URL.revokeObjectURL(session.mediaUrl) })
+    }
+  }, [])
 
   /** Recording clock in seconds, pauses excluded. */
   const recordingClock = useCallback(() => {
@@ -143,14 +182,23 @@ export function CameraProvider({
 
   // Load saved sessions on mount
   useEffect(() => {
+    let cancelled = false
     void getAllSpeakingSessions().then((list) => {
+      if (cancelled || !isCurrentScope()) {
+        list.forEach((session) => { if (session.mediaUrl) URL.revokeObjectURL(session.mediaUrl) })
+        return
+      }
+      sessionsRef.current = list
       setSessions(list)
     })
-  }, [])
+    return () => { cancelled = true }
+  }, [isCurrentScope])
 
   // Audio analyser setup
   const setupAudioAnalyser = useCallback((mediaStream: MediaStream) => {
+    if (!isCurrentScope()) return
     try {
+      if (animFrameRef.current !== null) cancelAnimationFrame(animFrameRef.current)
       if (audioContextRef.current) {
         void audioContextRef.current.close().catch(() => undefined)
       }
@@ -166,6 +214,7 @@ export function CameraProvider({
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount)
       const updateMeter = () => {
+        if (!isCurrentScope() || analyserRef.current !== analyser) return
         analyser.getByteFrequencyData(dataArray)
         let sum = 0
         for (let i = 0; i < dataArray.length; i++) {
@@ -179,15 +228,17 @@ export function CameraProvider({
     } catch {
       // AudioContext not available
     }
-  }, [])
+  }, [isCurrentScope])
 
   const stopAllMedia = useCallback(() => {
+    mediaRequest.current += 1
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined)
     }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
     }
+    streamRef.current = null
     setStream(null)
     setCameraActive(false)
     if (timerRef.current) window.clearInterval(timerRef.current)
@@ -203,6 +254,8 @@ export function CameraProvider({
   }, [])
 
   const requestMediaAccess = useCallback(async (): Promise<boolean> => {
+    if (!isCurrentScope()) return false
+    const request = ++mediaRequest.current
     try {
       setPermissionError(null)
       if (streamRef.current && streamRef.current.active) {
@@ -213,6 +266,10 @@ export function CameraProvider({
         video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       })
+      if (!isCurrentScope() || request !== mediaRequest.current) {
+        media.getTracks().forEach((track) => track.stop())
+        return false
+      }
       streamRef.current = media
       setStream(media)
       setCameraActive(true)
@@ -221,11 +278,12 @@ export function CameraProvider({
       setupAudioAnalyser(media)
       return true
     } catch (err) {
+      if (!isCurrentScope() || request !== mediaRequest.current) return false
       console.error('Error requesting media stream:', err)
       setPermissionError('Impossible d’accéder à la caméra ou au microphone. Vérifie les autorisations de ton navigateur.')
       return false
     }
-  }, [setupAudioAnalyser])
+  }, [setupAudioAnalyser, facingMode, isCurrentScope])
 
   const toggleCameraTrack = useCallback(() => {
     if (!streamRef.current) return
@@ -248,18 +306,24 @@ export function CameraProvider({
   }, [])
 
   const flipCamera = useCallback(async () => {
+    if (!isCurrentScope()) return
     const nextFacing: 'user' | 'environment' = facingMode === 'user' ? 'environment' : 'user'
     setFacingMode(nextFacing)
-    if (streamRef.current) {
-      const oldVideoTracks = streamRef.current.getVideoTracks()
+    const previousStream = streamRef.current
+    if (previousStream) {
+      const oldVideoTracks = previousStream.getVideoTracks()
       try {
         const newMedia = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: nextFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
         })
+        if (!isCurrentScope() || streamRef.current !== previousStream) {
+          newMedia.getTracks().forEach((track) => track.stop())
+          return
+        }
         const newVideoTrack = newMedia.getVideoTracks()[0]
         if (newVideoTrack) {
           oldVideoTracks.forEach((t) => t.stop())
-          const audioTracks = streamRef.current.getAudioTracks()
+          const audioTracks = previousStream.getAudioTracks()
           const combined = new MediaStream([...audioTracks, newVideoTrack])
           streamRef.current = combined
           setStream(combined)
@@ -270,11 +334,12 @@ export function CameraProvider({
         console.error('Error flipping camera:', err)
       }
     }
-  }, [facingMode])
+  }, [facingMode, isCurrentScope])
 
   const doStartRecordingNow = useCallback(() => {
+    if (!isCurrentScope()) return
     const currentStream = streamRef.current
-    if (!currentStream) return
+    if (!currentStream || (recorderRef.current && recorderRef.current.state !== 'inactive')) return
 
     try {
       const mimeCandidates = [
@@ -294,16 +359,19 @@ export function CameraProvider({
         ? new MediaRecorder(currentStream, { mimeType: supportedMime })
         : new MediaRecorder(currentStream)
 
-      chunksRef.current = []
+      const recordingChunks: Blob[] = []
+      const recordingSegments: TranscriptSegment[] = []
+      chunksRef.current = recordingChunks
       recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          chunksRef.current.push(e.data)
+        if (isCurrentScope() && e.data && e.data.size > 0) {
+          recordingChunks.push(e.data)
         }
       }
 
       recorder.onstop = async () => {
+        if (!isCurrentScope()) return
         const mime = recorder.mimeType || 'video/webm'
-        const blob = new Blob(chunksRef.current, { type: mime })
+        const blob = new Blob(recordingChunks, { type: mime })
         chunksRef.current = []
         const finalDuration = Math.max(1, Math.round(recordingClock()))
         pausedAtRef.current = null
@@ -314,12 +382,16 @@ export function CameraProvider({
         timerRef.current = null
 
         // Let the live captions finalise their last words before saving.
-        await liveRef.current?.stop()
+        const live = liveRef.current
         liveRef.current = null
-        setLiveCaption('')
-        setLiveCaptionsOn(false)
-        const liveSegments = tidySegments(liveSegmentsRef.current.map((segment) => ({ ...segment, end: Math.min(segment.end, finalDuration) })))
-        liveSegmentsRef.current = []
+        await live?.stop().catch(() => undefined)
+        if (!isCurrentScope()) return
+        if (recorderRef.current === recorder) {
+          setLiveCaption('')
+          setLiveCaptionsOn(false)
+        }
+        const liveSegments = tidySegments(recordingSegments.map((segment) => ({ ...segment, end: Math.min(segment.end, finalDuration) })))
+        if (liveSegmentsRef.current === recordingSegments) liveSegmentsRef.current = []
 
         if (blob.size === 0) return
 
@@ -344,6 +416,10 @@ export function CameraProvider({
             ? { segments: liveSegments, engine: 'browser', language, createdAt: new Date().toISOString() }
             : undefined,
         })
+        if (!isCurrentScope()) {
+          if (record.mediaUrl) URL.revokeObjectURL(record.mediaUrl)
+          return
+        }
         setSessions((prev) => [record, ...prev])
         sessionsRef.current = [record, ...sessionsRef.current]
 
@@ -352,6 +428,7 @@ export function CameraProvider({
         if (currentApi && planTranscription(currentApi)) {
           await transcribeRef.current(record.id)
         }
+        if (!isCurrentScope()) return
         const latest = sessionsRef.current.find((item) => item.id === record.id)
         if (currentApi && latest?.transcript?.segments.length && resolveLlm(currentApi)) {
           await analyzeRef.current(record.id)
@@ -380,17 +457,18 @@ export function CameraProvider({
       setIsPaused(false)
 
       // Free live captions (Chrome, Edge, Safari desktop). iOS can't share the mic with the recorder.
-      liveSegmentsRef.current = []
+      liveSegmentsRef.current = recordingSegments
       if (api && wantsLiveCaptions(api) && speechRecognitionSupported() && !isIOS()) {
         const live = createLiveTranscriber({
           lang: getLanguageBcp47(language),
           now: recordingClock,
           onSegment: (segment) => {
-            liveSegmentsRef.current.push({ id: '', ...segment })
-            setLiveCaption('')
+            if (!isCurrentScope()) return
+            recordingSegments.push({ id: '', ...segment })
+            if (recorderRef.current === recorder) setLiveCaption('')
           },
-          onInterim: setLiveCaption,
-          onUnavailable: () => setLiveCaptionsOn(false),
+          onInterim: (text) => { if (isCurrentScope() && recorderRef.current === recorder) setLiveCaption(text) },
+          onUnavailable: () => { if (isCurrentScope() && recorderRef.current === recorder) setLiveCaptionsOn(false) },
         })
         liveRef.current = live
         live.start()
@@ -399,13 +477,15 @@ export function CameraProvider({
     } catch (err) {
       console.error('Error starting MediaRecorder:', err)
     }
-  }, [selectedNiche, api, language, ui, recordingClock])
+  }, [selectedNiche, api, language, ui, recordingClock, isCurrentScope])
 
   const startRecordingWithCountdown = useCallback(async (onBeforeStart?: () => void) => {
+    if (!isCurrentScope()) return
     if (!streamRef.current) {
       const ok = await requestMediaAccess()
       if (!ok) return
     }
+    if (!isCurrentScope()) return
 
     if (onBeforeStart) {
       onBeforeStart()
@@ -418,6 +498,11 @@ export function CameraProvider({
 
     let currentSec = 5
     countdownIntervalRef.current = window.setInterval(() => {
+      if (!isCurrentScope()) {
+        if (countdownIntervalRef.current !== null) window.clearInterval(countdownIntervalRef.current)
+        countdownIntervalRef.current = null
+        return
+      }
       currentSec -= 1
       if (currentSec > 0) {
         setCountdownSeconds(currentSec)
@@ -428,7 +513,7 @@ export function CameraProvider({
         doStartRecordingNow()
       }
     }, 1000)
-  }, [requestMediaAccess, doStartRecordingNow])
+  }, [requestMediaAccess, doStartRecordingNow, isCurrentScope])
 
   const pauseRecording = useCallback(() => {
     if (recorderRef.current && recorderRef.current.state === 'recording') {
@@ -470,12 +555,13 @@ export function CameraProvider({
   }, [])
 
   const patchSession = useCallback(async (id: string, patch: SpeakingSessionPatch) => {
+    if (!isCurrentScope()) return
     const apply = (session: SpeakingSessionRecord) => (session.id === id ? { ...session, ...patch } : session)
     sessionsRef.current = sessionsRef.current.map(apply)
     setSessions((prev) => prev.map(apply))
     setActiveReviewSession((prev) => (prev?.id === id ? { ...prev, ...patch } : prev))
     await updateSpeakingSession(id, patch).catch((error) => console.error('[speaking] save failed', error))
-  }, [])
+  }, [isCurrentScope])
 
   const handleUpdateSession = useCallback(async (updated: SpeakingSessionRecord) => {
     const { id, blob: _blob, mediaUrl: _url, ...patch } = updated
@@ -483,42 +569,50 @@ export function CameraProvider({
   }, [patchSession])
 
   const handleDeleteSession = useCallback(async (id: string) => {
+    if (!isCurrentScope()) return
     const target = sessionsRef.current.find((session) => session.id === id)
     if (target?.mediaUrl) URL.revokeObjectURL(target.mediaUrl)
     await deleteSpeakingSession(id)
+    if (!isCurrentScope()) return
     sessionsRef.current = sessionsRef.current.filter((session) => session.id !== id)
     setSessions((prev) => prev.filter((s) => s.id !== id))
     setActiveReviewSession((prev) => (prev?.id === id ? null : prev))
-  }, [])
+  }, [isCurrentScope])
 
   const transcribeSession = useCallback(async (sessionId: string) => {
+    if (!isCurrentScope()) return
     const session = sessionsRef.current.find((item) => item.id === sessionId)
     const currentApi = apiRef.current
     if (!session?.blob || !currentApi) return
     await patchSession(sessionId, { transcriptStatus: 'transcribing', transcriptError: undefined, transcriptProgress: 0 })
+    if (!isCurrentScope()) return
     try {
       const transcript = await transcribeRecording({
         blob: session.blob,
         api: currentApi,
         language: session.language || language,
         onProgress: (ratio) => {
+          if (!isCurrentScope()) return
           const apply = (item: SpeakingSessionRecord) => (item.id === sessionId ? { ...item, transcriptProgress: ratio } : item)
           setSessions((prev) => prev.map(apply))
           setActiveReviewSession((prev) => (prev?.id === sessionId ? { ...prev, transcriptProgress: ratio } : prev))
         },
       })
+      if (!isCurrentScope()) return
       const previous = sessionsRef.current.find((item) => item.id === sessionId)?.transcript
       // Keep the live captions if the cloud engine heard nothing.
       const next = transcript.segments.length || !previous ? transcript : previous
       await patchSession(sessionId, { transcript: next, transcriptStatus: 'done', transcriptError: undefined, transcriptProgress: undefined })
     } catch (error) {
+      if (!isCurrentScope()) return
       const message = error instanceof Error ? error.message : 'Transcription impossible.'
       const hasPrevious = Boolean(sessionsRef.current.find((item) => item.id === sessionId)?.transcript?.segments.length)
       await patchSession(sessionId, { transcriptStatus: hasPrevious ? 'done' : 'error', transcriptError: message, transcriptProgress: undefined })
     }
-  }, [language, patchSession])
+  }, [language, patchSession, isCurrentScope])
 
   const triggerSessionAnalysis = useCallback(async (sessionId: string) => {
+    if (!isCurrentScope()) return
     const session = sessionsRef.current.find((item) => item.id === sessionId)
     const currentApi = apiRef.current
     if (!session || !currentApi) return
@@ -527,6 +621,7 @@ export function CameraProvider({
       return
     }
     await patchSession(sessionId, { analysisStatus: 'analyzing', analysisError: undefined })
+    if (!isCurrentScope()) return
     try {
       const analysis = await coachSpeakingSession({
         transcript: session.transcript,
@@ -541,7 +636,7 @@ export function CameraProvider({
     } catch (error) {
       await patchSession(sessionId, { analysisStatus: 'error', analysisError: error instanceof Error ? error.message : 'Analyse impossible.' })
     }
-  }, [language, ui, patchSession])
+  }, [language, ui, patchSession, isCurrentScope])
 
   // The recorder callback is created before these exist: reach them through refs.
   const transcribeRef = useRef(transcribeSession)

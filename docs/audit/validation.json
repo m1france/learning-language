@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-01",
+  "baseline": "de90a5ad402a9c22d97b539c9960a97438a4597a",
+  "checks": {
+    "frontend_build": "passed; large chunk warning",
+    "backend_build": "passed",
+    "coach_regression": "passed",
+    "server_security_regression": "passed; fake data and mocked DeepL upstream",
+    "npm_frontend_audit": 0,
+    "npm_server_audit": 0,
+    "compose_config": "passed with fictitious environment",
+    "browser_home": "loaded; no captured console warnings/errors",
+    "browser_mobile_home": {
+      "width": 390,
+      "height": 844,
+      "documentWidth": 390
+    },
+    "regex_reproduction": {
+      "pattern": "(a+)+$",
+      "inputLength": 31,
+      "timeoutMs": 500,
+      "result": "ETIMEDOUT"
+    }
+  },
+  "not_verified": [
+    "Docker build/runtime (daemon unavailable)",
+    "Caddy executable validation",
+    "VPS OS/resources/network",
+    "DNS/HTTPS",
+    "real third-party API calls",
+    "MySQL backend",
+    "full UI and load tests"
+  ]
+}

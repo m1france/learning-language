@@ -69,7 +69,7 @@ export function TeacherUsernameModal({ initialValue = '', onSave, onCancel, ui =
             <div className="teacher-export-url-text">
               <span>{t.studentsReceiveUrl}</span>
               <code>
-                share.mathisbnl.info/<strong>{clean || t.yourName}</strong>/x9y2z4
+                {window.location.host}/share/<strong>{clean || t.yourName}</strong>/x9y2z4
               </code>
             </div>
           </div>

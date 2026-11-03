@@ -1,0 +1,28 @@
+[Unit]
+Description=Vivre la langue - HTTPS et reverse proxy
+Requires=vivre-app.service
+After=network-online.target vivre-app.service
+Wants=network-online.target
+
+[Container]
+Image=docker.io/library/caddy:2-alpine
+Pull=never
+ContainerName=vivre-caddy
+Network=vivre.network
+EnvironmentFile=/etc/vivre-la-langue.env
+Environment=GOMEMLIMIT=80MiB
+Volume=/opt/vivre-la-langue/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+Volume=vivre-caddy-data.volume:/data
+Volume=vivre-caddy-config.volume:/config
+PublishPort=80:80
+PublishPort=443:443
+LogDriver=journald
+
+[Service]
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

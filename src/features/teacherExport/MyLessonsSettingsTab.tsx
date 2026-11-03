@@ -42,6 +42,7 @@ export function MyLessonsSettingsTab({
   ui,
 }: MyLessonsSettingsTabProps) {
   const [lessons, setLessons] = useState<ExportedLesson[]>([])
+  const [publishError, setPublishError] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [deleteConfirmLesson, setDeleteConfirmLesson] = useState<ExportedLesson | null>(null)
   const [usernameModalOpen, setUsernameModalOpen] = useState(false)
@@ -61,10 +62,13 @@ export function MyLessonsSettingsTab({
     setTimeout(() => setCopiedId(null), 2000)
   }
 
-  const handleDelete = (lessonId: string) => {
-    deleteExportedLesson(lessonId)
-    setLessons(getAllExportedLessons())
-    setDeleteConfirmLesson(null)
+  const handleDelete = async (lessonId: string) => {
+    setPublishError('')
+    try {
+      await deleteExportedLesson(lessonId)
+      setLessons(getAllExportedLessons())
+      setDeleteConfirmLesson(null)
+    } catch (cause) { setPublishError(cause instanceof Error ? cause.message : 'Impossible de retirer cette leçon.'); setDeleteConfirmLesson(null) }
   }
 
   const handleSaveUsername = (newUsername: string) => {
@@ -75,6 +79,7 @@ export function MyLessonsSettingsTab({
 
   return (
     <div className="settings-section my-lessons-tab">
+      {publishError && <p className="account-error" role="alert">{publishError}</p>}
       {/* En-tête profil Enseignant */}
       <div className="my-lessons-header-card">
         <div className="my-lessons-teacher-info">
@@ -86,7 +91,7 @@ export function MyLessonsSettingsTab({
             <p>
               {t.subdomain}{' '}
               <code>
-                share.mathisbnl.info/<strong>{currentUsername || 'prof'}</strong>/…
+                {window.location.host}/share/<strong>{currentUsername || 'prof'}</strong>/…
               </code>
             </p>
           </div>

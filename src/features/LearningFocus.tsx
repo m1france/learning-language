@@ -1,3 +1,4 @@
+import { appStorage } from './auth/storageScope'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Resource, UiLanguage, ApiSettings } from '../domain'
@@ -230,22 +231,18 @@ function renderMirrorChars(text: string, green: Set<number>, grayed: string[], p
 
 const loadMap = (resourceId: string): AnnotationMap => {
   try {
-    const raw = JSON.parse(localStorage.getItem(`vivre-focus-${resourceId}`) || '{}') as Record<string, Partial<PageAnnotations>>
+    const raw = JSON.parse(appStorage.getItem(`vivre-focus-${resourceId}`) || '{}') as Record<string, Partial<PageAnnotations>>
     return Object.fromEntries(Object.entries(raw).map(([key, page]) => [key, normalizePage(page)]))
   } catch { return {} }
 }
 
 export const loadOriginals = (resourceId: string): Record<string, string> => {
-  try { return JSON.parse(localStorage.getItem(`vivre-focus-originals-${resourceId}`) || '{}') } catch { return {} }
+  try { return JSON.parse(appStorage.getItem(`vivre-focus-originals-${resourceId}`) || '{}') } catch { return {} }
 }
 
 const loadLegacyEdited = (resourceId: string): string[] => {
-  try { return JSON.parse(localStorage.getItem(`vivre-focus-edited-${resourceId}`) || '[]') } catch { return [] }
+  try { return JSON.parse(appStorage.getItem(`vivre-focus-edited-${resourceId}`) || '[]') } catch { return [] }
 }
-
-const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-const runsToHtml = (runs: TextRun[]) =>
-  runs.map((run) => `<span style="color:${run.c}">${escapeHtml(run.t).replace(/\n/g, '<br>')}</span>`).join('')
 
 /** Sérialise le DOM du contenteditable en segments texte+couleur (fusionne les voisins de même couleur). */
 function serializeEditor(root: HTMLElement, baseColor: string): TextRun[] {
@@ -373,7 +370,7 @@ export function LearningFocus({
   const t = teacherCopy[ui] || teacherCopy.fr
   const resource = resources.find((item) => item.id === initialResourceId) ?? resources[0]
   const [pageIndex, setPageIndex] = useState(0)
-  const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem('vivre-focus-zoom')) || BASE_FONT)
+  const [fontSize, setFontSize] = useState(() => Number(appStorage.getItem('vivre-focus-zoom')) || BASE_FONT)
   const [tool, setTool] = useState<Tool>('pen')
   const [color, setColor] = useState(COLORS[0])
   const [width, setWidth] = useState(WIDTHS[1])
@@ -399,6 +396,7 @@ export function LearningFocus({
   const [publishedPopupOpen, setPublishedPopupOpen] = useState(false)
   const [isPublishedCopied, setIsPublishedCopied] = useState(false)
   const [reloadTrigger, setReloadTrigger] = useState(0)
+  const [publicationError, setPublicationError] = useState('')
 
   const stageRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
@@ -516,8 +514,8 @@ export function LearningFocus({
     setPreviewFrameOpen(true)
   }
 
-  const handleFinishExport = (lesson: ExportedLesson) => {
-    saveExportedLesson(lesson)
+  const handleFinishExport = async (lesson: ExportedLesson) => {
+    await saveExportedLesson(lesson)
     setPreviewFrameOpen(false)
     setSuccessExportModalLesson(lesson)
     setReloadTrigger((n) => n + 1)
@@ -555,15 +553,15 @@ export function LearningFocus({
   }, [page, originals, modifiedChars])
 
   useEffect(() => {
-    localStorage.setItem(`vivre-focus-${resource.id}`, JSON.stringify(annotations))
+    appStorage.setItem(`vivre-focus-${resource.id}`, JSON.stringify(annotations))
   }, [annotations, resource.id])
 
   useEffect(() => {
-    localStorage.setItem(`vivre-focus-originals-${resource.id}`, JSON.stringify(originals))
+    appStorage.setItem(`vivre-focus-originals-${resource.id}`, JSON.stringify(originals))
   }, [originals, resource.id])
 
   useEffect(() => {
-    localStorage.setItem('vivre-focus-zoom', String(fontSize))
+    appStorage.setItem('vivre-focus-zoom', String(fontSize))
   }, [fontSize])
 
   useEffect(() => {
@@ -631,7 +629,7 @@ export function LearningFocus({
       })
       setLegacyEdited((keys) => {
         const next = keys.filter((key) => !restorable.some((paragraph) => paragraph.key === key))
-        localStorage.setItem(`vivre-focus-edited-${resource.id}`, JSON.stringify(next))
+        appStorage.setItem(`vivre-focus-edited-${resource.id}`, JSON.stringify(next))
         return next
       })
     }
@@ -1205,6 +1203,7 @@ export function LearningFocus({
   const eraserTitle = eraserShortcut ? `${t.tools.eraser.label} (${eraserShortcut})` : t.tools.eraser.label
 
   return <div className="focus-overlay">
+    {publicationError && <div className="account-error" role="alert">{publicationError}<button className="outline" onClick={() => setPublicationError('')}>Fermer</button></div>}
     <div className={`focus-stage ${tool !== 'edit' ? 'no-text-select' : ''}`} ref={stageRef}>
       <div className={`focus-board ${tool !== 'edit' ? 'no-text-select' : ''}`} ref={boardRef} onClick={onBoardClick}>
         <div className={`focus-text-col ${tool !== 'edit' ? 'no-text-select' : ''}`}>
@@ -1445,10 +1444,12 @@ export function LearningFocus({
                   <button
                     type="button"
                     className="btn-danger-ghost small full"
-                    onClick={() => {
-                      deleteExportedLesson(publishedLesson.id)
-                      setPublishedPopupOpen(false)
-                      setReloadTrigger((n) => n + 1)
+                    onClick={async () => {
+                      try {
+                        await deleteExportedLesson(publishedLesson.id)
+                        setPublishedPopupOpen(false)
+                        setReloadTrigger((n) => n + 1)
+                      } catch (cause) { setPublicationError(cause instanceof Error ? cause.message : 'Impossible de retirer cette leçon.') }
                     }}
                   >
                     <Trash2 size={12} />
@@ -1545,7 +1546,13 @@ function NoteEditor({ x, y, size, baseColor, initialRuns, editorRef, onCancel }:
     if (!el) return
     editorRef.current = el
     try { document.execCommand('styleWithCSS', false, 'true') } catch { /* noop */ }
-    if (initialRuns.length) el.innerHTML = runsToHtml(initialRuns)
+    if (initialRuns.length) el.replaceChildren(...initialRuns.map((run) => {
+      const span = document.createElement('span')
+      span.style.color = run.c
+      span.style.whiteSpace = 'pre-wrap'
+      span.textContent = run.t
+      return span
+    }))
     el.focus()
     // curseur en fin de texte
     const range = document.createRange()

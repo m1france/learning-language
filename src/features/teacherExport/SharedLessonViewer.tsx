@@ -1,3 +1,4 @@
+import { appStorage } from '../auth/storageScope'
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import {
   GraduationCap,
@@ -76,7 +77,7 @@ export function SharedLessonViewer({
   const [selectedStickerEmoji, setSelectedStickerEmoji] = useState<string | null>(null)
 
   // Identité élève
-  const [studentName, setStudentName] = useState(() => localStorage.getItem('vivre_student_name') || '')
+  const [studentName, setStudentName] = useState(() => appStorage.getItem('vivre_student_name') || '')
 
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const [, forceRedraw] = useState(0)
@@ -193,7 +194,7 @@ export function SharedLessonViewer({
   const handleSendFigmaComment = () => {
     if (!draftFigmaComment || !draftFigmaComment.text.trim()) return
     const author = studentName.trim() || 'Student'
-    localStorage.setItem('vivre_student_name', author)
+    appStorage.setItem('vivre_student_name', author)
 
     const newComment = addStudentFigmaComment(lesson.id, {
       pageIndex: draftFigmaComment.pageIndex,

@@ -1,3 +1,4 @@
+import { appStorage } from '../auth/storageScope'
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useCamera } from './CameraContext'
 import { Mic, MicOff, Maximize2, X, Square, Play, Pause, GripHorizontal } from 'lucide-react'
@@ -31,7 +32,7 @@ export function FloatingMiniCam({ onNavigateToSpeaking }: FloatingMiniCamProps) 
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const [width, setWidth] = useState(() => {
-    const saved = localStorage.getItem('vivre-pip-width')
+    const saved = appStorage.getItem('vivre-pip-width')
     return saved ? Math.min(600, Math.max(220, parseInt(saved, 10))) : 340
   })
   const isResizingRef = useRef(false)
@@ -66,7 +67,7 @@ export function FloatingMiniCam({ onNavigateToSpeaking }: FloatingMiniCamProps) 
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       setWidth((w) => {
-        localStorage.setItem('vivre-pip-width', String(w))
+        appStorage.setItem('vivre-pip-width', String(w))
         return w
       })
     }

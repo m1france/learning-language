@@ -1,3 +1,6 @@
+import { appStorage } from './features/auth/storageScope'
+import { useAuth } from './features/auth/authService'
+import { syncService } from './features/sync/syncService'
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState, Difficulty, Language, Resource, UiLanguage } from './domain'
 import { BUILTIN_CATEGORIES, id } from './domain'
@@ -97,11 +100,12 @@ export const isGenericImportedAuthor = (author?: string): boolean => {
 }
 
 export default function App() {
+  const { user } = useAuth()
   const [state, setState] = useState<AppState | null>(() => loadState())
   const [page, setPage] = useState<Page>('home')
   const [readerId, setReaderId] = useState<string | null>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
-  const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem('vivre-side-collapsed') === '1')
+  const [sideCollapsed, setSideCollapsed] = useState(() => appStorage.getItem('vivre-side-collapsed') === '1')
   const [speakingPrompterText, setSpeakingPrompterText] = useState<string | null>(null)
   const [isAiTaskRunning, setIsAiTaskRunning] = useState(false)
   const [aiTaskLabel, setAiTaskLabel] = useState<string | undefined>(undefined)
@@ -154,15 +158,17 @@ export default function App() {
   const toggleSide = () => {
     const next = !sideCollapsed
     setSideCollapsed(next)
-    localStorage.setItem('vivre-side-collapsed', next ? '1' : '0')
+    appStorage.setItem('vivre-side-collapsed', next ? '1' : '0')
   }
 
-  // Stockage individuel par appareil (100% local dans ce navigateur)
+  useEffect(() => syncService.init((remote) => setState(remote)), [user?.id])
+
+  // The browser cache is scoped to the account; guests remain local.
   useEffect(() => {
     if (state) {
       saveState(state)
     }
-  }, [state])
+  }, [state, user?.id])
   useEffect(() => { if (state) document.documentElement.dataset.theme = state.settings.theme }, [state?.settings.theme]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Écran de chargement d'une leçon partagée distante
@@ -218,7 +224,7 @@ export default function App() {
             window.history.replaceState({}, '', window.location.pathname)
           }
         }}
-        isTeacherPreview={state !== null && !isShareSubdomain()}
+        isTeacherPreview={Boolean(user) && state !== null && !isShareSubdomain()}
         ui={state?.settings.uiLanguage || 'fr'}
       />
     )
@@ -243,7 +249,7 @@ export default function App() {
     )
   }
 
-  if (!state) return <Onboarding onComplete={(name, uiLanguage, learningLanguage) => setState(createState({ name, uiLanguage, learningLanguage }))} />
+  if (!state) return <LearningSetup onComplete={(name, uiLanguage, learningLanguage) => setState(createState({ name, uiLanguage, learningLanguage }))} />
 
   const ui = state.settings.uiLanguage
   const t = copy[ui]
@@ -403,7 +409,7 @@ export default function App() {
                   onOpenLesson={(lesson) => setViewingSharedLesson(lesson)}
                   onResetData={() => {
                     resetState()
-                    setState(null)
+                    setState(createState({ name: user?.name || '' }))
                     setPage('home')
                   }}
                 />
@@ -499,7 +505,7 @@ function Brand({ onClick }: { onClick?: () => void }) {
     : <div className="brand">{content}</div>
 }
 
-function Onboarding({ onComplete }: { onComplete: (name: string, uiLanguage: UiLanguage, learningLanguage: Language) => void }) {
+function LearningSetup({ onComplete }: { onComplete: (name: string, uiLanguage: UiLanguage, learningLanguage: Language) => void }) {
   const [name, setName] = useState('')
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>(() => detectUiLanguage())
   const [learningLanguage, setLearningLanguage] = useState<Language>('en')
@@ -659,7 +665,7 @@ function Dashboard({
       {/* Header */}
       <header className="page-header dashboard-header">
         <div>
-          <h1>{t.welcome}, {name || 'Salut'}.</h1>
+          <h1>{t.welcome}{name ? `, ${name}` : ''}.</h1>
         </div>
         <SessionDonePill state={state} ui={ui} onOpen={onStartSession} />
       </header>

@@ -48,7 +48,7 @@ type ExportPreviewFrameProps = {
   teacherName?: string
   existingLesson?: ExportedLesson | null
   onCancel: () => void
-  onExport: (exportedLesson: ExportedLesson) => void
+  onExport: (exportedLesson: ExportedLesson) => void | Promise<void>
   ui?: UiLanguage
   api?: ApiSettings
 }
@@ -72,6 +72,8 @@ export function ExportPreviewFrame({
   const [currentPageIndex, setCurrentPageIndex] = useState(initialPageIndex)
   const [activeAction, setActiveAction] = useState<ActiveAction>('none')
   const [isAiAligning, setIsAiAligning] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [publishError, setPublishError] = useState('')
   const [aiAlignToast, setAiAlignToast] = useState<string | null>(null)
   const [, forceRedraw] = useState(0)
 
@@ -473,7 +475,9 @@ export function ExportPreviewFrame({
   }
 
   // Déclenchement de l'export final
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
+    if (isPublishing) return
+    setIsPublishing(true); setPublishError('')
     const exportedPages: ExportedLessonPage[] = pages.map((p) => ({
       pageIndex: p.pageIndex,
       chapterTitle: p.chapterTitle,
@@ -518,12 +522,15 @@ export function ExportPreviewFrame({
       updatedAt: new Date().toISOString(),
     }
 
-    onExport(exported)
+    try { await onExport(exported) }
+    catch (cause) { setPublishError(cause instanceof Error ? cause.message : 'La publication a échoué. Réessayez.'); setFinalizeModalOpen(false) }
+    finally { setIsPublishing(false) }
   }
 
   return (
     <div className="export-preview-overlay">
       <div className="export-preview-frame">
+        {publishError && <div className="account-error" role="alert">{publishError}</div>}
         {/* Barre supérieure */}
         <header className="export-preview-topbar">
           <div className="export-preview-title">
@@ -1016,6 +1023,7 @@ export function ExportPreviewFrame({
             <button
               type="button"
               className="primary"
+              disabled={isPublishing}
               onClick={() => setFinalizeModalOpen(true)}
             >
               <span>{existingLesson ? t.updateLesson : t.exportBtn}</span>
@@ -1211,7 +1219,7 @@ export function ExportPreviewFrame({
               <button type="button" className="outline" onClick={() => setFinalizeModalOpen(false)}>
                 {t.back}
               </button>
-              <button type="button" className="primary" onClick={handleFinalize}>
+              <button type="button" className="primary" disabled={isPublishing} onClick={() => void handleFinalize()}>
                 <span>{existingLesson ? t.updateLessonBtn : t.generateUniqueLink}</span>
                 <ArrowRight size={15} />
               </button>

@@ -1,45 +1,60 @@
-version: "3.8"
-
+name: vivre-la-langue
 services:
-  db:
-    image: mysql:8.0
-    container_name: ll-db
+  app:
+    image: vivre-la-langue:local
+    build:
+      context: .
+      dockerfile: dockerfile
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: changeme_root
-      MYSQL_DATABASE: learning_language
-      MYSQL_USER: ll_user
-      MYSQL_PASSWORD: changeme_user
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      DATA_DIR: /app/data
+      APP_ORIGIN: https://${APP_DOMAIN:?Set APP_DOMAIN in .env}
+      TRUST_PROXY: '1'
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:-}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_VERIFY_SERVICE_SID: ${TWILIO_VERIFY_SERVICE_SID:-}
     volumes:
-      - db_data:/var/lib/mysql
-      - ./server/db-init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - ll-net
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
-
-  app:
-    build: .
-    container_name: ll-app
+      - lessons:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  caddy:
+    image: caddy:2-alpine
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - '80:80'
+      - '443:443'
     environment:
-      DATABASE_URL: mysql://ll_user:changeme_user@db:3306/learning_language
-      NODE_ENV: production
-      PORT: 3001
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
-      - db
-    networks:
-      - ll-net
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
-
+      app:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
 volumes:
-  db_data:
-
-networks:
-  ll-net:
-    driver: bridge
+  lessons:
+  caddy_data:
+  caddy_config:

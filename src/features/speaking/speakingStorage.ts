@@ -1,3 +1,5 @@
+import { getScopedDatabaseName, getStorageScope, notifyStorageChange } from '../auth/storageScope'
+
 export type SpeakingSessionTimestamp = {
   id: string
   time: number // in seconds
@@ -103,7 +105,7 @@ function openDB(): Promise<IDBDatabase> {
     if (typeof indexedDB === 'undefined') {
       return reject(new Error('IndexedDB is not supported'))
     }
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
+    const request = indexedDB.open(getScopedDatabaseName(DB_NAME), DB_VERSION)
     request.onupgradeneeded = () => {
       const db = request.result
       if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -119,16 +121,19 @@ function openDB(): Promise<IDBDatabase> {
 export async function saveSpeakingSession(
   session: Omit<SpeakingSessionRecord, 'mediaUrl'> & { blob: Blob },
 ): Promise<SpeakingSessionRecord> {
+  const scope = getStorageScope()
   const db = await openDB()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const store = tx.objectStore(STORE_NAME)
     const req = store.put(session)
-    req.onsuccess = () => {
+    tx.oncomplete = () => {
+      db.close()
+      notifyStorageChange(scope)
       const mediaUrl = URL.createObjectURL(session.blob)
       resolve({ ...session, mediaUrl })
     }
-    req.onerror = () => reject(req.error)
+    tx.onerror = tx.onabort = () => { db.close(); reject(tx.error || req.error) }
   })
 }
 
@@ -139,6 +144,8 @@ export async function getAllSpeakingSessions(): Promise<SpeakingSessionRecord[]>
       const tx = db.transaction(STORE_NAME, 'readonly')
       const store = tx.objectStore(STORE_NAME)
       const req = store.getAll()
+      tx.oncomplete = () => db.close()
+      tx.onabort = () => { db.close(); reject(tx.error) }
       req.onsuccess = () => {
         const results = (req.result as (Omit<SpeakingSessionRecord, 'mediaUrl'> & { blob?: Blob })[]) || []
         // Sort descending by createdAt
@@ -169,6 +176,7 @@ export async function getAllSpeakingSessions(): Promise<SpeakingSessionRecord[]>
 }
 
 export async function updateSpeakingSession(id: string, updates: SpeakingSessionPatch): Promise<void> {
+  const scope = getStorageScope()
   const db = await openDB()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
@@ -176,27 +184,24 @@ export async function updateSpeakingSession(id: string, updates: SpeakingSession
     const getReq = store.get(id)
     getReq.onsuccess = () => {
       const existing = getReq.result
-      if (!existing) {
-        resolve()
-        return
-      }
+      if (!existing) return
       const merged = { ...existing, ...updates }
-      const putReq = store.put(merged)
-      putReq.onsuccess = () => resolve()
-      putReq.onerror = () => reject(putReq.error)
+      store.put(merged)
     }
-    getReq.onerror = () => reject(getReq.error)
+    tx.oncomplete = () => { db.close(); notifyStorageChange(scope); resolve() }
+    tx.onerror = tx.onabort = () => { db.close(); reject(tx.error || getReq.error) }
   })
 }
 
 export async function deleteSpeakingSession(id: string): Promise<void> {
+  const scope = getStorageScope()
   const db = await openDB()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const store = tx.objectStore(STORE_NAME)
     const req = store.delete(id)
-    req.onsuccess = () => resolve()
-    req.onerror = () => reject(req.error)
+    tx.oncomplete = () => { db.close(); notifyStorageChange(scope); resolve() }
+    tx.onerror = tx.onabort = () => { db.close(); reject(tx.error || req.error) }
   })
 }
 
@@ -205,7 +210,10 @@ export async function listSpeakingTranscripts(limit = 5): Promise<{ id: string; 
   try {
     const db = await openDB()
     const all = await new Promise<SpeakingSessionRecord[]>((resolve, reject) => {
-      const req = db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
+      const tx = db.transaction(STORE_NAME, 'readonly')
+      const req = tx.objectStore(STORE_NAME).getAll()
+      tx.oncomplete = () => db.close()
+      tx.onabort = () => { db.close(); reject(tx.error) }
       req.onsuccess = () => resolve(req.result as SpeakingSessionRecord[])
       req.onerror = () => reject(req.error)
     })

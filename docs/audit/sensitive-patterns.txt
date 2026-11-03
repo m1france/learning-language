@@ -1,0 +1,84 @@
+src/importer.ts:14:  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+src/importer.ts:15:  (url: string) => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+src/importer.ts:16:  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+src/importer.ts:24:  return `https://${lang}.wikipedia.org/api/rest_v1/page/html/${encodeURIComponent(decodeURIComponent(match[1]))}`
+src/importer.ts:131:    url = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`)
+src/domain.ts:226:  /** API token for youtube-transcript.io (https://www.youtube-transcript.io/api) */
+src/seed.ts:13:  { name: 'Language Reactor', description: 'Make video time active learning.', category: 'Video', url: 'https://www.languagereactor.com/' },
+src/seed.ts:14:  { name: 'Ogima', description: 'Practice everyday conversations.', category: 'Speaking', url: 'https://www.ogima.co/' },
+src/seed.ts:15:  { name: 'my_lute', description: 'Read with context at your own pace.', category: 'Reading', url: 'https://luteorg.github.io/lute-manual/' },
+src/seed.ts:16:  { name: 'Anki', description: 'A classic deck for learners who want one.', category: 'Memory', url: 'https://apps.ankiweb.net/' },
+src/seed.ts:17:  { name: 'Tandem', description: 'Exchange with native speakers.', category: 'Community', url: 'https://tandem.net/' },
+src/lib/llm.ts:17:  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+src/lib/llm.ts:18:  google: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+src/lib/llm.ts:19:  openai: 'https://api.openai.com/v1/chat/completions',
+src/lib/llm.ts:20:  nvidia: 'https://integrate.api.nvidia.com/v1/chat/completions',
+src/lib/llm.ts:21:  kimi: 'https://api.moonshot.cn/v1/chat/completions',
+src/lib/llm.ts:160:    base['HTTP-Referer'] = typeof window !== 'undefined' ? window.location.origin : 'https://vivre-la-langue.app'
+src/ai.ts:4:const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
+src/ai.ts:74:    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${api.elevenLabsVoice || '21m00Tcm4TlvDq8ikWAM'}?output_format=mp3_44100_128`, {
+src/ai.ts:90:    const response = await fetch('https://api.fish.audio/v1/tts', {
+src/ai.ts:116:    'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+src/ai.ts:124:      const response = await fetch('https://openrouter.ai/api/v1/audio/speech', {
+src/ai.ts:274:      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${tl}&q=${encodeURIComponent(chunks[index])}`
+src/features/resourceAiService.ts:115:        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+src/features/resourceAiService.ts:198:      coverImage = `https://image.pollinations.ai/prompt/${encodeURIComponent(coverPrompt + ' high quality cinematic book cover art')}?width=600&height=800&nologo=true`
+src/features/resourceAiService.ts:230:  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`
+src/features/resourceAiService.ts:333:        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+src/features/resourceAiService.ts:370:            author: parsed.author?.trim() || new URL(url.startsWith('http') ? url : `https://${url}`).hostname,
+src/features/LearningFocus.tsx:1548:    if (initialRuns.length) el.innerHTML = runsToHtml(initialRuns)
+src/components/AddResourceModal.tsx:420:                placeholder="https://example.com/article"
+src/features/writing/writingCorrectionAiService.ts:182:        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+src/features/assistant/assistantPrompt.ts:57:<svg viewBox="0 0 640 320" xmlns="http://www.w3.org/2000/svg">…</svg>
+src/features/teacherExport/teacherExportService.ts:305: * - Sous-domaine direct : https://share.mathisbnl.info/{username}/{id}
+src/features/assistant/Markdown.tsx:6: * Small, safe Markdown renderer (React elements only, never innerHTML) with
+src/features/exercises/exerciseAiService.ts:152:        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+src/features/assistant/ModelPicker.tsx:16:    fetch('https://openrouter.ai/api/v1/models', { signal: controller.signal })
+src/features/assistant/assistantTools.ts:140:      const pattern = new RegExp(regex[1], regex[2].includes('i') ? regex[2] : `${regex[2]}i`)
+src/features/Reader.tsx:105:const wikiUrl = (language: Language, word: string) => `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`
+src/features/Reader.tsx:109:    ? `https://www.linguee.com/french-english/translation/${encodeURIComponent(word)}.html`
+src/features/Reader.tsx:110:    : `https://www.linguee.com/english-french/translation/${encodeURIComponent(word)}.html`
+src/features/Reader.tsx:116:    return `https://dictionary.cambridge.org/dictionary/french-english/${encodeURIComponent(clean)}`
+src/features/Reader.tsx:118:  return `https://dictionary.cambridge.org/pronunciation/english/${encodeURIComponent(clean)}`
+src/features/Reader.tsx:3368:      const fallbackRegex = new RegExp(`(^|[^\\p{L}\\p{N}'’‘-])(${escaped})([^\\p{L}\\p{N}'’‘-]|$)`, "giu")
+src/features/assistant/blocks/LearnBlocks.tsx:227:    const withNs = svg.includes('xmlns=') ? svg : svg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"')
+src/features/assistant/blocks/HtmlArtifact.tsx:26:  return `(function(){var id=${JSON.stringify(id)};function post(m){m.__vl=id;parent.postMessage(m,'*')}
+src/features/assistant/blocks/HtmlArtifact.tsx:50:  const srcDoc = useMemo(() => (partial ? '' : buildArtifactDocument(code, id)), [code, id, partial])
+src/features/assistant/blocks/HtmlArtifact.tsx:98:          srcDoc={srcDoc}
+src/features/speaking/deeplService.ts:16:  return `https://www.deepl.com/translator#fr/${target}/${encodeURIComponent(text)}`
+src/features/speaking/deeplService.ts:59:          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+src/features/speaking/deeplService.ts:94:    const directEndpoint = isFreeKey ? 'https://api-free.deepl.com/v2/translate' : 'https://api.deepl.com/v2/translate'
+src/features/speaking/deeplService.ts:153:    const fallbackUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(trimmed)}`
+src/features/exercises/components/GeneralExerciseBoards.tsx:750:    return `https://source.unsplash.com/400x300/?${cleanQuery}`
+src/features/speaking/QuickWordLookup.tsx:217:  const lingueeUrl = `https://www.linguee.com/french-english/translation/${encodeURIComponent(cleanWord || 'bonjour')}.html`
+src/features/speaking/QuickWordLookup.tsx:222:    const url = `https://dictionary.cambridge.org/dictionary/french-english/${encodeURIComponent(term)}`
+src/features/speaking/transcriptionService.ts:25:  groq: 'https://api.groq.com/openai/v1/audio/transcriptions',
+src/features/speaking/transcriptionService.ts:26:  openai: 'https://api.openai.com/v1/audio/transcriptions',
+src/features/speaking/review/notesMarkdown.ts:200:  const pattern = new RegExp(TIMESTAMP_PATTERN.source, 'g')
+src/features/vocabulary/RichInputField.tsx:118:      const currentMd = htmlToMarkdown(editorRef.current.innerHTML)
+src/features/vocabulary/RichInputField.tsx:120:        editorRef.current.innerHTML = markdownToHtml(value)
+src/features/vocabulary/RichInputField.tsx:128:      editorRef.current.innerHTML = markdownToHtml(value)
+src/features/vocabulary/RichInputField.tsx:138:    const md = htmlToMarkdown(editorRef.current.innerHTML)
+src/features/vocabulary/RichInputField.tsx:208:  return <span className={className} dangerouslySetInnerHTML={{ __html: markdownToHtml(text) }} />
+src/features/speaking/wordAiService.ts:7:const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
+src/features/speaking/wordAiService.ts:43:        endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+src/features/speaking/wordAiService.ts:52:        endpoint: 'https://integrate.api.nvidia.com/v1/chat/completions',
+src/features/speaking/wordAiService.ts:61:        endpoint: 'https://api.moonshot.cn/v1/chat/completions',
+src/features/speaking/wordAiService.ts:70:        endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+src/features/speaking/wordAiService.ts:79:        endpoint: 'https://api.openai.com/v1/chat/completions',
+src/features/speaking/wordAiService.ts:88:        endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+src/features/speaking/wordAiService.ts:276:          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+src/features/speaking/wordAiService.ts:351:        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+src/features/speaking/wordAiService.ts:471:        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://learning-language.app',
+src/features/vocabulary/ankiExporter.ts:65:    const versionRes = await fetch('http://127.0.0.1:8765', {
+src/features/vocabulary/ankiExporter.ts:78:    await fetch('http://127.0.0.1:8765', {
+src/features/vocabulary/ankiExporter.ts:106:    const addNotesRes = await fetch('http://127.0.0.1:8765', {
+src/features/vocabulary/phraseMatchingService.ts:234:  return new RegExp(`(?:^|[^\\p{L}\\p{N}'’‘-])(${joined})(?=[^\\p{L}\\p{N}'’‘-]|$)`, 'giu')
+src/features/speaking/review/NotesEditor.tsx:81:    if (!root.firstElementChild) root.innerHTML = '<p><br></p>'
+src/features/speaking/review/NotesEditor.tsx:91:    root.innerHTML = markdownToHtml(initialMarkdown)
+src/features/speaking/review/NotesEditor.tsx:121:    if (!el.textContent && !el.querySelector('.nb-ts, br')) el.innerHTML = '<br>'
+src/features/speaking/review/NotesEditor.tsx:192:      if (!block.textContent) block.innerHTML = '<br>'
+src/features/speaking/review/NotesEditor.tsx:241:    holder.innerHTML = timestampChipHtml(seconds)
+src/features/speaking/review/NotesEditor.tsx:267:      quote.innerHTML = `${seconds !== undefined ? `${timestampChipHtml(seconds)} ` : ''}${safe}`
+src/features/speaking/review/NotesEditor.tsx:269:      after.innerHTML = '<br>'
+src/features/speaking/review/NotesEditor.tsx:486:            p.innerHTML = '<br>'

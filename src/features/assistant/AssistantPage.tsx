@@ -48,6 +48,7 @@ import { BlockEnvContext, type BlockEnv, type SaveWordInput } from './blocks/sha
 import { Markdown, parseMarkdown, type MdBlock } from './Markdown'
 import { VoiceMode, type VoiceExchange } from './VoiceMode'
 import { ModelPicker } from './ModelPicker'
+import { getStorageScope } from '../auth/storageScope'
 import './assistant.css'
 
 type Props = {
@@ -214,6 +215,9 @@ function attachmentIcon(kind: Attachment['kind']) {
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSettings }: Props) {
+  const mountedScope = useRef(getStorageScope())
+  const mounted = useRef(true)
+  const isCurrentScope = useCallback(() => mounted.current && getStorageScope() === mountedScope.current, [])
   const c = assistantCopy(ui)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -239,9 +243,10 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   // Source of truth for async work (agent loop, voice mode): updated synchronously.
   const conversationsRef = useRef<Conversation[]>([])
   const commit = useCallback((next: Conversation[]) => {
+    if (!isCurrentScope()) return
     conversationsRef.current = next
     setConversations(next)
-  }, [])
+  }, [isCurrentScope])
   const abortRef = useRef<AbortController | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -249,6 +254,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   const dictationRef = useRef<ListenHandle | null>(null)
   const dictationBase = useRef('')
   const saveTimers = useRef(new Map<string, number>())
+  const pendingFrames = useRef(new Set<number>())
 
   const level: CefrLevel = state.settings.assistantLevel ?? 'B1'
   const lang = state.settings.learningLanguage
@@ -257,23 +263,47 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   const active = conversations.find((conversation) => conversation.id === activeId) ?? null
   const turns = active?.turns ?? []
 
-  useEffect(() => { void listConversations().then(commit) }, [commit])
-  useEffect(() => () => { abortRef.current?.abort(); dictationRef.current?.abort(); stopSpeaking() }, [])
+  useEffect(() => {
+    mounted.current = true
+    let cancelled = false
+    void listConversations().then((list) => { if (!cancelled && isCurrentScope()) commit(list) })
+    return () => {
+      // A normal page change can flush a pending draft; an account change must discard it.
+      const canFlush = isCurrentScope()
+      mounted.current = false
+      for (const [id, timer] of saveTimers.current) {
+        window.clearTimeout(timer)
+        const conversation = conversationsRef.current.find((item) => item.id === id)
+        if (canFlush && conversation) void saveConversation(conversation)
+      }
+      saveTimers.current.clear()
+      cancelled = true
+      abortRef.current?.abort()
+      dictationRef.current?.abort()
+      for (const frame of pendingFrames.current) cancelAnimationFrame(frame)
+      pendingFrames.current.clear()
+      stopSpeaking()
+    }
+  }, [commit, isCurrentScope])
 
   // ── Persistence helpers ──────────────────────────────────────────────────
   const persist = useCallback((id: string, delay = 400) => {
+    if (!isCurrentScope()) return
     const timers = saveTimers.current
     window.clearTimeout(timers.get(id))
     timers.set(id, window.setTimeout(() => {
+      timers.delete(id)
+      if (!isCurrentScope()) return
       const conversation = conversationsRef.current.find((item) => item.id === id)
       if (conversation) void saveConversation(conversation)
     }, delay))
-  }, [])
+  }, [isCurrentScope])
 
   const mutate = useCallback((id: string, update: (conversation: Conversation) => Conversation, save = true) => {
+    if (!isCurrentScope()) return
     commit(conversationsRef.current.map((conversation) => (conversation.id === id ? update(conversation) : conversation)))
     if (save) persist(id)
-  }, [persist, commit])
+  }, [persist, commit, isCurrentScope])
 
   const patchTurn = useCallback((conversationId: string, turnId: string, patch: Partial<ChatTurn> | ((turn: ChatTurn) => Partial<ChatTurn>), save = false) => {
     mutate(conversationId, (conversation) => ({
@@ -297,6 +327,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   const known = useMemo(() => new Set(state.words.filter((word) => word.language === lang).map((word) => word.normalized)), [state.words, lang])
   const hasWord = useCallback((word: string) => known.has(normalizeWord(word)), [known])
   const saveWord = useCallback((input: SaveWordInput) => {
+    if (!isCurrentScope()) return
     onChange((prev) => upsertWordDetails(prev, {
       raw: input.word,
       sentence: input.example,
@@ -308,7 +339,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
     }))
     setToast(c.savedToDeck(input.word))
     window.setTimeout(() => setToast(null), 1800)
-  }, [onChange, c])
+  }, [onChange, c, isCurrentScope])
 
   const speakTarget = useCallback((text: string) => { void speak(text, lang, api) }, [lang, api])
   const speakTargetAndWait = useCallback(async (text: string) => { await speakAndWait(text, lang, api) }, [lang, api])
@@ -339,6 +370,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   }
 
   const runTurn = async (conversationId: string, extraSystem?: string) => {
+    if (!isCurrentScope()) return
     const conversation = conversationsRef.current.find((item) => item.id === conversationId)
     if (!conversation) return
     const assistantTurn: ChatTurn = { id: newId('t'), role: 'assistant', content: '', createdAt: now(), steps: [] }
@@ -367,8 +399,12 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
 
     let frame = 0
     let pending: Partial<ChatTurn> = {}
-    const flush = () => { frame = 0; const patch = pending; pending = {}; patchTurn(conversationId, assistantTurn.id, patch) }
-    const queue = (patch: Partial<ChatTurn>) => { pending = { ...pending, ...patch }; if (!frame) frame = requestAnimationFrame(flush) }
+    const flush = () => { pendingFrames.current.delete(frame); frame = 0; const patch = pending; pending = {}; patchTurn(conversationId, assistantTurn.id, patch) }
+    const queue = (patch: Partial<ChatTurn>) => {
+      if (!isCurrentScope()) return
+      pending = { ...pending, ...patch }
+      if (!frame) { frame = requestAnimationFrame(flush); pendingFrames.current.add(frame) }
+    }
 
     try {
       const result = await runAgent({
@@ -377,7 +413,10 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
         messages: buildHistory(conversation.turns),
         tools: toolsOk ? ASSISTANT_TOOLS : undefined,
         reasoningEffort: effortFor(lastUser?.content ?? ''),
-        executeTool: (name, args) => executeTool(stateRef.current, name, args, ui === 'fr' ? 'fr' : 'en'),
+        executeTool: (name, args) => {
+          if (!isCurrentScope()) throw new DOMException('Account changed', 'AbortError')
+          return executeTool(stateRef.current, name, args, ui === 'fr' ? 'fr' : 'en')
+        },
         signal: controller.signal,
         callbacks: {
           onText: (full) => queue({ content: full }),
@@ -388,20 +427,25 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
       })
       if (!result.toolsSupported && toolsOk) toolless.add(cfg.model)
       cancelAnimationFrame(frame)
+      pendingFrames.current.delete(frame)
       patchTurn(conversationId, assistantTurn.id, { ...pending, content: result.content, reasoning: result.reasoning || undefined, model: result.model }, true)
     } catch (error) {
       cancelAnimationFrame(frame)
+      pendingFrames.current.delete(frame)
       const aborted = (error as Error)?.name === 'AbortError'
       patchTurn(conversationId, assistantTurn.id, (turn) => ({ ...pending, error: aborted ? undefined : error instanceof Error ? error.message : String(error), content: turn.content || pending.content || '' }), true)
     } finally {
-      abortRef.current = null
-      setBusyTurn(null)
-      onAiTaskChange?.(false)
-      mutate(conversationId, (item) => ({ ...item, updatedAt: now() }))
+      if (isCurrentScope()) {
+        abortRef.current = null
+        setBusyTurn(null)
+        onAiTaskChange?.(false)
+        mutate(conversationId, (item) => ({ ...item, updatedAt: now() }))
+      }
     }
   }
 
   const send = async (textArg?: string, options: { extraSystem?: string } = {}) => {
+    if (!isCurrentScope()) return
     const text = (textArg ?? draft).trim()
     if ((!text && !attachments.length) || busyTurn) return
     stopDictation()
@@ -447,6 +491,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
 
   // ── Attachments ──────────────────────────────────────────────────────────
   const addAttachment = (attachment: Attachment) => {
+    if (!isCurrentScope()) return
     setAttachments((prev) => [...prev.filter((item) => item.label !== attachment.label || item.kind !== attachment.kind), attachment])
     setMenu(null)
     inputRef.current?.focus()
@@ -467,8 +512,9 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   }
 
   const openMenu = (next: typeof menu) => {
+    if (!isCurrentScope()) return
     setMenu(menu === next ? null : next)
-    if (next === 'speaking') void listSpeakingTranscripts(12).then(setSpeakingList)
+    if (next === 'speaking') void listSpeakingTranscripts(12).then((list) => { if (isCurrentScope()) setSpeakingList(list) })
   }
 
   // ── Voice ────────────────────────────────────────────────────────────────
@@ -483,6 +529,7 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   }
 
   const onVoiceExchange = (exchange: VoiceExchange) => {
+    if (!isCurrentScope()) return
     let id = voiceConversationId.current
     if (!id) {
       const conversation: Conversation = { id: newId('conv'), title: `🎙 ${c.voiceTitle}`, createdAt: now(), updatedAt: now(), turns: [] }
@@ -525,7 +572,10 @@ export function AssistantPage({ state, ui, onChange, onAiTaskChange, onOpenSetti
   }
 
   const removeConversation = (id: string) => {
+    if (!isCurrentScope()) return
     if (!window.confirm(c.confirmDelete)) return
+    window.clearTimeout(saveTimers.current.get(id))
+    saveTimers.current.delete(id)
     commit(conversationsRef.current.filter((item) => item.id !== id))
     void deleteConversation(id)
     if (activeId === id) setActiveId(null)

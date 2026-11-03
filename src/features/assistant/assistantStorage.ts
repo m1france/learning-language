@@ -1,32 +1,35 @@
 import type { Conversation } from './assistantTypes'
+import { getScopedDatabaseName, getStorageScope, notifyStorageChange } from '../auth/storageScope'
 
 /** Conversations live in IndexedDB (they can hold images and long lessons). */
 
 const DB_NAME = 'vivre_assistant_db'
 const STORE = 'conversations'
 
-let dbPromise: Promise<IDBDatabase> | null = null
-
 function openDb(): Promise<IDBDatabase> {
-  if (dbPromise) return dbPromise
-  dbPromise = new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') { reject(new Error('IndexedDB indisponible')); return }
-    const request = indexedDB.open(DB_NAME, 1)
+    const request = indexedDB.open(getScopedDatabaseName(DB_NAME), 1)
     request.onupgradeneeded = () => {
       const db = request.result
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' }).createIndex('updatedAt', 'updatedAt')
     }
     request.onsuccess = () => resolve(request.result)
-    request.onerror = () => { dbPromise = null; reject(request.error) }
+    request.onerror = () => reject(request.error)
   })
-  return dbPromise
 }
 
 function run<T>(mode: IDBTransactionMode, action: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  const scope = getStorageScope()
   return openDb().then((db) => new Promise<T>((resolve, reject) => {
-    const request = action(db.transaction(STORE, mode).objectStore(STORE))
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
+    const tx = db.transaction(STORE, mode)
+    const request = action(tx.objectStore(STORE))
+    tx.oncomplete = () => {
+      db.close()
+      if (mode === 'readwrite') notifyStorageChange(scope)
+      resolve(request.result)
+    }
+    tx.onerror = tx.onabort = () => { db.close(); reject(tx.error || request.error || new Error('Conversation transaction failed')) }
   }))
 }
 

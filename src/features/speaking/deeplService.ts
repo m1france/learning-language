@@ -90,22 +90,16 @@ export async function translateText(
     const key = apiKey.trim()
     const isFreeKey = key.endsWith(':fx')
     
-    const isLocalhost = typeof window !== 'undefined' && (
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname === '0.0.0.0'
-    )
-    const proxyEndpoint = isFreeKey ? '/api-deepl-free/v2/translate' : '/api-deepl-pro/v2/translate'
+    const proxyEndpoint = isFreeKey ? '/api/deepl/free/translate' : '/api/deepl/pro/translate'
     const directEndpoint = isFreeKey ? 'https://api-free.deepl.com/v2/translate' : 'https://api.deepl.com/v2/translate'
-
-    const endpointsToTry = isLocalhost ? [proxyEndpoint, directEndpoint] : [directEndpoint, proxyEndpoint]
+    const endpointsToTry = [proxyEndpoint, directEndpoint]
 
     for (const endpoint of endpointsToTry) {
       try {
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
-            Authorization: `DeepL-Auth-Key ${key}`,
+            ...(endpoint.startsWith('/') ? { 'X-DeepL-Key': key } : { Authorization: `DeepL-Auth-Key ${key}` }),
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({

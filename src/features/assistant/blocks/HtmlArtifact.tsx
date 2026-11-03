@@ -31,13 +31,11 @@ window.addEventListener('load',size);setTimeout(size,60);setTimeout(size,400);
 window.addEventListener('error',function(e){post({type:'error',message:String(e.message||e)})});})();`
 }
 
-const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob: https:; media-src data: blob:"
+const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; form-action 'none'; base-uri 'none'"
 
 export function buildArtifactDocument(code: string, id: string): string {
   const head = `<meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${themeCss()}</style><script>${bridge(id)}</script>`
-  if (/<html[\s>]/i.test(code)) {
-    return /<head[^>]*>/i.test(code) ? code.replace(/<head[^>]*>/i, (tag) => `${tag}${head}`) : code.replace(/<html[^>]*>/i, (tag) => `${tag}<head>${head}</head>`)
-  }
+  // The policy precedes every byte supplied by the model, including malformed documents.
   return `<!doctype html><html><head>${head}</head><body>${code}</body></html>`
 }
 
@@ -96,7 +94,7 @@ export function HtmlArtifact({ code, index, partial }: { code: string; index: nu
           ref={frameRef}
           className="ab-frame"
           title={title || env.c.blockKinds.html}
-          sandbox="allow-scripts allow-forms"
+          sandbox="allow-scripts"
           srcDoc={srcDoc}
           style={{ height: env.inCanvas ? 'calc(100vh - 190px)' : height }}
         />

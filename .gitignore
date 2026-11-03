@@ -7,3 +7,9 @@ server/data/
 *.sqlite
 .env
 .env.*
+!.env.example
+dist/
+server/dist/
+.DS_Store
+deploy/backups/
+deploy/artifacts/

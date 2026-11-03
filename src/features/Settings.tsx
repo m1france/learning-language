@@ -1,3 +1,4 @@
+import { useAuth } from './auth/authService'
 import React, { useEffect, useState } from 'react'
 import type { AppState, Language, UiLanguage, UserSettings } from '../domain'
 import { BUILTIN_CATEGORIES, id } from '../domain'
@@ -291,6 +292,7 @@ const DEFAULT_CATEGORIES: { id: string; label: string }[] = [
 ]
 
 export function Settings({ settings, state, onSave, onChangeState, onResetData, onOpenLesson }: SettingsProps) {
+  const { user, guest, signOut, openSignIn } = useAuth()
   const [draft, setDraft] = useState<UserSettings>(settings)
   const [syncInfo, setSyncInfo] = useState<SyncStateInfo>(() => syncService.getInfo())
 
@@ -559,14 +561,14 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
         <div className="settings-title-row">
           <h1>{t.title}</h1>
           <div
-            className="settings-sync-badge status-synced"
-            title="Stockage individuel par appareil : vos données restent strictement confinées dans ce navigateur."
+            className={`settings-sync-badge status-${user ? syncInfo.status : "idle"}`}
+            title={user ? "Votre progression est sauvegardée sur votre compte. Les clés API et les fichiers audio/vidéo restent sur cet appareil." : "Mode invité : votre progression reste dans ce navigateur."}
           >
             <ShieldCheck size={12} />
-            <span>Stockage local individuel</span>
+            <span>{user ? (syncInfo.status === "synced" ? "Compte sauvegardé" : syncInfo.status === "syncing" ? "Sauvegarde…" : syncInfo.status === "conflict" ? "Versions à vérifier" : "Sauvegarde en attente") : "Mode invité · stockage local"}</span>
           </div>
         </div>
-        <p className="subhead">{t.subhead}</p>
+        <p className="subhead">{user ? "Votre profil, vos préférences et la sauvegarde de votre progression." : t.subhead}</p>
       </div>
       <button className="primary" onClick={save}>{saved ? <><Check size={15} /> {t.saved}</> : t.save} <ArrowRight size={15} /></button>
     </header>
@@ -577,6 +579,10 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
       <section className="settings-panel">
         {tab === 'profile' && <>
           <SettingHeading title={t.profileTitle} detail={t.profileDetail} />
+          <div className="data-card account-card">
+            <div><strong>{user ? 'Votre compte' : 'Vous êtes en mode invité'}</strong><p>{user ? `${user.email || user.phone || user.name} · ${user.provider === 'google' ? 'Google' : user.phone ? 'Téléphone' : 'E-mail'}` : 'Connectez-vous pour retrouver votre progression sur vos appareils.'}</p></div>
+            <button className="outline" onClick={() => void (guest ? openSignIn() : signOut())}>{guest ? 'Créer un compte ou se connecter' : 'Se déconnecter'}</button>
+          </div>
           <div className="settings-fields">
             <label>{t.name}<input value={draft.name} onChange={(event) => update('name', event.target.value)} /></label>
             <label>{t.uiLanguage}<select value={draft.uiLanguage} onChange={(event) => update('uiLanguage', event.target.value as UiLanguage)}>{UI_LANGUAGES.map((language) => <option value={language.id} key={language.id}>{language.flag} {language.name}</option>)}</select></label>
@@ -1634,27 +1640,17 @@ export function Settings({ settings, state, onSave, onChangeState, onResetData, 
         </>}
 
         {tab === 'data' && <>
-          <SettingHeading title={t.dataTitle} detail={t.dataDetail} />
+          <SettingHeading title={t.dataTitle} detail={user ? "Votre progression est liée à votre compte et conservée sur le serveur." : t.dataDetail} />
 
           <div className="data-card sync-card">
-            <div className="sync-card-header">
-              <div className="sync-card-icon" style={{ color: "#16a34a" }}>
-                <ShieldCheck size={20} />
-              </div>
-              <div className="sync-card-meta">
-                <h3>Stockage individuel par appareil (100% Local &amp; Confidentiel)</h3>
-                <p>Toutes vos ressources, vos entrées de journal écrit, votre vocabulaire et vos données personnelles sont stockés exclusivement dans ce navigateur. Aucune donnée n'est partagée avec les personnes ayant accès au lien de l'application.</p>
-              </div>
-            </div>
-            <div className="sync-card-footer">
-              <span className="sync-status-indicator">
-                <span className="sync-dot online" />
-                Stockage local individuel actif &amp; sécurisé
-              </span>
-            </div>
+            <div className="sync-card-header"><div className="sync-card-icon"><ShieldCheck size={20} /></div><div className="sync-card-meta">
+              <h3>{user ? 'Une progression liée à votre compte' : 'Votre progression dans ce navigateur'}</h3>
+              <p>{user ? 'Ressources, vocabulaire, écrits, révisions et historiques sont sauvegardés automatiquement sur le serveur et accessibles sur vos appareils. Chaque compte dispose de son espace personnel.' : 'En mode invité, vos données sont enregistrées uniquement dans ce navigateur. Effacer les données du site peut supprimer votre progression.'}</p>
+            </div></div>
+            {user && <div className="sync-card-footer"><span role="status">{syncInfo.status === 'synced' ? `Dernière sauvegarde : ${syncInfo.lastSyncedAt?.toLocaleTimeString() || 'à jour'}` : syncInfo.status === 'syncing' ? 'Sauvegarde en cours…' : syncInfo.message || 'Sauvegarde en attente'}</span><button className="outline" disabled={syncInfo.status === 'syncing' || syncInfo.status === 'conflict'} onClick={() => void handleManualSync()}><RefreshCw size={14} /> Sauvegarder maintenant</button></div>}
+            {user && syncInfo.status === 'conflict' && <div className="account-conflict" role="alert"><p>Deux versions existent. Charger celle du compte télécharge d’abord une copie de votre progression locale.</p><button className="outline" onClick={() => void syncService.resolveConflict(true)}>Charger la version du compte</button><button className="outline" onClick={() => void syncService.resolveConflict(false)}>Conserver celle de cet appareil</button></div>}
           </div>
-
-          <div className="data-card"><h3>{t.localDefault}</h3><p>{t.localDefaultDesc}</p></div>
+          <div className="data-card"><h3>{user ? 'Ce qui reste sur cet appareil' : 'Retrouver votre progression partout'}</h3><p>{user ? 'Les clés des services IA et les fichiers audio/vidéo restent dans ce navigateur. Les notes, transcriptions et résultats des séances sont sauvegardés sur le compte. Les fichiers enregistrés ne seront pas lisibles depuis un autre appareil.' : 'Vous pouvez créer un compte depuis votre profil. Une importation de la progression invitée vous sera proposée pour un nouveau compte.'}</p></div>
           <div className="danger-zone"><div><h3>{t.startFresh}</h3><p>{t.startFreshDesc}</p></div>{confirmingReset ? <div className="confirm-row"><button className="outline" onClick={() => setConfirmingReset(false)}>{t.cancel}</button><button className="danger" onClick={onResetData}>{t.deleteDataConfirm}</button></div> : <button className="outline" onClick={() => setConfirmingReset(true)}>{t.resetDataBtn}</button>}</div>
         </>}
       </section>

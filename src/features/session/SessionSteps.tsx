@@ -1,3 +1,4 @@
+import { appStorage } from '../auth/storageScope'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, BookOpen, Check, CheckCircle2, Loader2, Mic, Plus, RotateCcw, Snail, Sparkles, Square, Volume2 } from 'lucide-react'
 import type { AppState, DailySession, UiLanguage, WritingEntry } from '../../domain'
@@ -121,7 +122,7 @@ export function ReadingStep({ state, session, ui, onOpenReader, onFinish, onAddT
 export function WritingStep({ state, session, ui, onChange }: StepProps) {
   const c = learnCopy(ui)
   const draftKey = `vivre-session-draft:${session.day}`
-  const [text, setText] = useState(() => { try { return localStorage.getItem(draftKey) ?? '' } catch { return '' } })
+  const [text, setText] = useState(() => { try { return appStorage.getItem(draftKey) ?? '' } catch { return '' } })
   const [correction, setCorrection] = useState<WritingCorrectionResult | null>(null)
   const [rawView, setRawView] = useState(false)
   const [correcting, setCorrecting] = useState(false)
@@ -132,7 +133,7 @@ export function WritingStep({ state, session, ui, onChange }: StepProps) {
   const sentences = countSentences(text)
   const used = words.filter((word) => isWordInText(word.word, text) || (word.parent ? isWordInText(word.parent, text) : false))
 
-  useEffect(() => { try { localStorage.setItem(draftKey, text) } catch { /* private mode */ } }, [text, draftKey])
+  useEffect(() => { try { appStorage.setItem(draftKey, text) } catch { /* private mode */ } }, [text, draftKey])
 
   const correct = async () => {
     setCorrecting(true)
@@ -186,7 +187,7 @@ export function WritingStep({ state, session, ui, onChange }: StepProps) {
       next = setWritingId(next, entry.id)
       return closeStep(next, 'done', { words: wordCount, used: used.length, ...(correction?.score !== undefined ? { score: correction.score } : {}) }, now)
     })
-    try { localStorage.removeItem(draftKey) } catch { /* private mode */ }
+    try { appStorage.removeItem(draftKey) } catch { /* private mode */ }
   }
 
   return (
